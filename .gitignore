@@ -1,0 +1,48 @@
+.repo-admin/
+.agents/
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+Desktop.ini
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Root-local temp files
+tmp/
+temp/
+*.log
+
+# Frontend
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/build/
+frontend/coverage/
+frontend/.turbo/
+frontend/.vercel/
+frontend/*.tsbuildinfo
+frontend/next-env.d.ts
+frontend/.env*
+!frontend/.env.example
+
+# Backend / scanner
+SkillSpector/.venv/
+SkillSpector/.pytest_cache/
+SkillSpector/.mypy_cache/
+SkillSpector/.ruff_cache/
+SkillSpector/.coverage
+SkillSpector/.coverage.*
+SkillSpector/htmlcov/
+SkillSpector/build/
+SkillSpector/dist/
+SkillSpector/*.egg-info/
+SkillSpector/.langgraph_api/
+SkillSpector/.skillspector/
+SkillSpector/tmp/
+SkillSpector/__pycache__/
+SkillSpector/**/*.pyc
+SkillSpector/**/*.pyo
