@@ -1,0 +1,113 @@
+@import "tailwindcss";
+
+:root {
+  --background: #fbfaf8;
+  --foreground: #1c1a17;
+  --card: #ffffff;
+  --card-foreground: #1c1a17;
+  --muted: #f3f0ec;
+  --muted-foreground: #6f6a63;
+  --border: #e7e1d9;
+  --border-strong: #d8d0c4;
+
+  --accent: #c44b21;
+  --accent-hover: #ab4019;
+  --accent-foreground: #fff9f6;
+
+  --success: #1f7a4d;
+  --success-bg: #ecf6f0;
+  --warning: #a3690a;
+  --warning-bg: #fbf1de;
+  --danger: #b7291f;
+  --danger-bg: #fbecea;
+  --info: #2358a8;
+  --info-bg: #eaf1fb;
+
+  --radius: 1rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #131110;
+    --foreground: #f2ede6;
+    --card: #1b1815;
+    --card-foreground: #f2ede6;
+    --muted: #211d19;
+    --muted-foreground: #9c948a;
+    --border: #322c26;
+    --border-strong: #423a32;
+
+    --accent: #e2632f;
+    --accent-hover: #ec7844;
+    --accent-foreground: #1c1a17;
+
+    --success: #4cba86;
+    --success-bg: #163226;
+    --warning: #d99a3d;
+    --warning-bg: #332507;
+    --danger: #e8695f;
+    --danger-bg: #391613;
+    --info: #6ea3e8;
+    --info-bg: #142236;
+  }
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-foreground: var(--accent-foreground);
+
+  --color-success: var(--success);
+  --color-success-bg: var(--success-bg);
+  --color-warning: var(--warning);
+  --color-warning-bg: var(--warning-bg);
+  --color-danger: var(--danger);
+  --color-danger-bg: var(--danger-bg);
+  --color-info: var(--info);
+  --color-info-bg: var(--info-bg);
+
+  --radius-card: var(--radius);
+
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+  --font-display: var(--font-onest);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(28px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.animate-fade-up {
+  animation: fade-up 900ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
