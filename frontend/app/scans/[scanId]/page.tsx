@@ -40,9 +40,9 @@ const MAX_POLL_ATTEMPTS = 120;
 
 const RISK_RING_COLOR: Record<string, string> = {
   CRITICAL: "text-danger",
-  HIGH: "text-danger",
+  HIGH: "text-high",
   MEDIUM: "text-warning",
-  LOW: "text-info",
+  LOW: "text-success",
 };
 
 const CATEGORY_EXPLAINERS: Record<

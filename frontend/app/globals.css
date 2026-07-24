@@ -16,6 +16,8 @@
 
   --success: #1f7a4d;
   --success-bg: #ecf6f0;
+  --high: #c85c1f;
+  --high-bg: #fbe9df;
   --warning: #a3690a;
   --warning-bg: #fbf1de;
   --danger: #b7291f;
@@ -43,6 +45,8 @@
 
     --success: #4cba86;
     --success-bg: #163226;
+    --high: #f08a4b;
+    --high-bg: #3d2415;
     --warning: #d99a3d;
     --warning-bg: #332507;
     --danger: #e8695f;
@@ -68,6 +72,8 @@
 
   --color-success: var(--success);
   --color-success-bg: var(--success-bg);
+  --color-high: var(--high);
+  --color-high-bg: var(--high-bg);
   --color-warning: var(--warning);
   --color-warning-bg: var(--warning-bg);
   --color-danger: var(--danger);

@@ -2,16 +2,16 @@ export const SEVERITY_ORDER = ["CRITICAL", "HIGH", "MEDIUM", "LOW"] as const;
 
 export const SEVERITY_STYLES: Record<string, string> = {
   CRITICAL: "bg-danger-bg text-danger",
-  HIGH: "bg-warning-bg text-warning",
+  HIGH: "bg-high-bg text-high",
   MEDIUM: "bg-warning-bg text-warning",
-  LOW: "bg-info-bg text-info",
+  LOW: "bg-success-bg text-success",
 };
 
 export const SEVERITY_BAR_COLOR: Record<string, string> = {
   CRITICAL: "bg-danger",
-  HIGH: "bg-danger/60",
+  HIGH: "bg-high",
   MEDIUM: "bg-warning",
-  LOW: "bg-info",
+  LOW: "bg-success",
 };
 
 export const RECOMMENDATION_STYLES: Record<string, string> = {
