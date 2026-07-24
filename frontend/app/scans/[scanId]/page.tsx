@@ -310,7 +310,7 @@ export default function ScanDashboardPage() {
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
-      <SiteHeader />
+      <SiteHeader actionHref="/" actionLabel="Scan another skill" />
 
       {loadState === "loading" && (
         <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col items-center justify-center px-6 py-24">

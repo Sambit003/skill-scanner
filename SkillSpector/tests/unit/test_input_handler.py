@@ -123,6 +123,57 @@ def test_scp_valid_host_clones() -> None:
         handler.cleanup()
 
 
+def test_github_tree_url_clones_repo_ref_and_returns_subpath(tmp_path: Path) -> None:
+    """GitHub /tree/<ref>/<path> URLs clone the repo and scan only the subpath."""
+    handler = InputHandler()
+    commands: list[list[str]] = []
+
+    def fake_run(cmd: list[str], **kwargs) -> MagicMock:
+        commands.append(cmd)
+        if cmd[:3] == ["git", "ls-remote", "--heads"]:
+            return MagicMock(stdout="abc123\trefs/heads/v4\n")
+        if cmd[:2] == ["git", "clone"]:
+            clone_dir = Path(cmd[-1])
+            (clone_dir / "skills" / "nuxt-ui").mkdir(parents=True)
+            (clone_dir / "skills" / "nuxt-ui" / "SKILL.md").write_text("# Skill", encoding="utf-8")
+            return MagicMock()
+        raise AssertionError(f"Unexpected command: {cmd}")
+
+    try:
+        with (
+            patch("skillspector.input_handler._is_private_ip", return_value=False),
+            patch("skillspector.input_handler.subprocess.run", side_effect=fake_run),
+        ):
+            resolved, source_type = handler.resolve(
+                "https://github.com/nuxt/ui/tree/v4/skills/nuxt-ui"
+            )
+
+        assert source_type == "git"
+        assert resolved.name == "nuxt-ui"
+        assert (resolved / "SKILL.md").exists()
+        clone_command = next(cmd for cmd in commands if cmd[:2] == ["git", "clone"])
+        assert "https://github.com/nuxt/ui.git" in clone_command
+        assert "--branch" in clone_command
+        assert "v4" in clone_command
+        assert "https://github.com/nuxt/ui/tree/v4/skills/nuxt-ui" not in clone_command
+    finally:
+        handler.cleanup()
+
+
+def test_github_tree_url_prefers_longest_remote_ref_for_slash_branches() -> None:
+    """Branches containing slashes are resolved by matching remote refs."""
+    handler = InputHandler()
+    output = "abc\trefs/heads/release\nabc\trefs/heads/release/v1\n"
+    with patch("skillspector.input_handler.subprocess.run", return_value=MagicMock(stdout=output)):
+        repo_url, ref, subpath = handler._parse_github_tree_url(
+            "https://github.com/org/repo/tree/release/v1/skills/foo"
+        )
+
+    assert repo_url == "https://github.com/org/repo.git"
+    assert ref == "release/v1"
+    assert subpath == Path("skills/foo")
+
+
 def test_scp_disallowed_host_raises() -> None:
     """_validate_url_host rejects an scp URL whose host is not in the allowlist."""
     with pytest.raises(ValueError, match="not in the allowed hosts"):
