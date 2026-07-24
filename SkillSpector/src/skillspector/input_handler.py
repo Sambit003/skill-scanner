@@ -64,6 +64,9 @@ ALLOWED_DOWNLOAD_HOSTS = frozenset(
 )
 
 
+GitHubTreeTarget = tuple[str, str, Path]
+
+
 def _is_private_ip(host: str) -> bool:
     """Return True if host resolves to a private/reserved IP address."""
     try:
@@ -199,12 +202,18 @@ class InputHandler:
 
     def _clone_git(self, url: str) -> Path:
         """Clone a Git repository to a temporary directory."""
-        self._validate_url_host(url, ALLOWED_GIT_HOSTS)
+        tree_target = self._parse_github_tree_url(url)
+        clone_url = tree_target[0] if tree_target else url
+        self._validate_url_host(clone_url, ALLOWED_GIT_HOSTS)
         temp_dir = self._get_temp_dir()
         clone_dir = temp_dir / "repo"
+        clone_cmd = ["git", "clone", "--depth", "1"]
+        if tree_target:
+            clone_cmd.extend(["--branch", tree_target[1], "--single-branch"])
+        clone_cmd.extend([clone_url, str(clone_dir)])
         try:
             subprocess.run(
-                ["git", "clone", "--depth", "1", url, str(clone_dir)],
+                clone_cmd,
                 check=True,
                 capture_output=True,
                 timeout=60,
@@ -221,7 +230,88 @@ class InputHandler:
             raise ValueError(
                 "Git is not installed. Please install git to scan repositories."
             ) from None
+        if tree_target:
+            subpath = tree_target[2]
+            target_dir = (clone_dir / subpath).resolve()
+            if not str(target_dir).startswith(str(clone_dir.resolve())):
+                raise ValueError(f"GitHub tree path escapes repository root: {url}")
+            if not target_dir.exists():
+                raise ValueError(
+                    f"GitHub tree path not found after clone: {subpath.as_posix()}"
+                )
+            if target_dir.is_file():
+                return self._wrap_single_file(target_dir)
+            return target_dir
         return clone_dir
+
+    def _parse_github_tree_url(self, url: str) -> GitHubTreeTarget | None:
+        """Parse GitHub web tree URLs into clone URL, ref, and repo-relative path.
+
+        Supports URLs like:
+
+        - https://github.com/org/repo/tree/main/path/to/skill
+        - https://github.com/org/repo/tree/release/v1/path/to/skill
+
+        GitHub branch and tag names may contain slashes, so this resolves remote
+        refs and picks the longest ref prefix that matches the URL tail. If refs
+        cannot be listed, it falls back to GitHub's common one-segment ref form.
+        """
+        parsed = urlparse(url)
+        host = parsed.hostname or ""
+        if host != "github.com":
+            return None
+        parts = [part for part in parsed.path.strip("/").split("/") if part]
+        if len(parts) < 4 or parts[2] != "tree":
+            return None
+
+        owner, repo = parts[0], parts[1]
+        tail = parts[3:]
+        repo_url = f"{parsed.scheme or 'https'}://github.com/{owner}/{repo}.git"
+        ref, subpath_parts = self._split_github_tree_ref(repo_url, tail)
+        subpath = Path(*subpath_parts) if subpath_parts else Path(".")
+        return repo_url, ref, subpath
+
+    def _split_github_tree_ref(self, repo_url: str, tail: list[str]) -> tuple[str, list[str]]:
+        """Split the tail after /tree/ into (ref, subpath_parts)."""
+        if not tail:
+            raise ValueError(f"GitHub tree URL is missing a branch/tag: {repo_url}")
+
+        refs = self._list_remote_refs(repo_url)
+        for ref in sorted(refs, key=lambda value: len(value.split("/")), reverse=True):
+            ref_parts = ref.split("/")
+            if tail[: len(ref_parts)] == ref_parts:
+                return ref, tail[len(ref_parts) :]
+
+        return tail[0], tail[1:]
+
+    def _list_remote_refs(self, repo_url: str) -> list[str]:
+        """Return branch/tag refs available on a remote repository."""
+        try:
+            result = subprocess.run(
+                ["git", "ls-remote", "--heads", "--tags", repo_url],
+                check=True,
+                capture_output=True,
+                timeout=30,
+                shell=False,
+                text=True,
+            )
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired, FileNotFoundError) as e:
+            logger.debug("Could not list remote refs for %s: %s", repo_url, e)
+            return []
+
+        refs: list[str] = []
+        for line in result.stdout.splitlines():
+            fields = line.split()
+            if len(fields) < 2:
+                continue
+            raw_ref = fields[1]
+            if raw_ref.endswith("^{}"):
+                continue
+            if raw_ref.startswith("refs/heads/"):
+                refs.append(raw_ref.removeprefix("refs/heads/"))
+            elif raw_ref.startswith("refs/tags/"):
+                refs.append(raw_ref.removeprefix("refs/tags/"))
+        return refs
 
     def _download_file(self, url: str) -> Path:
         """Download a file from URL to a temporary directory."""
