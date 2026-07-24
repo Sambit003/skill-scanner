@@ -1,0 +1,35 @@
+services:
+  app:
+    build:
+      context: ..
+      args:
+        NEXT_PUBLIC_API_URL: /api
+    restart: unless-stopped
+    environment:
+      SKILLSPECTOR_DATA_DIR: /data
+      SKILLSPECTOR_DB_PATH: /data/skillspector.db
+      SKILLSPECTOR_WORK_DIR: /tmp/skillspector-scans
+      SKILLSPECTOR_MAX_SCAN_TIMEOUT_SECONDS: ${SKILLSPECTOR_MAX_SCAN_TIMEOUT_SECONDS:-300}
+      SKILLSPECTOR_CORS_ORIGINS: ${SKILLSPECTOR_CORS_ORIGINS:-*}
+      SKILLSPECTOR_EMBEDDED_WORKER_ENABLED: "true"
+    ports:
+      - "80:80"
+    volumes:
+      - skillspector_data:/data
+      - skillspector_work:/tmp/skillspector-scans
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1/health', timeout=5).read()",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+volumes:
+  skillspector_data:
+  skillspector_work:
