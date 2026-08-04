@@ -1,0 +1,21 @@
+[project]
+name = "riskdb-backend"
+version = "0.1.0"
+description = "Scalable FastAPI backend for AIRiskDB"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.111.0",
+    "uvicorn[standard]>=0.30.0",
+    "pydantic>=2.7.0",
+    "pydantic-settings>=2.2.1",
+    "sqlalchemy[asyncio]>=2.0.30",
+    "asyncpg>=0.29.0",
+    "alembic>=1.13.1",
+    "redis>=8.1.0",
+    "celery>=5.4.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

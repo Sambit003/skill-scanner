@@ -1,0 +1,57 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Distribution / packaging
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environments
+.venv/
+env/
+venv/
+
+# Environment Variables & Secrets
+.env
+.env.*
+!.env.example
+
+# Test, coverage & lint caches
+.coverage
+.coverage.*
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+
+# YARA & AST temporary compilation artifacts
+*.yarc
+.yara_cache/
+.skillspector/
+.langgraph_api/
+
+# Local scan test artifacts & output dumps
+reports/
+scan_output/
+*.sarif.tmp
+*.json.tmp
+tmp/
+temp/
+*.log
+
+# OS / Editor artifacts
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+*~

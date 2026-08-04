@@ -1,30 +1,69 @@
+# Version control & internal tools
 .git
+.gitignore
+.gitattributes
 .repo-admin
 .agents
-docs
+docs/
+*.md
+!README.md
 
-frontend/node_modules
-frontend/.next
-frontend/.vercel
-frontend/out
-frontend/build
-frontend/coverage
-frontend/.turbo
-frontend/tsconfig.tsbuildinfo
+# Frontend noise
+**/node_modules/
+**/.next/
+**/.vercel/
+**/out/
+**/build/
+**/dist/
+**/coverage/
+**/.turbo/
+**/*.tsbuildinfo
 
-SkillSpector/.venv
-SkillSpector/.pytest_cache
-SkillSpector/.mypy_cache
-SkillSpector/.ruff_cache
-SkillSpector/.coverage
-SkillSpector/.coverage.*
-SkillSpector/htmlcov
-SkillSpector/build
-SkillSpector/dist
-SkillSpector/*.egg-info
-SkillSpector/.langgraph_api
-SkillSpector/.skillspector
-SkillSpector/tmp
-SkillSpector/**/__pycache__
-SkillSpector/**/*.pyc
-SkillSpector/**/*.pyo
+# Python & Virtualenv noise
+**/.venv/
+**/venv/
+**/env/
+**/__pycache__/
+**/*.py[cod]
+**/*.pyo
+**/*.pyd
+**/.pytest_cache/
+**/.mypy_cache/
+**/.ruff_cache/
+**/.coverage
+**/.coverage.*
+**/htmlcov/
+**/*.egg-info/
+**/.installed.cfg
+**/*.egg
+
+# Scanner temp & rule caches
+**/*.yarc
+**/.yara_cache/
+**/.skillspector/
+**/.langgraph_api/
+**/reports/
+**/scan_output/
+
+# Temp & DB files
+**/tmp/
+**/temp/
+**/*.log
+**/*.db
+**/*.sqlite
+**/*.sqlite3
+
+# Environment files
+**/.env
+**/.env.*
+!**/.env.example
+
+# OS & Editor noise
+.DS_Store
+Thumbs.db
+Desktop.ini
+.idea/
+.vscode/
+*.swp
+*.swo
+*~

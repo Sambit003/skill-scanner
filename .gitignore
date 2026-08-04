@@ -1,7 +1,8 @@
-.repo-admin/
-.agents/
+# ==============================================================================
+# Repository Global Ignore
+# ==============================================================================
 
-# OS / editor noise
+# OS / Editor artifacts
 .DS_Store
 Thumbs.db
 Desktop.ini
@@ -10,17 +11,31 @@ Desktop.ini
 *.swp
 *.swo
 *~
+*.bak
 
-# Root-local temp files
+# Temporary Files & Logs
 tmp/
 temp/
 *.log
+*.pid
 
-# Frontend
+# Environment & Secrets (Global Safeguard)
+.env
+.env.*
+.env.local
+.env.*.local
+!.env.example
+
+# ==============================================================================
+# Frontend Module (frontend/)
+# ==============================================================================
 frontend/node_modules/
 frontend/.next/
 frontend/out/
 frontend/build/
+frontend/dist/
+frontend/.output/
+frontend/.nuxt/
 frontend/coverage/
 frontend/.turbo/
 frontend/.vercel/
@@ -29,8 +44,57 @@ frontend/next-env.d.ts
 frontend/.env*
 !frontend/.env.example
 
-# Backend / scanner
+# ==============================================================================
+# Backend Module (backend/)
+# ==============================================================================
+backend/__pycache__/
+backend/**/*.py[cod]
+backend/.venv/
+backend/venv/
+backend/.pytest_cache/
+backend/.mypy_cache/
+backend/.ruff_cache/
+backend/.coverage
+backend/.coverage.*
+backend/htmlcov/
+backend/build/
+backend/dist/
+backend/*.egg-info/
+backend/*.db
+backend/*.sqlite
+backend/*.sqlite3
+backend/celerybeat-schedule
+backend/celerybeat.pid
+backend/.env*
+!backend/.env.example
+
+# ==============================================================================
+# Scanner Engine Module (scanner_engine/)
+# ==============================================================================
+scanner_engine/__pycache__/
+scanner_engine/**/*.py[cod]
+scanner_engine/.venv/
+scanner_engine/venv/
+scanner_engine/.pytest_cache/
+scanner_engine/.mypy_cache/
+scanner_engine/.ruff_cache/
+scanner_engine/.coverage
+scanner_engine/.coverage.*
+scanner_engine/htmlcov/
+scanner_engine/build/
+scanner_engine/dist/
+scanner_engine/*.egg-info/
+scanner_engine/*.yarc
+scanner_engine/.yara_cache/
+scanner_engine/reports/
+scanner_engine/scan_output/
+
+# ==============================================================================
+# Legacy / Subsystem references
+# ==============================================================================
 SkillSpector/.venv/
+SkillSpector/__pycache__/
+SkillSpector/**/*.py[cod]
 SkillSpector/.pytest_cache/
 SkillSpector/.mypy_cache/
 SkillSpector/.ruff_cache/
@@ -43,6 +107,3 @@ SkillSpector/*.egg-info/
 SkillSpector/.langgraph_api/
 SkillSpector/.skillspector/
 SkillSpector/tmp/
-SkillSpector/__pycache__/
-SkillSpector/**/*.pyc
-SkillSpector/**/*.pyo
