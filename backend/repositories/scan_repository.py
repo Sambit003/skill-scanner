@@ -49,7 +49,6 @@ class ScanRepository:
         summary_dict: Dict[str, Any],
         findings_list: List[Dict[str, Any]],
         reports_dict: Dict[str, str],
-        agent_review_dict: Optional[Dict[str, Any]] = None,
     ) -> None:
         """Persist findings and mark the scan as COMPLETED."""
         completed_at = datetime.now(timezone.utc)
@@ -69,7 +68,6 @@ class ScanRepository:
                 findings_by_severity=summary_dict.get("findings_by_severity", {}),
                 findings_by_category=summary_dict.get("findings_by_category", {}),
                 reports_blob=reports_dict,
-                agent_review_blob=agent_review_dict or {},
                 completed_at=completed_at,
             )
         )

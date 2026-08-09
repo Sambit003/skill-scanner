@@ -18,9 +18,9 @@ const onest = Onest({
 });
 
 export const metadata: Metadata = {
-  title: "SkillSpector — know what an AI skill does before you install it",
+  title: "ScanKernel — know what an AI skill does before you install it",
   description:
-    "Static, reproducible security scanning for AI skills. Scan a GitHub repo deterministically or bring your own LLM key for deeper analysis.",
+    "Static, reproducible security scanning for AI skills with deterministic analysis.",
 };
 
 export default function RootLayout({

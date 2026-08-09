@@ -1,12 +1,9 @@
-import os
-from typing import Any, Dict, List, Optional
-from backend.domain.models.entities import ScanModel
+from typing import List, Optional
 from backend.domain.models.schemas import (
     FindingResponse,
     ScanCreateRequest,
     ScanDetailResponse,
     ScanResponse,
-    ScanSummaryResponse,
 )
 from backend.repositories.scan_repository import ScanRepository
 from backend.workers.scan_worker import run_asset_scan_task
@@ -24,16 +21,12 @@ class ScanService:
             asset_type=request.asset_type,
         )
 
-        agent_review_dict = request.agent_review.model_dump() if request.agent_review else None
-
         # Dispatch async task to Celery
         try:
             run_asset_scan_task.delay(
                 scan_id=scan.id,
                 target=request.target,
                 asset_type=request.asset_type,
-                use_llm=request.use_llm,
-                agent_review_data=agent_review_dict,
             )
         except Exception:
             # Fallback to local synchronous/background execution if Celery broker is offline in dev
@@ -44,8 +37,6 @@ class ScanService:
                     scan_id=scan.id,
                     target=request.target,
                     asset_type=request.asset_type,
-                    use_llm=request.use_llm,
-                    agent_review_data=agent_review_dict,
                 )
             )
 
@@ -101,7 +92,6 @@ class ScanService:
 
         display_target = scan.asset_target.split("/")[-1].replace(".git", "") if scan.asset_target else scan.asset_target
 
-        ar_blob = scan.agent_review_blob or {}
         headline = "Unsafe to install" if scan.safe_to_install is False else ("Safe to install" if scan.safe_to_install is True else None)
         summary_text = None
         if scan.status == "COMPLETED":
@@ -152,10 +142,6 @@ class ScanService:
             report_downloads=report_downloads,
             links=links,
             is_terminal=is_terminal,
-            agent_review_model=ar_blob.get("model"),
-            agent_review_status=ar_blob.get("status"),
-            agent_review_verdict=ar_blob.get("verdict"),
-            agent_review_summary=ar_blob.get("summary"),
         )
 
     async def list_scans(self, limit: int = 50, offset: int = 0) -> List[ScanResponse]:

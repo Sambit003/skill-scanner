@@ -40,8 +40,7 @@ docs/
 # Scanner temp & rule caches
 **/*.yarc
 **/.yara_cache/
-**/.skillspector/
-**/.langgraph_api/
+**/.scan_kernel/
 **/reports/
 **/scan_output/
 

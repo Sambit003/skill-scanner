@@ -4,12 +4,10 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import {
-  getScanAgentReview,
   ApiError,
   getRule,
   getScan,
   getScanFindings,
-  type AgentReviewReportResponse,
   type FindingResponse,
   type RuleDocResponse,
   type ScanStatusResponse,
@@ -117,9 +115,6 @@ export default function ScanDashboardPage() {
   const [findings, setFindings] = useState<FindingResponse[] | null>(null);
   const [findingsError, setFindingsError] = useState<string | null>(null);
   const [loadingFindings, setLoadingFindings] = useState(false);
-  const [agentReview, setAgentReview] = useState<AgentReviewReportResponse | null>(null);
-  const [agentReviewError, setAgentReviewError] = useState<string | null>(null);
-  const [loadingAgentReview, setLoadingAgentReview] = useState(false);
 
   const [severityFilter, setSeverityFilter] = useState<string>("ALL");
   const [categoryFilter, setCategoryFilter] = useState<string>("ALL");
@@ -228,41 +223,6 @@ export default function ScanDashboardPage() {
       cancelled = true;
     };
   }, [scanId, scan, findingsRequestKey, selectedFinding, severityFilter, categoryFilter, search]);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    async function loadAgentReview() {
-      if (!scan || scan.status !== "completed" || !scan.agent_review_requested) {
-        setAgentReview(null);
-        setAgentReviewError(null);
-        setLoadingAgentReview(false);
-        return;
-      }
-
-      setLoadingAgentReview(true);
-      setAgentReviewError(null);
-
-      try {
-        const response = await getScanAgentReview(scanId);
-        if (!cancelled) {
-          setAgentReview(response);
-        }
-      } catch (err) {
-        if (!cancelled) {
-          setAgentReview(null);
-          setAgentReviewError(err instanceof Error ? err.message : "Couldn't load agent review.");
-        }
-      } finally {
-        if (!cancelled) setLoadingAgentReview(false);
-      }
-    }
-
-    void loadAgentReview();
-    return () => {
-      cancelled = true;
-    };
-  }, [scanId, scan]);
 
   useEffect(() => {
     let cancelled = false;
@@ -527,116 +487,6 @@ export default function ScanDashboardPage() {
             </div>
           </section>
 
-          {scan.agent_review_requested && (
-            <section className="mt-4 rounded-card border border-border bg-card p-6">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                <div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <h2 className="text-sm font-medium text-foreground">Agent review</h2>
-                    <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
-                      {scan.agent_review_provider?.toUpperCase() ?? "BYOK"}
-                    </span>
-                    {scan.agent_review_model && (
-                      <span className="rounded-full bg-muted px-2 py-0.5 font-mono text-[11px] font-medium text-muted-foreground">
-                        {scan.agent_review_model}
-                      </span>
-                    )}
-                  </div>
-                  <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
-                    Deterministic findings reviewed by a bounded post-scan agent. The deterministic
-                    scan remains authoritative; this section is triage assistance.
-                  </p>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {scan.agent_review_status && (
-                    <span className="rounded-full border border-border px-3 py-1 text-xs font-medium text-foreground">
-                      {scan.agent_review_status.replaceAll("_", " ")}
-                    </span>
-                  )}
-                  {scan.agent_review_verdict && (
-                    <span className="rounded-full bg-info-bg px-3 py-1 text-xs font-medium text-info">
-                      {scan.agent_review_verdict.replaceAll("_", " ")}
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              {loadingAgentReview && (
-                <div className="mt-5 flex items-center gap-2.5 rounded-xl bg-muted px-4 py-3 text-sm text-muted-foreground">
-                  <SpinnerIcon className="h-4 w-4 animate-spin text-accent" />
-                  Loading agent review…
-                </div>
-              )}
-
-              {agentReviewError && (
-                <div className="mt-5 flex items-start gap-2.5 rounded-xl bg-danger-bg px-4 py-3 text-sm text-danger">
-                  <AlertIcon className="mt-0.5 h-4 w-4 shrink-0" />
-                  <span>{agentReviewError}</span>
-                </div>
-              )}
-
-              {!loadingAgentReview && !agentReviewError && (
-                <div className="mt-5 space-y-4">
-                  <div className="rounded-2xl border border-border bg-background p-4">
-                    <span className="block text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                      Executive summary
-                    </span>
-                    <p className="mt-2 text-sm leading-6 text-foreground">
-                      {agentReview?.summary ??
-                        scan.agent_review_summary ??
-                        "No structured agent summary was produced for this scan."}
-                    </p>
-                  </div>
-
-                  {agentReview?.report && (
-                    <div className="grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
-                      <div className="space-y-4">
-                        {agentReview.report.top_confirmed_risks.length > 0 && (
-                          <ReviewList
-                            title="Top confirmed risks"
-                            items={agentReview.report.top_confirmed_risks}
-                          />
-                        )}
-
-                        {agentReview.report.follow_up_actions.length > 0 && (
-                          <ReviewList
-                            title="Follow-up actions"
-                            items={agentReview.report.follow_up_actions}
-                          />
-                        )}
-                      </div>
-
-                      <div className="space-y-4">
-                        <div className="rounded-2xl border border-border bg-background p-4">
-                          <span className="block text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                            Review confidence
-                          </span>
-                          <p className="mt-2 font-display text-3xl font-semibold tracking-tight text-foreground">
-                            {Math.round(agentReview.report.review_confidence * 100)}%
-                          </p>
-                        </div>
-
-                        {agentReview.report.likely_false_positives.length > 0 && (
-                          <ReviewFindingList
-                            title="Likely false positives"
-                            findings={agentReview.report.likely_false_positives}
-                          />
-                        )}
-
-                        {agentReview.report.likely_duplicates.length > 0 && (
-                          <ReviewFindingList
-                            title="Likely duplicates"
-                            findings={agentReview.report.likely_duplicates}
-                          />
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-            </section>
-          )}
-
           <section className="mt-4 flex flex-1 flex-col">
             <div className="mb-4 flex flex-col items-start justify-between gap-4 md:flex-row md:items-center">
               <h2 className="text-sm font-medium text-foreground">Scan findings</h2>
@@ -888,56 +738,10 @@ export default function ScanDashboardPage() {
 
       <footer className="border-t border-border">
         <div className="mx-auto flex w-full max-w-7xl flex-col items-center gap-2 px-6 py-6 text-xs text-muted-foreground sm:flex-row sm:justify-between">
-          <span>SkillSpector</span>
+          <span>ScanKernel</span>
           <span>Deterministic scans never execute the code they analyze.</span>
         </div>
       </footer>
-    </div>
-  );
-}
-
-function ReviewList({ title, items }: { title: string; items: string[] }) {
-  return (
-    <div className="rounded-2xl border border-border bg-background p-4">
-      <span className="block text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-        {title}
-      </span>
-      <ul className="mt-3 space-y-2">
-        {items.map((item) => (
-          <li key={item} className="rounded-xl bg-card px-3 py-2 text-sm text-foreground">
-            {item}
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
-
-function ReviewFindingList({
-  title,
-  findings,
-}: {
-  title: string;
-  findings: NonNullable<AgentReviewReportResponse["report"]>["likely_false_positives"];
-}) {
-  return (
-    <div className="rounded-2xl border border-border bg-background p-4">
-      <span className="block text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-        {title}
-      </span>
-      <div className="mt-3 space-y-3">
-        {findings.map((finding) => (
-          <div key={finding.finding_key} className="rounded-xl bg-card px-3 py-3">
-            <div className="flex items-start justify-between gap-3">
-              <span className="font-mono text-xs text-muted-foreground">{finding.finding_key}</span>
-              <span className="text-xs font-medium text-foreground">
-                {Math.round(finding.confidence * 100)}%
-              </span>
-            </div>
-            <p className="mt-2 text-sm leading-6 text-foreground">{finding.rationale}</p>
-          </div>
-        ))}
-      </div>
     </div>
   );
 }

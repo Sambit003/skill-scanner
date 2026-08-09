@@ -145,26 +145,6 @@ async def get_scan_share_summary(
     }
 
 
-@router.get("/{scan_id}/agent-review")
-async def get_scan_agent_review(
-    scan_id: str,
-    service: ScanService = Depends(get_scan_service),
-):
-    """Retrieve Agent Review findings disposition report."""
-    scan = await service.get_scan_details(scan_id)
-    if not scan:
-        raise HTTPException(status_code=404, detail="Scan not found")
-    return {
-        "scan_id": scan_id,
-        "requested": bool(scan.agent_review_requested),
-        "used": bool(scan.agent_review_requested),
-        "status": "completed" if scan.status == "completed" else "pending",
-        "verdict": scan.primary_verdict,
-        "summary": scan.summary,
-        "report": None,
-    }
-
-
 @router.get("/{scan_id}/reports/{format}")
 async def get_scan_report(
     scan_id: str,

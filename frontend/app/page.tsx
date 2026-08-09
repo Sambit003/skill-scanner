@@ -97,9 +97,8 @@ export default function Home() {
       </section>
 
       <footer className="border-t border-border">
-        <div className="mx-auto flex w-full max-w-5xl flex-col items-center gap-4 px-6 py-8 text-sm text-muted-foreground sm:flex-row sm:justify-between">
+        <div className="mx-auto flex w-full max-w-5xl justify-center px-6 py-8 text-sm text-muted-foreground">
           <span>Reports export as {REPORT_FORMATS.join(" · ")}.</span>
-          <span>BYOK keys are used per scan and never stored.</span>
         </div>
       </footer>
     </div>

@@ -32,7 +32,7 @@ ENV PATH="/app/.venv/bin:$PATH" \
     VIRTUAL_ENV="/app/.venv"
 
 # Copy package configurations
-COPY scanner_engine/pyproject.toml ./scanner_engine/
+COPY scan_kernel/pyproject.toml ./scan_kernel/
 COPY backend/pyproject.toml ./backend/
 
 # Install core dependencies into virtualenv
@@ -51,14 +51,6 @@ RUN uv pip install --no-cache \
     "httpx>=0.27.0" \
     "pyyaml>=6.0.1" \
     "yara-python>=4.5.0" \
-    "langchain-core>=0.3.0" \
-    "langchain-openai>=0.2.0" \
-    "langchain-anthropic>=0.2.0" \
-    "langchain-aws>=0.2.0" \
-    "langgraph>=0.2.0" \
-    "langsmith>=0.1.0" \
-    "boto3>=1.34.0" \
-    "openai>=1.50.0" \
     "typer>=0.12.0" \
     "rich>=13.0.0"
 
@@ -89,7 +81,7 @@ WORKDIR /app
 COPY --from=builder --chown=appuser:appgroup /app/.venv /app/.venv
 
 # Copy application source code
-COPY --chown=appuser:appgroup scanner_engine/ /app/scanner_engine/
+COPY --chown=appuser:appgroup scan_kernel/ /app/scan_kernel/
 COPY --chown=appuser:appgroup backend/ /app/backend/
 
 # Switch to non-root user

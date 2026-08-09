@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This document defines what a deterministic-only skill checker can report when given a GitHub repository and asked to scan one skill without any LLM analysis.
+This document defines what the deterministic skill checker reports when given a GitHub repository and asked to scan one skill.
 
 The goal is to make the product scope concrete:
 
@@ -10,13 +10,13 @@ The goal is to make the product scope concrete:
 - scan mode: deterministic only
 - output: findings, severity, score, recommendation, and machine-readable reports
 
-This report is based on the current SkillSpector codebase and excludes all optional semantic/LLM checks.
+This report is based on the current ScanKernel codebase.
 
 ## What "deterministic-only" means
 
 Deterministic scanning means:
 
-- no LLM calls
+- no external model calls
 - no execution of untrusted skill code
 - findings come only from static parsing, pattern matching, dependency lookups, structural analysis, and signature matching
 - the same input should produce the same findings and score
@@ -164,15 +164,11 @@ Python-only data-flow findings:
 - `LP3` Missing Permission Declaration
 - `LP4` Overdeclared Permission
 
-### 17. MCP Tool Poisoning (deterministic subset)
-
-Deterministic-only subset:
+### 17. MCP Tool Poisoning
 
 - `TP1` Hidden Instructions in metadata
 - `TP2` Unicode Deception
 - `TP3` Parameter Description Injection / suspicious defaults
-
-Note: `TP4` is LLM-based and excluded from deterministic-only mode.
 
 ### 18. MCP Rug Pull
 
@@ -249,13 +245,11 @@ For each finding:
 
 ### E. Deterministic coverage metadata
 
-You can explicitly show that the scan was deterministic-only with fields like:
+You can explicitly show that the scan is deterministic with fields like:
 
-- `llm_requested: false`
-- `llm_available: false` or omitted
-- `meta_analysis_applied: false`
+- `analysis_mode: deterministic`
 - `filtering_mode: heuristic`
-- `scan_mode: static-only`
+- `scan_mode: deterministic`
 
 ### F. Completeness / limitations
 
@@ -400,7 +394,7 @@ Do not claim these in static-only mode:
 - perfect description-behavior mismatch detection
 - human-level understanding of policy violations
 
-Those belong to the optional LLM layer.
+Those require human review and are outside the scanner's guarantees.
 
 ## Product-safe positioning
 
@@ -408,14 +402,14 @@ The deterministic-only scanner can be positioned as:
 
 > A reproducible, auditable, no-code-execution security gate for AI skills that detects structural, signature-based, dependency-based, manifest-based, and code-flow-based risks.
 
-That is a strong MVP and a valid enterprise product even before adding BYOK LLM scan.
+This is a strong fit for reproducible CI and pre-installation review.
 
 ## Recommended API response for deterministic-only one-skill scan
 
 ```json
 {
   "target": "https://github.com/org/repo",
-  "scan_mode": "static-only",
+  "scan_mode": "deterministic",
   "risk_score": 72,
   "severity": "HIGH",
   "recommendation": "DO_NOT_INSTALL",
@@ -433,8 +427,7 @@ That is a strong MVP and a valid enterprise product even before adding BYOK LLM 
     "terminal": "available"
   },
   "metadata": {
-    "llm_requested": false,
-    "llm_used": false,
+    "analysis_mode": "deterministic",
     "filtering_mode": "heuristic"
   }
 }

@@ -28,7 +28,7 @@ class ScanModel(Base):
     asset_type = Column(String(64), nullable=False, default="agent_skill", index=True)
     status = Column(String(32), nullable=False, default="QUEUED", index=True)
     
-    # State tracking: QUEUED -> FETCHING -> DETER_SCAN -> LLM_ANALYSIS -> COMPLETED / FAILED
+    # State tracking: QUEUED -> FETCHING -> DETER_SCAN -> COMPLETED / FAILED
     current_stage = Column(String(32), nullable=True)
     
     # Metric aggregates
@@ -42,7 +42,6 @@ class ScanModel(Base):
     findings_by_severity = Column(JSON, default=dict)
     findings_by_category = Column(JSON, default=dict)
     reports_blob = Column(JSON, default=dict)
-    agent_review_blob = Column(JSON, default=dict)
     
     # Timing & errors
     error_message = Column(Text, nullable=True)

@@ -1,13 +1,11 @@
 from fastapi import APIRouter
 from backend.api.v1.routers.scans import router as scans_router
 from backend.api.v1.routers.rules import router as rules_router
-from backend.api.v1.routers.providers import router as providers_router
 
 api_v1_router = APIRouter()
 
 api_v1_router.include_router(scans_router)
 api_v1_router.include_router(rules_router)
-api_v1_router.include_router(providers_router)
 
 @api_v1_router.get("/health", tags=["Health"])
 async def health_check():

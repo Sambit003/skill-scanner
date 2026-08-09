@@ -2,19 +2,11 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, ConfigDict, Field
 
-class AgentReviewRequest(BaseModel):
-    enabled: bool = False
-    provider: Optional[str] = None
-    skill: Optional[str] = None
-    prompt: Optional[str] = None
-    model: Optional[str] = None
-    api_key: Optional[str] = None
-
 class ScanCreateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     target: str = Field(..., description="Target file path, git URL, or directory to scan")
     asset_type: str = Field(default="agent_skill", description="Type of asset (e.g. agent_skill, mcp_server)")
-    use_llm: bool = Field(default=False, description="Enable secondary static-LLM review")
-    agent_review: Optional[AgentReviewRequest] = None
     tags: List[str] = Field(default_factory=list)
 
 class FindingLocation(BaseModel):
@@ -88,8 +80,6 @@ class ScanSummaryResponse(BaseModel):
     findings_count: int = 0
     findings_by_severity: Dict[str, int] = Field(default_factory=dict)
     findings_by_category: Dict[str, int] = Field(default_factory=dict)
-    agent_review_verdict: Optional[str] = None
-    agent_review_summary: Optional[str] = None
 
 class ScanResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -107,8 +97,6 @@ class ScanResponse(BaseModel):
     error_message: Optional[str] = None
     error: Optional[str] = None
     mode: str = "deterministic"
-    agent_review_enabled: bool = False
-    agent_review_provider: Optional[str] = None
 
     def model_post_init(self, __context: Any) -> None:
         if not self.scan_id:
@@ -159,13 +147,4 @@ class ScanDetailResponse(ScanResponse):
     links: Optional[ScanLinksResponse] = None
     scanner_version: Optional[str] = "1.0.0"
     scan_mode: Optional[str] = "deterministic"
-    llm_requested: bool = False
-    llm_used: bool = False
-    agent_review_model: Optional[str] = None
-    agent_review_requested: bool = False
-    agent_review_used: bool = False
-    agent_review_status: Optional[str] = None
-    agent_review_verdict: Optional[str] = None
-    agent_review_summary: Optional[str] = None
     findings: List[FindingResponse] = Field(default_factory=list)
-

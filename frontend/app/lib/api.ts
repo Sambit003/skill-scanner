@@ -8,8 +8,6 @@ export interface CreateScanResponse {
   status: ScanStatus;
   mode: string;
   created_at: string;
-  agent_review_enabled: boolean;
-  agent_review_provider: string | null;
 }
 
 export interface BreakdownItemResponse {
@@ -62,15 +60,6 @@ export interface ScanStatusResponse {
   links: ScanLinksResponse | null;
   scanner_version: string | null;
   scan_mode: string | null;
-  llm_requested: boolean;
-  llm_used: boolean;
-  agent_review_provider: string | null;
-  agent_review_model: string | null;
-  agent_review_requested: boolean;
-  agent_review_used: boolean;
-  agent_review_status: string | null;
-  agent_review_verdict: string | null;
-  agent_review_summary: string | null;
 }
 
 export interface ScanListResponse {
@@ -104,7 +93,7 @@ async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
   try {
     res = await fetch(`${API_BASE}${path}`, init);
   } catch {
-    throw new ApiError(`Couldn't reach the SkillSpector API at ${API_BASE}. Make sure the backend is running.`);
+    throw new ApiError(`Couldn't reach the ScanKernel API at ${API_BASE}. Make sure the backend is running.`);
   }
 
   if (!res.ok) {
@@ -113,25 +102,13 @@ async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
   return res.json();
 }
 
-export interface CreateScanOptions {
-  agentReviewEnabled?: boolean;
-  agentReviewProvider?: "openrouter";
-  agentReviewModel?: string;
-  agentReviewApiKey?: string;
-}
-
-export async function createScan(target: string, options?: CreateScanOptions): Promise<CreateScanResponse> {
+export async function createScan(target: string): Promise<CreateScanResponse> {
   return requestJson<CreateScanResponse>("/v1/scans", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       target,
-      mode: "deterministic",
-      formats: ["json", "markdown", "sarif", "terminal"],
-      agent_review_enabled: options?.agentReviewEnabled ?? false,
-      agent_review_provider: options?.agentReviewProvider ?? null,
-      agent_review_model: options?.agentReviewModel ?? null,
-      agent_review_api_key: options?.agentReviewApiKey ?? null,
+      asset_type: "agent_skill",
     }),
   });
 }
@@ -262,61 +239,6 @@ export interface ScanShareSummaryResponse {
 
 export async function getScanShareSummary(scanId: string): Promise<ScanShareSummaryResponse> {
   return requestJson<ScanShareSummaryResponse>(`/v1/scans/${scanId}/share-summary`);
-}
-
-export interface AgentReviewFindingResponse {
-  finding_key: string;
-  disposition: "keep" | "likely_false_positive" | "likely_duplicate" | "needs_human_review";
-  rationale: string;
-  confidence: number;
-}
-
-export interface AgentReviewStructuredReportResponse {
-  overall_verdict: "confirm_safe" | "confirm_unsafe" | "mixed_signal" | "needs_human_review" | "cautionary";
-  executive_summary: string;
-  top_confirmed_risks: string[];
-  likely_false_positives: AgentReviewFindingResponse[];
-  likely_duplicates: AgentReviewFindingResponse[];
-  follow_up_actions: string[];
-  review_confidence: number;
-}
-
-export interface AgentReviewReportResponse {
-  scan_id: string;
-  requested: boolean;
-  used: boolean;
-  status: string | null;
-  verdict: string | null;
-  summary: string | null;
-  report: AgentReviewStructuredReportResponse | null;
-}
-
-export async function getScanAgentReview(scanId: string): Promise<AgentReviewReportResponse> {
-  return requestJson<AgentReviewReportResponse>(`/v1/scans/${scanId}/agent-review`);
-}
-
-export interface OpenRouterModelResponse {
-  id: string;
-  name: string;
-  description: string | null;
-  context_length: number | null;
-  max_completion_tokens: number | null;
-  modality: string | null;
-  prompt_price: string | null;
-  completion_price: string | null;
-  supported_parameters: string[];
-}
-
-export interface OpenRouterModelsResponse {
-  source: string;
-  fetched_at: number;
-  total_count: number;
-  items: OpenRouterModelResponse[];
-}
-
-export async function listOpenRouterModels(refresh = false): Promise<OpenRouterModelsResponse> {
-  const suffix = refresh ? "?refresh=true" : "";
-  return requestJson<OpenRouterModelsResponse>(`/v1/providers/openrouter/models${suffix}`);
 }
 
 export interface RuleDocResponse {

@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 from typing import List, Dict, Any
 from pydantic import BaseModel
-from scanner_engine.engine.plugins.agent_skills.presentation import (
+from scan_kernel.engine.plugins.agent_skills.presentation import (
     all_rule_docs,
     get_rule_doc,
 )

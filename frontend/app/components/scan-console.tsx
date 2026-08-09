@@ -4,26 +4,16 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createScan, getScan, type ScanStatusResponse } from "@/app/lib/api";
-import {
-  loadOpenRouterSettings,
-  type OpenRouterSettings,
-} from "@/app/lib/byok-settings";
 import { RECOMMENDATION_STYLES, SEVERITY_STYLES, formatRecommendation } from "@/app/lib/severity";
-import { ByokSettingsModal } from "@/app/components/byok-settings-modal";
 import { ReportDownloadMenu } from "@/app/components/report-download-menu";
 import {
   AlertIcon,
   ArrowRightIcon,
-  CheckIcon,
   GithubIcon,
-  KeyIcon,
-  SettingsIcon,
   ShieldIcon,
-  SparkleIcon,
   SpinnerIcon,
 } from "@/app/components/icons";
 
-type ReviewMode = "deterministic" | "agent";
 type Phase = "idle" | "loading" | "done";
 
 const MAX_POLL_ATTEMPTS = 60;
@@ -37,29 +27,16 @@ function isLikelyValidTarget(value: string): boolean {
 export function ScanConsole() {
   const router = useRouter();
   const [target, setTarget] = useState("");
-  const [reviewMode, setReviewMode] = useState<ReviewMode>("deterministic");
   const [fieldError, setFieldError] = useState<string | null>(null);
   const [apiError, setApiError] = useState<string | null>(null);
   const [phase, setPhase] = useState<Phase>("idle");
   const [scanStatus, setScanStatus] = useState<ScanStatusResponse | null>(null);
-  const [openRouterSettings, setOpenRouterSettings] = useState<OpenRouterSettings>(() =>
-    loadOpenRouterSettings()
-  );
-  const [settingsOpen, setSettingsOpen] = useState(false);
 
   const pollHandle = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pollAttempts = useRef(0);
 
   useEffect(() => {
-    const onStorage = (event: StorageEvent) => {
-      if (event.key) {
-        setOpenRouterSettings(loadOpenRouterSettings());
-      }
-    };
-
-    window.addEventListener("storage", onStorage);
     return () => {
-      window.removeEventListener("storage", onStorage);
       if (pollHandle.current) clearInterval(pollHandle.current);
     };
   }, []);
@@ -112,20 +89,10 @@ export function ScanConsole() {
       return;
     }
 
-    if (reviewMode === "agent" && !openRouterSettings.apiKey.trim()) {
-      setFieldError("Add your OpenRouter API key in Settings before starting agent review.");
-      return;
-    }
-
     setScanStatus(null);
     setPhase("loading");
     try {
-      const created = await createScan(target.trim(), {
-        agentReviewEnabled: reviewMode === "agent",
-        agentReviewProvider: reviewMode === "agent" ? "openrouter" : undefined,
-        agentReviewModel: reviewMode === "agent" ? openRouterSettings.model : undefined,
-        agentReviewApiKey: reviewMode === "agent" ? openRouterSettings.apiKey : undefined,
-      });
+      const created = await createScan(target.trim());
       pollScan(created.scan_id);
     } catch (err) {
       setApiError(err instanceof Error ? err.message : "Couldn't start the scan.");
@@ -134,14 +101,11 @@ export function ScanConsole() {
   }
 
   const isLoading = phase === "loading";
-  const hasOpenRouterKey = openRouterSettings.apiKey.trim().length > 0;
   const statusLabel =
     scanStatus?.status === "queued"
       ? "Queued…"
       : scanStatus?.status === "running"
-        ? reviewMode === "agent"
-          ? "Running deterministic scan, then agent review…"
-          : "Running static analysis…"
+        ? "Running deterministic analysis…"
         : "Starting scan…";
 
   return (
@@ -186,108 +150,14 @@ export function ScanConsole() {
 
         <div className="mt-6">
           <span className="mb-2 block text-sm font-medium text-foreground">Scan strategy</span>
-          <div className="relative grid grid-cols-2 rounded-full border border-border bg-muted p-1">
-            <span
-              aria-hidden="true"
-              className={`absolute inset-y-1 w-[calc(50%-4px)] rounded-full bg-card shadow-sm transition-transform duration-150 ease-out ${
-                reviewMode === "agent" ? "translate-x-[calc(100%+8px)]" : "translate-x-0"
-              }`}
-            />
-            <button
-              type="button"
-              onClick={() => setReviewMode("deterministic")}
-              className={`relative z-10 flex items-center justify-center gap-1.5 rounded-full px-3 py-2 text-sm font-medium transition-colors duration-150 ${
-                reviewMode === "deterministic" ? "text-foreground" : "text-muted-foreground"
-              }`}
-            >
+          <div className="flex items-center gap-2 rounded-xl border border-border bg-muted px-4 py-3 text-sm font-medium text-foreground">
               <ShieldIcon className="h-4 w-4" />
               Deterministic
-            </button>
-            <button
-              type="button"
-              onClick={() => setReviewMode("agent")}
-              className={`relative z-10 flex items-center justify-center gap-1.5 rounded-full px-3 py-2 text-sm font-medium transition-colors duration-150 ${
-                reviewMode === "agent" ? "text-foreground" : "text-muted-foreground"
-              }`}
-            >
-              <SparkleIcon className="h-4 w-4" />
-              + Agent review
-            </button>
           </div>
           <p className="mt-2 text-sm text-muted-foreground">
-            {reviewMode === "deterministic"
-              ? "Static parsing, pattern matching, and taint analysis only. No code execution, no LLM calls."
-              : "Runs the deterministic scan first, then sends only the findings and supporting snippets to an OpenRouter model you select."}
+            Static parsing, pattern matching, and taint analysis only. No code execution or external model calls.
           </p>
         </div>
-
-        {reviewMode === "agent" && (
-          <div className="mt-4 rounded-2xl border border-border bg-background p-4">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium text-foreground">OpenRouter BYOK</span>
-                  {hasOpenRouterKey ? (
-                    <span className="inline-flex items-center gap-1 rounded-full bg-success-bg px-2 py-0.5 text-[11px] font-medium text-success">
-                      <CheckIcon className="h-3 w-3" />
-                      Configured
-                    </span>
-                  ) : (
-                    <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
-                      Not configured
-                    </span>
-                  )}
-                </div>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Keys stay in your browser until you start a scan. For the scan itself, the key is
-                  sent once and held only in memory by the backend worker.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setSettingsOpen(true)}
-                aria-label="Manage OpenRouter settings"
-                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-border text-foreground transition-colors duration-150 hover:border-border-strong hover:bg-muted"
-              >
-                <SettingsIcon className="h-4 w-4" />
-              </button>
-            </div>
-
-            <div className="mt-4 grid gap-3 sm:grid-cols-2">
-              <div className="rounded-xl border border-border bg-card px-4 py-3">
-                <span className="block text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                  Provider
-                </span>
-                <span className="mt-1 block text-sm font-medium text-foreground">OpenRouter</span>
-              </div>
-              <div className="rounded-xl border border-border bg-card px-4 py-3">
-                <span className="block text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                  Model
-                </span>
-                <span className="mt-1 block truncate font-mono text-sm text-foreground">
-                  {openRouterSettings.model}
-                </span>
-              </div>
-            </div>
-
-            {!hasOpenRouterKey && (
-              <div className="mt-4 flex items-start gap-2.5 rounded-xl bg-info-bg px-4 py-3 text-sm text-info">
-                <KeyIcon className="mt-0.5 h-4 w-4 shrink-0" />
-                <span>
-                  Add your OpenRouter API key in{" "}
-                  <button
-                    type="button"
-                    onClick={() => setSettingsOpen(true)}
-                    className="font-medium underline underline-offset-2"
-                  >
-                    Settings
-                  </button>{" "}
-                  to enable agent review.
-                </span>
-              </div>
-            )}
-          </div>
-        )}
 
         <button
           type="submit"
@@ -401,12 +271,6 @@ export function ScanConsole() {
         )}
       </div>
 
-      {settingsOpen && (
-        <ByokSettingsModal
-          onClose={() => setSettingsOpen(false)}
-          onSaved={setOpenRouterSettings}
-        />
-      )}
     </div>
   );
 }

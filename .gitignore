@@ -69,41 +69,24 @@ backend/.env*
 !backend/.env.example
 
 # ==============================================================================
-# Scanner Engine Module (scanner_engine/)
+# ScanKernel engine module
 # ==============================================================================
-scanner_engine/__pycache__/
-scanner_engine/**/*.py[cod]
-scanner_engine/.venv/
-scanner_engine/venv/
-scanner_engine/.pytest_cache/
-scanner_engine/.mypy_cache/
-scanner_engine/.ruff_cache/
-scanner_engine/.coverage
-scanner_engine/.coverage.*
-scanner_engine/htmlcov/
-scanner_engine/build/
-scanner_engine/dist/
-scanner_engine/*.egg-info/
-scanner_engine/*.yarc
-scanner_engine/.yara_cache/
-scanner_engine/reports/
-scanner_engine/scan_output/
-
-# ==============================================================================
-# Legacy / Subsystem references
-# ==============================================================================
-SkillSpector/.venv/
-SkillSpector/__pycache__/
-SkillSpector/**/*.py[cod]
-SkillSpector/.pytest_cache/
-SkillSpector/.mypy_cache/
-SkillSpector/.ruff_cache/
-SkillSpector/.coverage
-SkillSpector/.coverage.*
-SkillSpector/htmlcov/
-SkillSpector/build/
-SkillSpector/dist/
-SkillSpector/*.egg-info/
-SkillSpector/.langgraph_api/
-SkillSpector/.skillspector/
-SkillSpector/tmp/
+scan_kernel/__pycache__/
+scan_kernel/**/*.py[cod]
+scan_kernel/.venv/
+scan_kernel/venv/
+scan_kernel/.pytest_cache/
+scan_kernel/.mypy_cache/
+scan_kernel/.ruff_cache/
+scan_kernel/.coverage
+scan_kernel/.coverage.*
+scan_kernel/htmlcov/
+scan_kernel/build/
+scan_kernel/dist/
+scan_kernel/*.egg-info/
+scan_kernel/*.yarc
+scan_kernel/.yara_cache/
+scan_kernel/.scan_kernel/
+scan_kernel/reports/
+scan_kernel/scan_output/
+scan_kernel/tmp/
