@@ -1,0 +1,32 @@
+language: "python"
+
+tasks:
+  check:
+    command: "uv run python -m compileall -q ."
+    toolchains: "system"
+    env:
+      PYTHONPATH: "../../apps:../../packages"
+    inputs:
+      - "**/*.py"
+      - "pyproject.toml"
+      - "/pyproject.toml"
+      - "/uv.lock"
+
+  test:
+    command: "uv run pytest -q tests"
+    toolchains: "system"
+    env:
+      PYTHONPATH: "../../apps:../../packages"
+    inputs:
+      - "**/*.py"
+      - "pyproject.toml"
+      - "/contracts/**/*"
+      - "/pyproject.toml"
+      - "/uv.lock"
+
+  dev:
+    command: "uv run uvicorn backend.api.main:app --host 0.0.0.0 --port 8000"
+    toolchains: "system"
+    env:
+      PYTHONPATH: "../../apps:../../packages"
+    preset: "server"

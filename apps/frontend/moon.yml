@@ -1,0 +1,35 @@
+language: "typescript"
+
+tasks:
+  setup:
+    command: "pnpm install --frozen-lockfile"
+    options:
+      cache: false
+      runInCI: false
+
+  lint:
+    command: "pnpm run lint"
+    inputs:
+      - "app/**/*"
+      - "eslint.config.mjs"
+      - "package.json"
+      - "tsconfig.json"
+
+  build:
+    command: "pnpm run build"
+    inputs:
+      - "app/**/*"
+      - "public/**/*"
+      - "next.config.ts"
+      - "package.json"
+      - "postcss.config.mjs"
+      - "tsconfig.json"
+      - "/package.json"
+      - "/pnpm-lock.yaml"
+      - "/pnpm-workspace.yaml"
+    outputs:
+      - ".next"
+
+  dev:
+    command: "pnpm run dev"
+    preset: "server"

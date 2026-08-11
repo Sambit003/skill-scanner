@@ -1,0 +1,169 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://superalign.ai/contracts/scan-kernel/v1/response.schema.json",
+  "title": "ScanKernel engine response v1",
+  "oneOf": [
+    { "$ref": "#/$defs/success" },
+    { "$ref": "#/$defs/error" }
+  ],
+  "$defs": {
+    "success": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["protocol_version", "ok", "result"],
+      "properties": {
+        "protocol_version": { "const": "1" },
+        "ok": { "const": true },
+        "result": {
+          "oneOf": [
+            { "$ref": "#/$defs/scanResult" },
+            { "$ref": "#/$defs/rulesResult" },
+            { "$ref": "#/$defs/ruleResult" }
+          ]
+        }
+      }
+    },
+    "error": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["protocol_version", "ok", "error"],
+      "properties": {
+        "protocol_version": { "const": "1" },
+        "ok": { "const": false },
+        "error": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["code", "message"],
+          "properties": {
+            "code": {
+              "enum": ["INVALID_REQUEST", "UNSUPPORTED_ASSET_TYPE", "TIMEOUT", "SCAN_FAILED"]
+            },
+            "message": { "type": "string", "minLength": 1 }
+          }
+        }
+      }
+    },
+    "scanResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "summary", "findings", "reports"],
+      "properties": {
+        "kind": { "const": "scan" },
+        "summary": { "$ref": "#/$defs/summary" },
+        "findings": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/finding" }
+        },
+        "reports": {
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": { "enum": ["json", "markdown", "sarif", "terminal"] },
+          "additionalProperties": { "$ref": "#/$defs/report" }
+        }
+      }
+    },
+    "rulesResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "items"],
+      "properties": {
+        "kind": { "const": "rules" },
+        "items": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/ruleDoc" }
+        }
+      }
+    },
+    "ruleResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "rule"],
+      "properties": {
+        "kind": { "const": "rule" },
+        "rule": { "$ref": "#/$defs/ruleDoc" }
+      }
+    },
+    "ruleDoc": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "rule_id",
+        "rule_family",
+        "title",
+        "category",
+        "description",
+        "remediation",
+        "documentation_url"
+      ],
+      "properties": {
+        "rule_id": { "type": "string", "minLength": 1 },
+        "rule_family": { "type": "string", "minLength": 1 },
+        "title": { "type": "string", "minLength": 1 },
+        "category": { "type": "string", "minLength": 1 },
+        "description": { "type": "string", "minLength": 1 },
+        "remediation": { "type": "string", "minLength": 1 },
+        "documentation_url": { "type": "string", "minLength": 1 }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "risk_score",
+        "severity",
+        "recommendation",
+        "safe_to_install",
+        "findings_count",
+        "findings_by_severity",
+        "findings_by_category",
+        "scanner_version",
+        "scan_mode"
+      ],
+      "properties": {
+        "risk_score": { "type": "integer", "minimum": 0, "maximum": 100 },
+        "severity": { "type": "string" },
+        "recommendation": { "type": "string" },
+        "safe_to_install": { "type": "boolean" },
+        "findings_count": { "type": "integer", "minimum": 0 },
+        "findings_by_severity": { "$ref": "#/$defs/counts" },
+        "findings_by_category": { "$ref": "#/$defs/counts" },
+        "scanner_version": { "type": "string" },
+        "scan_mode": { "type": "string" }
+      }
+    },
+    "counts": {
+      "type": "object",
+      "additionalProperties": { "type": "integer", "minimum": 0 }
+    },
+    "finding": {
+      "type": "object",
+      "required": ["id", "category", "severity", "confidence", "location"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "category": { "type": "string", "minLength": 1 },
+        "severity": { "type": "string", "minLength": 1 },
+        "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+        "location": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["file", "start_line", "end_line"],
+          "properties": {
+            "file": { "type": "string" },
+            "start_line": { "type": "integer", "minimum": 1 },
+            "end_line": { "type": ["integer", "null"], "minimum": 1 }
+          }
+        }
+      },
+      "additionalProperties": true
+    },
+    "report": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["content", "content_type"],
+      "properties": {
+        "content": { "type": "string" },
+        "content_type": { "type": "string", "minLength": 1 }
+      }
+    }
+  }
+}

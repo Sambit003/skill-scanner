@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://superalign.ai/contracts/scan-kernel/v1/request.schema.json",
+  "title": "ScanKernel engine request v1",
+  "oneOf": [
+    { "$ref": "#/$defs/scan" },
+    { "$ref": "#/$defs/listRules" },
+    { "$ref": "#/$defs/getRule" }
+  ],
+  "$defs": {
+    "scan": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operation",
+        "protocol_version",
+        "target",
+        "asset_type",
+        "output_formats",
+        "timeout_seconds"
+      ],
+      "properties": {
+        "operation": { "const": "scan" },
+        "protocol_version": { "const": "1" },
+        "target": { "type": "string", "minLength": 1 },
+        "asset_type": { "type": "string", "minLength": 1 },
+        "output_formats": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "enum": ["json", "markdown", "sarif", "terminal"] }
+        },
+        "timeout_seconds": { "type": "number", "exclusiveMinimum": 0, "maximum": 3600 }
+      }
+    },
+    "listRules": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["operation", "protocol_version"],
+      "properties": {
+        "operation": { "const": "list_rules" },
+        "protocol_version": { "const": "1" }
+      }
+    },
+    "getRule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["operation", "protocol_version", "rule_id"],
+      "properties": {
+        "operation": { "const": "get_rule" },
+        "protocol_version": { "const": "1" },
+        "rule_id": { "type": "string", "minLength": 1 }
+      }
+    }
+  }
+}

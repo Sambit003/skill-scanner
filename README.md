@@ -1,24 +1,44 @@
 # ScanKernel Demo
 
-ScanKernel is a deterministic security scanner for AI skill repositories. The application accepts a Git URL, local directory, archive, or skill manifest; runs static analyzers; stores the result; and exposes JSON, Markdown, SARIF, and terminal reports.
+ScanKernel is a deterministic security scanner for AI skill repositories. The
+application accepts a Git URL, local directory, archive, or skill manifest, runs
+static analyzers, stores the result, and exposes JSON, Markdown, SARIF, and
+terminal reports.
 
-The scan path is fully local and deterministic. It does not execute scanned code or send scan content to an external model service.
+The scan path is local and deterministic. It does not execute scanned code or
+send scan content to an external model service.
 
-## Architecture
+## Monorepo
 
-- `frontend/`: Next.js dashboard for starting scans and reviewing results
-- `backend/`: FastAPI API and Celery worker
-- `scan_kernel/`: native Python pipeline with pattern, AST, taint, YARA, supply-chain, and MCP analyzers
-- PostgreSQL: scan metadata, summaries, findings, and rendered reports
-- Redis: Celery broker and result backend
+- `apps/frontend/`: Next.js dashboard
+- `apps/backend/`: FastAPI API and Celery worker
+- `packages/scan_kernel/`: current Python scanner engine; the next implementation can replace it with Go
+- `contracts/scan-kernel/v1/`: language-neutral scanner process contract
 
-The scanner pipeline runs these stages:
+[moon](https://moonrepo.dev/) owns the project and task graph. pnpm remains the
+JavaScript package manager, uv remains the Python workspace manager, and Go is
+already part of the pinned toolchain for the next scanner iteration.
 
-1. Resolve and safely prepare the input.
-2. Build the file and manifest context.
-3. Run deterministic analyzers.
-4. Apply confidence filtering and default remediations.
-5. Score, suppress, and render reports.
+Install [proto](https://moonrepo.dev/proto) once, then provision the repository's
+major/minor tool families and dependencies:
+
+```bash
+proto install
+moon run workspace:setup
+```
+
+Authoritative local workflows:
+
+```bash
+moon run workspace:check
+moon run workspace:dev
+moon run frontend:dev
+moon run backend:dev
+moon run scan-kernel:smoke
+```
+
+Moon caches deterministic tasks locally. CI and remote caching are intentionally
+not configured in this iteration.
 
 ## Run with Docker Compose
 
@@ -32,39 +52,30 @@ Then open:
 - API: `http://localhost:8000`
 - Health: `http://localhost:8000/api/v1/health`
 
-Stop the stack with:
+Stop the stack with `docker compose down`. The Compose file intentionally does
+not manage a Cloudflare Tunnel.
 
-```bash
-docker compose down
-```
+## Scanner process boundary
 
-## API
+The worker invokes `scan-kernel-engine`, writes one protocol-v1 JSON request to
+stdin, and reads one JSON response from stdout. Findings—including critical
+findings—are successful process results. Invalid requests exit `2`; scanner
+execution failures exit `3`; diagnostic logs are written to stderr.
 
-The API is mounted at both `/api/v1` and `/v1`. The browser client uses `NEXT_PUBLIC_API_URL` to reach the backend directly.
+Protocol v1 exposes `scan`, `list_rules`, and `get_rule` operations, so the API
+does not import scanner implementation modules for either execution or rule
+metadata.
 
-- `POST /v1/scans` starts a scan with `{ "target": "...", "asset_type": "agent_skill" }`.
-- `GET /v1/scans/{scan_id}` returns status and summary data.
-- `GET /v1/scans/{scan_id}/findings` returns filterable findings.
-- `GET /v1/scans/{scan_id}/reports` lists report downloads.
-- `GET /v1/scans/{scan_id}/reports/{format}` returns `json`, `markdown`, `sarif`, or `terminal` output.
-- `GET /v1/rules` and `GET /v1/rules/{rule_id}` expose rule documentation.
+The backend depends only on this contract. A future Go binary can replace the
+Python launcher at `/usr/local/bin/scan-kernel-engine` without changing the
+worker, database, frontend, or HTTP API.
 
-## Local validation
+The public API remains mounted at `/api/v1` and `/v1`:
 
-```bash
-python3 -m compileall -q backend scan_kernel/engine
-python3 -m pip check
-cd frontend
-npm run lint
-npm run build
-```
-
-For a direct scanner smoke test:
-
-```bash
-python3 -m scan_kernel.engine.plugins.agent_skills.cli scan . --format json
-```
-
-## Deployment notes
-
-The frontend is the public service and the browser reaches the backend at its configured public URL. The Compose file intentionally does not manage a Cloudflare Tunnel; an externally managed tunnel can target the published frontend port.
+- `POST /v1/scans`
+- `GET /v1/scans/{scan_id}`
+- `GET /v1/scans/{scan_id}/findings`
+- `GET /v1/scans/{scan_id}/reports`
+- `GET /v1/scans/{scan_id}/reports/{format}`
+- `GET /v1/rules`
+- `GET /v1/rules/{rule_id}`

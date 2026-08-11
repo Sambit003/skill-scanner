@@ -1,0 +1,12 @@
+projects:
+  workspace: "."
+  backend: "apps/backend"
+  frontend: "apps/frontend"
+  scan-kernel: "packages/scan_kernel"
+
+vcs:
+  client: "git"
+  defaultBranch: "main"
+
+pipeline:
+  installDependencies: false

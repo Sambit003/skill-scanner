@@ -1,0 +1,46 @@
+language: "python"
+
+tasks:
+  check:
+    command: "uv run python -m compileall -q engine"
+    toolchains: "system"
+    env:
+      PYTHONPATH: ".."
+    inputs:
+      - "engine/**/*.py"
+      - "pyproject.toml"
+      - "/pyproject.toml"
+      - "/uv.lock"
+
+  test:
+    command: "uv run pytest -q tests"
+    toolchains: "system"
+    env:
+      PYTHONPATH: ".."
+    inputs:
+      - "engine/**/*"
+      - "tests/**/*"
+      - "pyproject.toml"
+      - "/contracts/**/*"
+      - "/pyproject.toml"
+      - "/uv.lock"
+
+  build:
+    command: "uv run python -m compileall -q engine"
+    toolchains: "system"
+    env:
+      PYTHONPATH: ".."
+
+  smoke:
+    command: "uv run pytest -q tests/test_protocol_cli.py -k success"
+    toolchains: "system"
+    env:
+      PYTHONPATH: ".."
+    options:
+      cache: false
+
+  cli-version:
+    command: "uv run python -m scan_kernel.engine.plugins.agent_skills.cli --version"
+    toolchains: "system"
+    env:
+      PYTHONPATH: ".."

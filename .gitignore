@@ -1,8 +1,59 @@
-# ==============================================================================
-# Repository Global Ignore
-# ==============================================================================
+# Workspace tooling
+.moon/cache/
+.moon/docker/
+.proto/
+.venv/
+.pnpm-store/
+uv-cache/
 
-# OS / Editor artifacts
+# JavaScript / Next.js
+**/node_modules/
+**/.next/
+**/.vercel/
+**/out/
+**/dist/
+**/coverage/
+**/*.tsbuildinfo
+**/next-env.d.ts
+
+# Python
+**/__pycache__/
+**/*.py[cod]
+**/.pytest_cache/
+**/.mypy_cache/
+**/.ruff_cache/
+**/.coverage
+**/.coverage.*
+**/htmlcov/
+**/*.egg-info/
+
+# Scanner runtime artifacts
+**/*.yarc
+**/.yara_cache/
+**/.scan_kernel/
+**/reports/
+**/scan_output/
+
+# Databases, queues, logs, and temporary files
+**/*.db
+**/*.sqlite
+**/*.sqlite3
+**/celerybeat-schedule
+**/celerybeat.pid
+**/*.log
+**/*.pid
+**/tmp/
+**/temp/
+
+# Environment and secrets
+.env
+.env.*
+**/.env
+**/.env.*
+!.env.example
+!**/.env.example
+
+# Editors and operating systems
 .DS_Store
 Thumbs.db
 Desktop.ini
@@ -11,82 +62,3 @@ Desktop.ini
 *.swp
 *.swo
 *~
-*.bak
-
-# Temporary Files & Logs
-tmp/
-temp/
-*.log
-*.pid
-
-# Environment & Secrets (Global Safeguard)
-.env
-.env.*
-.env.local
-.env.*.local
-!.env.example
-
-# ==============================================================================
-# Frontend Module (frontend/)
-# ==============================================================================
-frontend/node_modules/
-frontend/.next/
-frontend/out/
-frontend/build/
-frontend/dist/
-frontend/.output/
-frontend/.nuxt/
-frontend/coverage/
-frontend/.turbo/
-frontend/.vercel/
-frontend/*.tsbuildinfo
-frontend/next-env.d.ts
-frontend/.env*
-!frontend/.env.example
-
-# ==============================================================================
-# Backend Module (backend/)
-# ==============================================================================
-backend/__pycache__/
-backend/**/*.py[cod]
-backend/.venv/
-backend/venv/
-backend/.pytest_cache/
-backend/.mypy_cache/
-backend/.ruff_cache/
-backend/.coverage
-backend/.coverage.*
-backend/htmlcov/
-backend/build/
-backend/dist/
-backend/*.egg-info/
-backend/*.db
-backend/*.sqlite
-backend/*.sqlite3
-backend/celerybeat-schedule
-backend/celerybeat.pid
-backend/.env*
-!backend/.env.example
-
-# ==============================================================================
-# ScanKernel engine module
-# ==============================================================================
-scan_kernel/__pycache__/
-scan_kernel/**/*.py[cod]
-scan_kernel/.venv/
-scan_kernel/venv/
-scan_kernel/.pytest_cache/
-scan_kernel/.mypy_cache/
-scan_kernel/.ruff_cache/
-scan_kernel/.coverage
-scan_kernel/.coverage.*
-scan_kernel/htmlcov/
-scan_kernel/build/
-scan_kernel/dist/
-scan_kernel/*.egg-info/
-scan_kernel/*.yarc
-scan_kernel/.yara_cache/
-scan_kernel/.scan_kernel/
-scan_kernel/reports/
-scan_kernel/scan_output/
-scan_kernel/tmp/

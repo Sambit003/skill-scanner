@@ -4,6 +4,9 @@
 .gitattributes
 .repo-admin
 .agents
+.moon
+.prototools
+moon.yml
 docs/
 *.md
 !README.md
@@ -21,6 +24,7 @@ docs/
 
 # Python & Virtualenv noise
 **/.venv/
+.venv/
 **/venv/
 **/env/
 **/__pycache__/
@@ -36,6 +40,11 @@ docs/
 **/*.egg-info/
 **/.installed.cfg
 **/*.egg
+**/.pytest_cache/
+
+# Local monorepo caches
+**/.moon/
+**/.proto/
 
 # Scanner temp & rule caches
 **/*.yarc

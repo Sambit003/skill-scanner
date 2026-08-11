@@ -1,0 +1,7 @@
+javascript:
+  packageManager: "pnpm"
+  inferTasksFromScripts: false
+
+node: {}
+pnpm: {}
+go: {}

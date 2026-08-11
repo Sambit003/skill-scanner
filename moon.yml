@@ -1,0 +1,35 @@
+tasks:
+  setup:
+    command: "uv sync --all-packages --locked"
+    deps:
+      - "frontend:setup"
+    toolchains: "system"
+    options:
+      cache: false
+      runInCI: false
+
+  check:
+    command: "docker compose config --quiet"
+    deps:
+      - "backend:check"
+      - "backend:test"
+      - "frontend:lint"
+      - "frontend:build"
+      - "scan-kernel:check"
+      - "scan-kernel:test"
+    toolchains: "system"
+    options:
+      cache: false
+      runInCI: false
+
+  dev:
+    command: "docker compose up --build"
+    preset: "server"
+    toolchains: "system"
+
+  docker-build:
+    command: "docker compose build"
+    toolchains: "system"
+    options:
+      cache: false
+      runInCI: false
