@@ -18,7 +18,8 @@ The backend creates a queued scan, dispatches a Celery task, and records lifecyc
 
 1. Resolve input.
 2. Build file and manifest context.
-3. Run pattern, AST, taint, YARA, supply-chain, and MCP checks.
+3. Dispatch to the compile-time Agent Skill plugin and run deterministic pattern,
+   behavioral, taint, signature, supply-chain, and MCP-oriented checks in Go.
 4. Apply deterministic confidence filtering.
 5. Compute risk, apply baselines, and render reports.
 
@@ -52,4 +53,12 @@ Core routes:
 - No scan content leaves the scanner runtime.
 - Report formats agree on findings and risk score.
 - The frontend can start and inspect a completed scan.
-- Python compilation, frontend lint, frontend build, and a direct scanner smoke test pass.
+- Go formatting, vet, tests and protocol contracts pass alongside backend tests,
+  frontend lint/build, Docker configuration, and a direct binary smoke test.
+- The pinned scanner corpus passes `moon run scan-kernel:regression`:
+  the readable identity fields, every user-visible finding field, risk score,
+  severity/category breakdowns, recommendation, and install verdict must match.
+- The Compose scanner uses native YARA with stable bundled-rule namespaces,
+  metadata overrides, match snippets, and custom-rule loading behavior.
+- The skill-only profile produces six target archives with manifests, checksums,
+  and dependency notices.

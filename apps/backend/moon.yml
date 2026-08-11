@@ -1,11 +1,15 @@
 language: "python"
 
+dependsOn:
+  - id: "scan-kernel-contracts"
+    scope: "production"
+
 tasks:
   check:
     command: "uv run python -m compileall -q ."
     toolchains: "system"
     env:
-      PYTHONPATH: "../../apps:../../packages"
+      PYTHONPATH: "../../apps"
     inputs:
       - "**/*.py"
       - "pyproject.toml"
@@ -16,7 +20,7 @@ tasks:
     command: "uv run pytest -q tests"
     toolchains: "system"
     env:
-      PYTHONPATH: "../../apps:../../packages"
+      PYTHONPATH: "../../apps"
     inputs:
       - "**/*.py"
       - "pyproject.toml"
@@ -24,9 +28,26 @@ tasks:
       - "/pyproject.toml"
       - "/uv.lock"
 
+  integration:
+    command: "uv run pytest -q tests/test_scanner_integration.py"
+    deps:
+      - "scan-kernel:build"
+      - "scan-kernel-contracts:check"
+    toolchains: "system"
+    env:
+      PYTHONPATH: "../../apps"
+      SCAN_KERNEL_EXECUTABLE: "../../packages/scan_kernel/dist/dev/scan-kernel-engine"
+    inputs:
+      - "**/*.py"
+      - "tests/**/*"
+      - "/contracts/**/*"
+      - "/packages/scan_kernel/dist/dev/scan-kernel-engine"
+    options:
+      cache: false
+
   dev:
     command: "uv run uvicorn backend.api.main:app --host 0.0.0.0 --port 8000"
     toolchains: "system"
     env:
-      PYTHONPATH: "../../apps:../../packages"
+      PYTHONPATH: "../../apps"
     preset: "server"

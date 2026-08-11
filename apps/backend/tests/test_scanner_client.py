@@ -72,12 +72,14 @@ async def test_nonzero_machine_error_is_reported(tmp_path: Path) -> None:
         f"import sys\nsys.stdin.read()\nprint({payload!r})\nraise SystemExit(3)\n",
     )
 
-    with pytest.raises(ScannerClientError, match="fixture failure"):
+    with pytest.raises(ScannerClientError, match="fixture failure") as exc_info:
         await ScannerClient(executable=executable, timeout_seconds=5).scan(
             target="fixture",
             asset_type="agent_skill",
             output_formats=["json"],
         )
+
+    assert exc_info.value.code == "SCAN_FAILED"
 
 
 @pytest.mark.asyncio

@@ -3,6 +3,7 @@ tasks:
     command: "uv sync --all-packages --locked"
     deps:
       - "frontend:setup"
+      - "scan-kernel:setup"
     toolchains: "system"
     options:
       cache: false
@@ -11,12 +12,14 @@ tasks:
   check:
     command: "docker compose config --quiet"
     deps:
+      - "scan-kernel-contracts:check"
       - "backend:check"
       - "backend:test"
       - "frontend:lint"
       - "frontend:build"
       - "scan-kernel:check"
       - "scan-kernel:test"
+      - "scan-kernel:contract"
     toolchains: "system"
     options:
       cache: false
@@ -29,6 +32,15 @@ tasks:
 
   docker-build:
     command: "docker compose build"
+    deps:
+      - "scan-kernel:build"
+    toolchains: "system"
+    options:
+      cache: false
+      runInCI: false
+
+  bundle-skill:
+    command: "bash packages/scan_kernel/scripts/build-scanner.sh --profile skill"
     toolchains: "system"
     options:
       cache: false

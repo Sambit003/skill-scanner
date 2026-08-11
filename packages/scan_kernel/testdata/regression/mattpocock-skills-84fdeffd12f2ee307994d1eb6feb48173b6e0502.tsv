@@ -1,0 +1,32 @@
+AR1	HIGH	Anti-Refusal	docs/productivity/to-questionnaire.md	5	Anti-Refusal Statement	0.21
+AR1	HIGH	Anti-Refusal	skills/productivity/to-questionnaire/SKILL.md	9	Anti-Refusal Statement	0.7
+AS1	HIGH	Agent Snooping	skills/misc/git-guardrails-claude-code/SKILL.md	24	Agent Config Directory Access	0.9
+EA2	MEDIUM	Excessive Agency	CHANGELOG.md	119	Autonomous Decision Making	0.75
+EA2	MEDIUM	Excessive Agency	skills/in-progress/loop-me/SKILL.md	27	Autonomous Decision Making	0.75
+EA2	MEDIUM	Excessive Agency	skills/productivity/grilling/SKILL.md	20	Autonomous Decision Making	0.8
+EA3	LOW	Excessive Agency	LICENSE	16	Scope Creep	0.7
+MP2	MEDIUM	Memory Poisoning	skills/engineering/ask-matt/PHASE-BOUNDARIES.md	9	Context Window Stuffing	0.8
+MP2	MEDIUM	Memory Poisoning	skills/misc/migrate-to-shoehorn/SKILL.md	99	Context Window Stuffing	0.8
+MP3	HIGH	Memory Poisoning	docs/engineering/implement.md	41	Memory Manipulation	0.24
+P6	HIGH	System Prompt Leakage	skills/engineering/diagnosing-bugs/scripts/hitl-loop.template.sh	10	Direct Prompt Extraction	0.85
+RA2	MEDIUM	Rogue Agent	AGENTS.md	17	Session Persistence	0.6
+RA2	MEDIUM	Rogue Agent	CLAUDE.md	17	Session Persistence	0.6
+RP1	MEDIUM	MCP Rug Pull	.agents/adr/0002-ship-as-a-claude-code-plugin.md	3		0.7
+RP1	MEDIUM	MCP Rug Pull	.agents/install-block.md	32		0.7
+RP1	MEDIUM	MCP Rug Pull	.agents/install-block.md	44		0.7
+RP1	MEDIUM	MCP Rug Pull	.agents/install-block.md	48		0.7
+RP1	MEDIUM	MCP Rug Pull	.github/workflows/release.yml	33		0.7
+RP1	MEDIUM	MCP Rug Pull	README.md	52		0.7
+RP1	MEDIUM	MCP Rug Pull	README.md	67		0.7
+RP1	MEDIUM	MCP Rug Pull	README.md	70		0.7
+RP1	MEDIUM	MCP Rug Pull	docs/engineering/ask-matt.md	72		0.7
+RP1	MEDIUM	MCP Rug Pull	docs/engineering/code-review.md	52		0.7
+RP1	MEDIUM	MCP Rug Pull	skills/in-progress/README.md	8		0.7
+RP1	MEDIUM	MCP Rug Pull	skills/misc/setup-pre-commit/SKILL.md	32		0.7
+RP1	MEDIUM	MCP Rug Pull	skills/misc/setup-pre-commit/SKILL.md	42		0.7
+RP1	MEDIUM	MCP Rug Pull	skills/misc/setup-pre-commit/SKILL.md	79		0.7
+SC1	LOW	Supply Chain	package.json	17	Unpinned Dependencies	0.4
+SC1	LOW	Supply Chain	package.json	18	Unpinned Dependencies	0.4
+TM1	HIGH	Tool Misuse	skills/misc/git-guardrails-claude-code/SKILL.md	13	Tool Parameter Abuse	0.65
+TM1	HIGH	Tool Misuse	skills/misc/git-guardrails-claude-code/scripts/block-dangerous-git.sh	8	Tool Parameter Abuse	0.75
+TM2	HIGH	Tool Misuse	skills/engineering/to-tickets/SKILL.md	40	Chaining Abuse	0.7

@@ -81,12 +81,12 @@ class ScanRepository:
                 title=str(finding.get("pattern") or finding.get("title") or "Finding"),
                 severity=str(finding.get("severity") or "UNKNOWN"),
                 category=str(finding.get("category") or "Security"),
-                description=str(finding.get("description") or ""),
+                description=str(finding.get("description") or finding.get("explanation") or ""),
                 remediation=str(finding.get("remediation") or ""),
                 file_path=str(loc.get("file") or ""),
                 start_line=loc.get("start_line"),
                 end_line=loc.get("end_line"),
-                code_snippet=str(finding.get("snippet") or ""),
+                code_snippet=str(finding.get("code_snippet") or finding.get("snippet") or ""),
                 extra_metadata=finding,
             )
             self.session.add(finding_model)

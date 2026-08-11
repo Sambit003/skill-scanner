@@ -1,0 +1,12 @@
+language: "unknown"
+layer: "configuration"
+
+tasks:
+  check:
+    command: "uv run pytest -q tests"
+    toolchains: "system"
+    inputs:
+      - "v1/**/*.json"
+      - "tests/**/*.py"
+      - "/pyproject.toml"
+      - "/uv.lock"

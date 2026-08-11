@@ -28,6 +28,7 @@ uv-cache/
 **/*.egg-info/
 
 # Scanner runtime artifacts
+packages/scan_kernel/dist/
 **/*.yarc
 **/.yara_cache/
 **/.scan_kernel/

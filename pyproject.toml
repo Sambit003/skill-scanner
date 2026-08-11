@@ -16,4 +16,4 @@ dev = [
 package = false
 
 [tool.uv.workspace]
-members = ["apps/backend", "packages/scan_kernel"]
+members = ["apps/backend"]

@@ -22,6 +22,10 @@ from backend.domain.models.scanner_protocol import (
 class ScannerClientError(RuntimeError):
     """Raised when the scanner process cannot produce a valid successful response."""
 
+    def __init__(self, message: str, *, code: str | None = None):
+        super().__init__(message)
+        self.code = code
+
 
 class ScannerClient:
     def __init__(self, executable: str | None = None, timeout_seconds: float | None = None):
@@ -100,9 +104,10 @@ class ScannerClient:
 
         if process.returncode != 0 or payload.get("ok") is not True:
             error = payload.get("error")
+            code = error.get("code") if isinstance(error, dict) else None
             message = error.get("message") if isinstance(error, dict) else None
             detail = message or stderr_text or f"exit code {process.returncode}"
-            raise ScannerClientError(f"Scanner failed: {detail}")
+            raise ScannerClientError(f"Scanner failed: {detail}", code=code)
 
         try:
             return ScannerSuccessEnvelope.model_validate(payload).result

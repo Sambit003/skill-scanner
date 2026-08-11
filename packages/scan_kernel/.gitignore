@@ -1,36 +1,14 @@
-# Byte-compiled / optimized / DLL files
-__pycache__/
-*.py[cod]
-*$py.class
-
 # Distribution / packaging
-build/
-develop-eggs/
 dist/
-downloads/
-eggs/
-.eggs/
-*.egg-info/
-.installed.cfg
-*.egg
-
-# Virtual Environments
-.venv/
-env/
-venv/
+build/*
+!build/profiles/
+build/profiles/*
+!build/profiles/*.env
 
 # Environment Variables & Secrets
 .env
 .env.*
 !.env.example
-
-# Test, coverage & lint caches
-.coverage
-.coverage.*
-.pytest_cache/
-.mypy_cache/
-.ruff_cache/
-htmlcov/
 
 # YARA & AST temporary compilation artifacts
 *.yarc

@@ -3,6 +3,7 @@ projects:
   backend: "apps/backend"
   frontend: "apps/frontend"
   scan-kernel: "packages/scan_kernel"
+  scan-kernel-contracts: "contracts/scan-kernel"
 
 vcs:
   client: "git"

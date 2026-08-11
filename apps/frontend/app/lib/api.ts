@@ -147,6 +147,7 @@ export interface FindingLocation {
 
 export interface FindingResponse {
   id: string;
+  rule_id: string;
   title: string | null;
   rule_family: string | null;
   category: string | null;

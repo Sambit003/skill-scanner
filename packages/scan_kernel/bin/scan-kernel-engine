@@ -1,4 +1,0 @@
-#!/usr/bin/env python3
-from scan_kernel.engine.protocol_cli import main
-
-raise SystemExit(main())

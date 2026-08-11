@@ -234,7 +234,7 @@ export default function ScanDashboardPage() {
         return;
       }
       try {
-        const rule = await getRule(selectedFinding.id);
+        const rule = await getRule(selectedFinding.rule_id);
         if (!cancelled) {
           setSelectedRule(rule);
           setRuleError(null);
@@ -592,7 +592,9 @@ export default function ScanDashboardPage() {
                             }`}
                             onClick={() => setSelectedFinding(finding)}
                           >
-                            <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{finding.id}</td>
+                            <td className="px-4 py-3 font-mono text-xs text-muted-foreground">
+                              {finding.rule_id}
+                            </td>
                             <td className="px-4 py-3">
                               <span
                                 className={`rounded-full px-2 py-0.5 text-[11px] font-semibold uppercase ${
@@ -645,11 +647,11 @@ export default function ScanDashboardPage() {
                         </span>
                         <div className="flex items-start gap-2">
                           <p className="text-sm font-medium text-foreground">
-                            {selectedRule?.title ?? selectedFinding.title ?? selectedFinding.id}
+                            {selectedRule?.title ?? selectedFinding.title ?? selectedFinding.rule_id}
                           </p>
                           {(selectedRule?.description || selectedFinding.explanation) ? (
                             <InfoPopover
-                              title={selectedRule?.title ?? selectedFinding.title ?? selectedFinding.id}
+                              title={selectedRule?.title ?? selectedFinding.title ?? selectedFinding.rule_id}
                               description={
                                 selectedRule?.description ??
                                 selectedFinding.explanation ??
@@ -667,7 +669,7 @@ export default function ScanDashboardPage() {
                           ) : null}
                         </div>
                         <p className="mt-1 font-mono text-xs text-muted-foreground">
-                          {selectedFinding.id}
+                          {selectedFinding.rule_id}
                           {selectedFinding.rule_family ? ` · ${selectedFinding.rule_family}` : ""}
                         </p>
                       </div>

@@ -1,46 +1,93 @@
-language: "python"
+language: "go"
+layer: "library"
+stack: "systems"
+
+dependsOn:
+  - id: "scan-kernel-contracts"
+    scope: "production"
 
 tasks:
-  check:
-    command: "uv run python -m compileall -q engine"
-    toolchains: "system"
-    env:
-      PYTHONPATH: ".."
+  setup:
+    command: "go mod download"
+    options:
+      cache: false
+      runInCI: false
+
+  fmt-check:
+    command: "go run ./cmd/checkfmt"
     inputs:
-      - "engine/**/*.py"
-      - "pyproject.toml"
-      - "/pyproject.toml"
-      - "/uv.lock"
+      - "**/*.go"
+      - "go.mod"
+      - "go.sum"
+
+  check:
+    command: "go vet ./..."
+    deps:
+      - "fmt-check"
+    inputs:
+      - "**/*.go"
+      - "go.mod"
+      - "go.sum"
+      - "/contracts/**/*"
 
   test:
-    command: "uv run pytest -q tests"
-    toolchains: "system"
-    env:
-      PYTHONPATH: ".."
+    command: "go test ./..."
+    deps:
+      - "scan-kernel-contracts:check"
     inputs:
-      - "engine/**/*"
-      - "tests/**/*"
-      - "pyproject.toml"
+      - "**/*.go"
+      - "testdata/**/*"
+      - "go.mod"
+      - "go.sum"
       - "/contracts/**/*"
-      - "/pyproject.toml"
-      - "/uv.lock"
 
   build:
-    command: "uv run python -m compileall -q engine"
-    toolchains: "system"
-    env:
-      PYTHONPATH: ".."
+    command: "go build -trimpath -o dist/dev/scan-kernel-engine ./cmd/scankernel"
+    deps:
+      - "check"
+    inputs:
+      - "**/*.go"
+      - "go.mod"
+      - "go.sum"
+      - "plugins/**/*.yar"
+      - "plugins/**/*.yara"
+    outputs:
+      - "dist/dev/scan-kernel-engine"
 
   smoke:
-    command: "uv run pytest -q tests/test_protocol_cli.py -k success"
-    toolchains: "system"
-    env:
-      PYTHONPATH: ".."
+    command: "go test ./internal/protocol -run TestProtocolSmoke -v"
+    deps:
+      - "build"
     options:
       cache: false
 
-  cli-version:
-    command: "uv run python -m scan_kernel.engine.plugins.agent_skills.cli --version"
+  contract:
+    command: "go test ./internal/protocol -run TestContract -v"
+    deps:
+      - "scan-kernel-contracts:check"
+
+  regression:
+    command: "bash scripts/verify-regression.sh"
     toolchains: "system"
-    env:
-      PYTHONPATH: ".."
+    inputs:
+      - "**/*.go"
+      - "go.mod"
+      - "go.sum"
+      - "scripts/verify-regression.sh"
+      - "testdata/regression/**/*"
+    options:
+      cache: false
+      runInCI: false
+
+  bundle:
+    command: "bash scripts/build-scanner.sh"
+    toolchains: "system"
+    inputs:
+      - "**/*.go"
+      - "go.mod"
+      - "go.sum"
+      - "build/**/*"
+      - "scripts/**/*"
+    options:
+      cache: false
+      runInCI: false

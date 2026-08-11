@@ -1,3 +1,4 @@
+import re
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, ConfigDict, Field
@@ -50,11 +51,16 @@ class FindingResponse(BaseModel):
             )
         if not self.file_path_display:
             self.file_path_display = self.file_path
-        if not self.finding:
-            self.finding = self.title
+            if self.file_path_display and self.start_line:
+                self.file_path_display = f"{self.file_path_display}:{self.start_line}"
         if not self.explanation and self.description:
             self.explanation = self.description
         if self.extra_metadata and isinstance(self.extra_metadata, dict):
+            metadata_confidence = self.extra_metadata.get("confidence")
+            if isinstance(metadata_confidence, (int, float)):
+                self.confidence = float(metadata_confidence)
+            if not self.rule_family and self.extra_metadata.get("rule_family"):
+                self.rule_family = str(self.extra_metadata.get("rule_family"))
             if not self.pattern and self.extra_metadata.get("pattern"):
                 self.pattern = self.extra_metadata.get("pattern")
             if not self.tags and self.extra_metadata.get("tags"):
@@ -63,6 +69,15 @@ class FindingResponse(BaseModel):
                 self.explanation = self.extra_metadata.get("explanation")
             if not self.code_snippet and self.extra_metadata.get("code_snippet"):
                 self.code_snippet = self.extra_metadata.get("code_snippet")
+            if not self.finding and self.extra_metadata.get("finding"):
+                self.finding = self.extra_metadata.get("finding")
+        if not self.rule_family:
+            match = re.match(r"[A-Za-z]+", self.rule_id or "")
+            self.rule_family = match.group(0).upper() if match else None
+        if not self.finding:
+            self.finding = self.title
+        if not self.documentation_url and self.rule_id:
+            self.documentation_url = f"/v1/rules/{self.rule_id}"
 
 class ScanFindingsResponse(BaseModel):
     scan_id: str

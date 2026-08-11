@@ -1,7 +1,7 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
 from typing import List
 from pydantic import BaseModel
-from backend.services.scanner_client import ScannerClient
+from backend.services.scanner_client import ScannerClient, ScannerClientError
 
 router = APIRouter(prefix="/rules", tags=["Rules"])
 
@@ -31,5 +31,16 @@ async def list_rules(client: ScannerClient = Depends(get_scanner_client)):
 @router.get("/{rule_id}", response_model=RuleDocResponse)
 async def get_rule(rule_id: str, client: ScannerClient = Depends(get_scanner_client)):
     """Retrieve detailed documentation and remediation instructions for a specific rule."""
-    doc = await client.get_rule(rule_id)
+    try:
+        doc = await client.get_rule(rule_id)
+    except ScannerClientError as exc:
+        if exc.code == "INVALID_REQUEST":
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Rule '{rule_id}' not found",
+            ) from exc
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Scanner engine could not provide rule metadata",
+        ) from exc
     return RuleDocResponse(**doc.model_dump())
