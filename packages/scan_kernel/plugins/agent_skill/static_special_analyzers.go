@@ -1,8 +1,10 @@
 package agentskill
 
 import (
+	"fmt"
 	"regexp"
 	"strings"
+	"unicode"
 	"unicode/utf8"
 
 	"gitlab.com/superalign/labs/asset-scan-demo/packages/scan_kernel/internal/model"
@@ -87,8 +89,12 @@ func analyzeSpecialStatic(item component) []model.Finding {
 	}
 	if offset := firstSmuggledTagOffset(item.Content); offset >= 0 {
 		pattern := staticPattern{ID: "P2", Title: "Hidden Instructions (Unicode Tag / ASCII smuggling)", Category: "Prompt Injection", Severity: "HIGH", Confidence: .9}
+		runes := []rune(item.Content[offset:])
+		matched := pythonStringRepr(string(runes[:min(40, len(runes))]))
 		_, size := utf8.DecodeRuneInString(item.Content[offset:])
 		if finding, ok := findingFromStaticMatch(item, pattern, []int{offset, offset + size}); ok {
+			finding.Finding = matched
+			finding.MatchedText = matched
 			findings = append(findings, finding)
 		}
 	}
@@ -131,6 +137,42 @@ func analyzeSpecialStatic(item component) []model.Finding {
 		}
 	}
 	return deduplicateRuleFileLineHighest(findings, "P5")
+}
+
+func pythonStringRepr(value string) string {
+	quote := '\''
+	if strings.ContainsRune(value, '\'') && !strings.ContainsRune(value, '"') {
+		quote = '"'
+	}
+	var output strings.Builder
+	output.WriteRune(quote)
+	for _, char := range value {
+		switch char {
+		case '\\':
+			output.WriteString(`\\`)
+		case '\n':
+			output.WriteString(`\n`)
+		case '\r':
+			output.WriteString(`\r`)
+		case '\t':
+			output.WriteString(`\t`)
+		default:
+			if char == quote {
+				output.WriteRune('\\')
+				output.WriteRune(char)
+			} else if unicode.IsPrint(char) {
+				output.WriteRune(char)
+			} else if char <= 0xFF {
+				fmt.Fprintf(&output, `\x%02x`, char)
+			} else if char <= 0xFFFF {
+				fmt.Fprintf(&output, `\u%04x`, char)
+			} else {
+				fmt.Fprintf(&output, `\U%08x`, char)
+			}
+		}
+	}
+	output.WriteRune(quote)
+	return output.String()
 }
 
 func isDependencyFile(path string) bool {
@@ -195,9 +237,39 @@ func safeEmojiZWJ(content string, byteOffset int) bool {
 	if !strings.HasPrefix(content[byteOffset:], "\u200d") {
 		return false
 	}
-	before, _ := utf8.DecodeLastRuneInString(content[:byteOffset])
-	after, _ := utf8.DecodeRuneInString(content[byteOffset+len("\u200d"):])
+	beforeText := content[:byteOffset]
+	before, size := utf8.DecodeLastRuneInString(beforeText)
+	for isVariationSelector(before) {
+		beforeText = beforeText[:len(beforeText)-size]
+		before, size = utf8.DecodeLastRuneInString(beforeText)
+	}
+	if isEmojiModifier(before) {
+		beforeText = beforeText[:len(beforeText)-size]
+		before, size = utf8.DecodeLastRuneInString(beforeText)
+		for isVariationSelector(before) {
+			beforeText = beforeText[:len(beforeText)-size]
+			before, size = utf8.DecodeLastRuneInString(beforeText)
+		}
+	}
+	afterText := content[byteOffset+len("\u200d"):]
+	after, size := utf8.DecodeRuneInString(afterText)
+	for isVariationSelector(after) {
+		afterText = afterText[size:]
+		after, size = utf8.DecodeRuneInString(afterText)
+	}
+	if isEmojiModifier(after) {
+		afterText = afterText[size:]
+		after, _ = utf8.DecodeRuneInString(afterText)
+	}
 	return isEmojiBase(before) && isEmojiBase(after)
+}
+
+func isVariationSelector(char rune) bool {
+	return (char >= 0xFE00 && char <= 0xFE0F) || (char >= 0xE0100 && char <= 0xE01EF)
+}
+
+func isEmojiModifier(char rune) bool {
+	return char >= 0x1F3FB && char <= 0x1F3FF
 }
 
 func isEmojiBase(char rune) bool {

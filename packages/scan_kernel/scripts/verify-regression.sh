@@ -13,6 +13,7 @@ EXPECTED_FINDINGS_SHA256="a2dc460ecf96030776f23f7711fcb06a8375ebb3505d7082c82622
 EXPECTED_SUMMARY_SHA256="2818c102d56c6f94ec159df0225d2c3edda36992956035de5b38d2478956dede"
 REGRESSION_TMP="$(mktemp -d /tmp/scankernel-regression.XXXXXX)"
 trap 'rm -rf "${REGRESSION_TMP}"' EXIT
+SCAN_KERNEL_DOCKER_IMAGE=""
 
 target="${1:-}"
 if [[ -z "${target}" ]]; then
@@ -29,21 +30,31 @@ run_scanner() {
     "${SCAN_KERNEL_BINARY}" scan --offline --format json "${scan_target}" > "${output}"
     return
   fi
-  (
-    cd "${SCANNER_DIR}"
-    GOCACHE="${GOCACHE:-/tmp/scankernel-go-cache}" \
-      go run -tags 'custom_plugins plugin_agent_skill' ./cmd/scankernel \
-        scan --offline --format json "${scan_target}" > "${output}"
-  )
+  docker run --rm --network none \
+    -v "$(cd "${scan_target}" && pwd):/scan-target:ro" \
+    "${SCAN_KERNEL_DOCKER_IMAGE}" \
+    /out/scan-kernel-engine scan --offline --format json /scan-target > "${output}"
 }
+
+if [[ -z "${SCAN_KERNEL_BINARY:-}" ]]; then
+  command -v docker >/dev/null || { printf 'native-YARA regression requires Docker or SCAN_KERNEL_BINARY\n' >&2; exit 2; }
+  SCAN_KERNEL_DOCKER_IMAGE="scankernel-native-regression:current"
+  docker build -q \
+    --file "${SCANNER_DIR}/build/linux-static.Dockerfile" \
+    --target scanner-builder \
+    --tag "${SCAN_KERNEL_DOCKER_IMAGE}" \
+    "${SCANNER_DIR}" >/dev/null
+fi
 
 if [[ -n "${SCAN_KERNEL_BINARY:-}" ]]; then
   "${SCAN_KERNEL_BINARY}" version --json > "${REGRESSION_TMP}/version.json"
-  if [[ "$(jq -r '.yara_mode' "${REGRESSION_TMP}/version.json")" != "native-static" ]] || \
-     [[ "$(jq -r '.yara_version' "${REGRESSION_TMP}/version.json")" != "4.5.4" ]]; then
-    printf 'native-YARA regression requires a native-static YARA 4.5.4 binary\n' >&2
-    exit 2
-  fi
+else
+  docker run --rm "${SCAN_KERNEL_DOCKER_IMAGE}" /out/scan-kernel-engine version --json > "${REGRESSION_TMP}/version.json"
+fi
+if [[ "$(jq -r '.yara_mode' "${REGRESSION_TMP}/version.json")" != "native-static" ]] || \
+   [[ "$(jq -r '.yara_version' "${REGRESSION_TMP}/version.json")" != "4.5.4" ]]; then
+  printf 'native-YARA regression requires a native-static YARA 4.5.4 binary\n' >&2
+  exit 2
 fi
 
 run_scanner "${target}" "${REGRESSION_TMP}/actual.json"
@@ -74,11 +85,6 @@ fi
 
 jq -r '"Corpus regression verified: \(.summary.findings_count) findings (HIGH=\(.summary.findings_by_severity.HIGH // 0), MEDIUM=\(.summary.findings_by_severity.MEDIUM // 0), LOW=\(.summary.findings_by_severity.LOW // 0))"' \
   "${REGRESSION_TMP}/actual.json"
-
-if [[ -z "${SCAN_KERNEL_BINARY:-}" ]]; then
-  printf 'Corpus regression passed in developer fallback mode; set SCAN_KERNEL_BINARY to include native-YARA fixtures.\n'
-  exit 0
-fi
 
 run_scanner "${MALICIOUS_FIXTURE}" "${REGRESSION_TMP}/malicious-actual.json"
 jq -S '{summary,findings}' "${REGRESSION_TMP}/malicious-actual.json" > "${REGRESSION_TMP}/malicious-actual-canonical.json"

@@ -380,7 +380,11 @@ func readComponents(root string) ([]component, map[string]any, error) {
 		if err != nil {
 			return err
 		}
-		content := strings.ToValidUTF8(string(raw), "�")
+		content := pythonDecodeUTF8(raw)
+		// Path.read_text() uses universal-newline mode in the Python oracle.
+		// Normalize before any offsets, line numbers, or analyzer matches are
+		// computed so mixed CRLF/CR inputs have identical scanner semantics.
+		content = strings.ReplaceAll(strings.ReplaceAll(content, "\r\n", "\n"), "\r", "\n")
 		components = append(components, component{
 			Path: filepath.ToSlash(relative), Type: kind, Lines: pythonLineCount(content),
 			Executable: ext == ".py" || ext == ".sh" || ext == ".bash" || ext == ".zsh" ||
@@ -403,6 +407,63 @@ func readComponents(root string) ([]component, map[string]any, error) {
 		}
 	}
 	return components, manifest, nil
+}
+
+// pythonDecodeUTF8 mirrors bytes.decode("utf-8", errors="replace"). Unlike
+// strings.ToValidUTF8, Python does not collapse an arbitrary run of malformed
+// bytes into one replacement character; it consumes the valid prefix of a
+// malformed sequence and emits one replacement for that sequence.
+func pythonDecodeUTF8(raw []byte) string {
+	var decoded strings.Builder
+	decoded.Grow(len(raw))
+	for index := 0; index < len(raw); {
+		first := raw[index]
+		if first < 0x80 {
+			decoded.WriteByte(first)
+			index++
+			continue
+		}
+		width := 0
+		secondMin, secondMax := byte(0x80), byte(0xBF)
+		switch {
+		case first >= 0xC2 && first <= 0xDF:
+			width = 2
+		case first >= 0xE0 && first <= 0xEF:
+			width = 3
+			if first == 0xE0 {
+				secondMin = 0xA0
+			} else if first == 0xED {
+				secondMax = 0x9F
+			}
+		case first >= 0xF0 && first <= 0xF4:
+			width = 4
+			if first == 0xF0 {
+				secondMin = 0x90
+			} else if first == 0xF4 {
+				secondMax = 0x8F
+			}
+		default:
+			decoded.WriteRune('�')
+			index++
+			continue
+		}
+
+		consumed := 1
+		if index+1 < len(raw) && raw[index+1] >= secondMin && raw[index+1] <= secondMax {
+			consumed = 2
+			for consumed < width && index+consumed < len(raw) && raw[index+consumed] >= 0x80 && raw[index+consumed] <= 0xBF {
+				consumed++
+			}
+		}
+		if consumed == width {
+			decoded.Write(raw[index : index+width])
+			index += width
+			continue
+		}
+		decoded.WriteRune('�')
+		index += consumed
+	}
+	return decoded.String()
 }
 
 func parseFrontmatter(content string) map[string]any {
@@ -471,9 +532,30 @@ func pythonLineCount(content string) int {
 	if content == "" {
 		return 0
 	}
-	lines := strings.Split(strings.ReplaceAll(strings.ReplaceAll(content, "\r\n", "\n"), "\r", "\n"), "\n")
-	if len(lines) > 0 && lines[len(lines)-1] == "" {
-		return len(lines) - 1
+	count := 0
+	endedWithBoundary := false
+	previousCR := false
+	for _, character := range content {
+		if previousCR {
+			previousCR = false
+			if character == '\n' {
+				continue
+			}
+		}
+		switch character {
+		case '\r':
+			count++
+			endedWithBoundary = true
+			previousCR = true
+		case '\n', '\v', '\f', '\x1c', '\x1d', '\x1e', '\u0085', '\u2028', '\u2029':
+			count++
+			endedWithBoundary = true
+		default:
+			endedWithBoundary = false
+		}
 	}
-	return len(lines)
+	if !endedWithBoundary {
+		count++
+	}
+	return count
 }

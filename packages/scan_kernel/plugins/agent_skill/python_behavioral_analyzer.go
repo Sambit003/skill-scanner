@@ -3,13 +3,20 @@ package agentskill
 import (
 	"fmt"
 	"reflect"
+	"regexp"
 	"sort"
 	"strings"
+	"sync"
 
 	pyparser "github.com/tamnd/gopapy/parser"
 
 	"gitlab.com/superalign/labs/asset-scan-demo/packages/scan_kernel/internal/model"
 )
+
+// gopapy recycles its parser arena as soon as ParseFile returns. Keep parsing
+// and traversal in one critical section so a concurrent parse cannot mutate
+// the AST that is still being analyzed.
+var pythonParserMu sync.Mutex
 
 var astSubprocessCalls = wordSet("call", "run", "Popen", "check_output", "check_call", "getoutput", "getstatusoutput")
 var astOSExecCalls = wordSet(
@@ -71,6 +78,8 @@ func analyzePythonBehavior(item component) []model.Finding {
 	if !strings.HasSuffix(item.Path, ".py") || len(item.Content) > maxFileBytes {
 		return nil
 	}
+	pythonParserMu.Lock()
+	defer pythonParserMu.Unlock()
 	module, err := pyparser.ParseFile(item.Path, item.Content)
 	if err != nil {
 		return nil
@@ -96,8 +105,8 @@ func analyzePythonAST(item component, module *pyparser.Module, aliases map[strin
 		if name == "" {
 			return
 		}
-		line := call.P.Line
-		endLine := pythonCallEndLine(item.Content, call.P.Line, call.P.Col)
+		line, column := correctedPythonCallPosition(item.Content, name, call.P.Line, call.P.Col)
+		endLine := pythonCallEndLine(item.Content, line, column)
 		emit := func(id, override string) {
 			properties := astRuleProperties[id]
 			message := properties.message
@@ -574,8 +583,9 @@ func sourceLines(content string, line, endLine int) string {
 }
 
 func pythonWalk(root any, visit func(any)) {
-	var walk func(reflect.Value)
-	walk = func(value reflect.Value) {
+	queue := []reflect.Value{reflect.ValueOf(root)}
+	var collectChildren func(reflect.Value, *[]reflect.Value)
+	collectChildren = func(value reflect.Value, children *[]reflect.Value) {
 		if !value.IsValid() {
 			return
 		}
@@ -583,17 +593,14 @@ func pythonWalk(root any, visit func(any)) {
 			if value.IsNil() {
 				return
 			}
-			walk(value.Elem())
+			collectChildren(value.Elem(), children)
 			return
 		}
 		if value.Kind() == reflect.Pointer {
 			if value.IsNil() {
 				return
 			}
-			if value.CanInterface() {
-				visit(value.Interface())
-			}
-			walk(value.Elem())
+			*children = append(*children, value)
 			return
 		}
 		switch value.Kind() {
@@ -601,16 +608,29 @@ func pythonWalk(root any, visit func(any)) {
 			for index := 0; index < value.NumField(); index++ {
 				field := value.Field(index)
 				if field.CanInterface() {
-					walk(field)
+					collectChildren(field, children)
 				}
 			}
 		case reflect.Slice, reflect.Array:
 			for index := 0; index < value.Len(); index++ {
-				walk(value.Index(index))
+				collectChildren(value.Index(index), children)
 			}
 		}
 	}
-	walk(reflect.ValueOf(root))
+	for len(queue) > 0 {
+		value := queue[0]
+		queue = queue[1:]
+		if value.Kind() == reflect.Interface {
+			value = value.Elem()
+		}
+		if value.Kind() != reflect.Pointer || value.IsNil() {
+			continue
+		}
+		if value.CanInterface() {
+			visit(value.Interface())
+		}
+		collectChildren(value.Elem(), &queue)
+	}
 }
 
 func intPointer(value int) *int { return &value }
@@ -698,6 +718,30 @@ func byteOffsetForPythonPosition(content string, line, column int) int {
 		offset += next + 1
 	}
 	return min(len(content), offset+max(0, column-1))
+}
+
+func correctedPythonCallPosition(content, name string, line, column int) (int, int) {
+	if line >= 1 {
+		lines := pythonSplitLines(content)
+		if line <= len(lines) {
+			start := max(0, column-1)
+			if start <= len(lines[line-1]) && strings.Contains(lines[line-1][start:], name) {
+				return line, column
+			}
+		}
+	}
+	// gopapy 0.6 reports interpolation-relative positions for calls nested in
+	// f-strings. Recover only an unambiguous textual occurrence; ambiguous
+	// cases retain the parser position instead of guessing.
+	expression := regexp.MustCompile(`\b` + regexp.QuoteMeta(name) + `\s*\(`)
+	matches := expression.FindAllStringIndex(content, 2)
+	if len(matches) != 1 {
+		return line, column
+	}
+	offset := matches[0][0]
+	line = 1 + strings.Count(content[:offset], "\n")
+	lineStart := strings.LastIndex(content[:offset], "\n") + 1
+	return line, offset - lineStart + 1
 }
 
 func sortedStringKeys(values map[string]string) []string {

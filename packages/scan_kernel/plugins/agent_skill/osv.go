@@ -19,11 +19,11 @@ import (
 )
 
 type dependencyCoordinate struct {
-	Name      string
-	Version   string
-	Ecosystem string
-	File      string
-	Line      int
+	Name      string `json:"name"`
+	Version   string `json:"version"`
+	Ecosystem string `json:"ecosystem"`
+	File      string `json:"file"`
+	Line      int    `json:"line"`
 }
 
 type fallbackVulnerability struct {
@@ -38,6 +38,18 @@ type osvVulnerability struct {
 	Summary  string
 	Severity string
 	Aliases  []string
+}
+
+type frozenOSVDocument struct {
+	SchemaVersion int                 `json:"schema_version"`
+	Responses     []frozenOSVResponse `json:"responses"`
+}
+
+type frozenOSVResponse struct {
+	Ecosystem       string             `json:"ecosystem"`
+	Name            string             `json:"name"`
+	Version         string             `json:"version"`
+	Vulnerabilities []osvVulnerability `json:"vulnerabilities"`
 }
 
 var requirementCoordinate = regexp.MustCompile(`^([a-zA-Z][a-zA-Z0-9._-]*)(?:\[.*?\])?\s*(?:([=<>!~]=?)\s*([\d.*]+))?`)
@@ -256,6 +268,9 @@ func sortedAnyMapKeys(values map[string]any) []string {
 }
 
 func analyzeOSVCoordinates(ctx context.Context, coordinates []dependencyCoordinate) ([]model.Finding, map[string]bool, bool) {
+	if fixture := strings.TrimSpace(os.Getenv("SCAN_KERNEL_OSV_FIXTURE")); fixture != "" {
+		return analyzeFrozenOSVCoordinates(coordinates, fixture)
+	}
 	queries := make([]map[string]any, 0, len(coordinates))
 	for _, coordinate := range coordinates {
 		query := map[string]any{"package": map[string]string{"name": coordinate.Name, "ecosystem": coordinate.Ecosystem}}
@@ -317,6 +332,46 @@ func analyzeOSVCoordinates(ctx context.Context, coordinates []dependencyCoordina
 		for _, detail := range details {
 			if severityRank(detail.Severity) > severityRank(severity) {
 				severity = detail.Severity
+			}
+		}
+		confidence := map[string]float64{"CRITICAL": .9, "HIGH": .8, "MEDIUM": .7, "LOW": .6}[severity]
+		version := ""
+		if coordinate.Version != "" {
+			version = "==" + coordinate.Version
+		}
+		findings = append(findings, supplyChainFinding("SC4", severity, confidence, coordinate.File, coordinate.Line,
+			fmt.Sprintf("Known Vulnerable Dependency: %s%s — %d advisory(ies): %s", coordinate.Name, version, len(details), formatOSVDetails(details)), coordinate.Name+version))
+	}
+	return findings, covered, true
+}
+
+func analyzeFrozenOSVCoordinates(coordinates []dependencyCoordinate, fixture string) ([]model.Finding, map[string]bool, bool) {
+	raw, err := os.ReadFile(fixture)
+	if err != nil {
+		return nil, map[string]bool{}, false
+	}
+	var document frozenOSVDocument
+	if json.Unmarshal(raw, &document) != nil || document.SchemaVersion != 1 {
+		return nil, map[string]bool{}, false
+	}
+	byCoordinate := map[string][]osvVulnerability{}
+	for _, response := range document.Responses {
+		key := strings.ToLower(response.Ecosystem) + "\x00" + normalizePackageName(response.Name) + "\x00" + response.Version
+		byCoordinate[key] = append([]osvVulnerability(nil), response.Vulnerabilities...)
+	}
+	findings := make([]model.Finding, 0)
+	covered := map[string]bool{}
+	for _, coordinate := range coordinates {
+		key := strings.ToLower(coordinate.Ecosystem) + "\x00" + normalizePackageName(coordinate.Name) + "\x00" + coordinate.Version
+		details := byCoordinate[key]
+		if len(details) == 0 {
+			continue
+		}
+		covered[normalizePackageName(coordinate.Name)] = true
+		severity := "LOW"
+		for _, detail := range details {
+			if severityRank(detail.Severity) > severityRank(severity) {
+				severity = strings.ToUpper(detail.Severity)
 			}
 		}
 		confidence := map[string]float64{"CRITICAL": .9, "HIGH": .8, "MEDIUM": .7, "LOW": .6}[severity]

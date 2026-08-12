@@ -5,12 +5,19 @@ package agentskill
 // post-processing order define the stable scanner behavior.
 
 import (
+	"context"
 	"fmt"
 	"math"
+	"net/url"
 	"path/filepath"
 	"regexp"
+	"regexp/syntax"
+	"runtime"
 	"sort"
 	"strings"
+	"sync"
+	"unicode"
+	"unicode/utf8"
 
 	"gitlab.com/superalign/labs/asset-scan-demo/packages/scan_kernel/internal/model"
 )
@@ -23,11 +30,135 @@ type staticPattern struct {
 	Confidence float64
 	Expression string
 	compiled   *regexp.Regexp
+	required   []string
 }
 
 func newStaticPattern(id, title, category, severity string, confidence float64, expression string) staticPattern {
 	return staticPattern{ID: id, Title: title, Category: category, Severity: severity,
-		Confidence: confidence, Expression: expression, compiled: regexp.MustCompile("(?im)" + expression)}
+		Confidence: confidence, Expression: expression, compiled: regexp.MustCompile("(?im)" + expression),
+		required: requiredRegexAlternatives(expression)}
+}
+
+func requiredRegexAlternatives(expression string) []string {
+	parsed, err := syntax.Parse("(?im)"+expression, syntax.Perl)
+	if err != nil {
+		return nil
+	}
+	parsed = parsed.Simplify()
+	literals := mandatoryRegexLiterals(parsed)
+	longest := ""
+	for literal := range literals {
+		if len(literal) > len(longest) {
+			longest = literal
+		}
+	}
+	if longest != "" {
+		return []string{strings.ToLower(longest)}
+	}
+	result := regexAlternativeLiterals(parsed)
+	for index := range result {
+		result[index] = strings.ToLower(result[index])
+	}
+	sort.Strings(result)
+	return result
+}
+
+// regexAlternativeLiterals returns a disjunction of literals where every
+// possible match must contain at least one member. It is deliberately
+// conservative: optional branches yield no prefilter.
+func regexAlternativeLiterals(expression *syntax.Regexp) []string {
+	switch expression.Op {
+	case syntax.OpLiteral:
+		if len(expression.Rune) > 0 {
+			return []string{string(expression.Rune)}
+		}
+	case syntax.OpCapture, syntax.OpPlus:
+		return regexAlternativeLiterals(expression.Sub[0])
+	case syntax.OpRepeat:
+		if expression.Min > 0 {
+			return regexAlternativeLiterals(expression.Sub[0])
+		}
+	case syntax.OpConcat:
+		var best []string
+		bestMinimum := 0
+		for _, child := range expression.Sub {
+			candidate := regexAlternativeLiterals(child)
+			minimum := minimumLiteralLength(candidate)
+			if minimum > bestMinimum {
+				best, bestMinimum = candidate, minimum
+			}
+		}
+		return best
+	case syntax.OpAlternate:
+		seen := map[string]bool{}
+		var result []string
+		for _, child := range expression.Sub {
+			candidate := regexAlternativeLiterals(child)
+			if len(candidate) == 0 {
+				return nil
+			}
+			for _, literal := range candidate {
+				if !seen[literal] {
+					seen[literal] = true
+					result = append(result, literal)
+				}
+			}
+		}
+		return result
+	}
+	return nil
+}
+
+func minimumLiteralLength(values []string) int {
+	if len(values) == 0 {
+		return 0
+	}
+	minimum := len(values[0])
+	for _, value := range values[1:] {
+		minimum = min(minimum, len(value))
+	}
+	return minimum
+}
+
+func mandatoryRegexLiterals(expression *syntax.Regexp) map[string]bool {
+	switch expression.Op {
+	case syntax.OpLiteral:
+		if len(expression.Rune) == 0 {
+			return nil
+		}
+		return map[string]bool{strings.ToLower(string(expression.Rune)): true}
+	case syntax.OpCapture:
+		return mandatoryRegexLiterals(expression.Sub[0])
+	case syntax.OpConcat:
+		result := map[string]bool{}
+		for _, child := range expression.Sub {
+			for literal := range mandatoryRegexLiterals(child) {
+				result[literal] = true
+			}
+		}
+		return result
+	case syntax.OpAlternate:
+		if len(expression.Sub) == 0 {
+			return nil
+		}
+		result := mandatoryRegexLiterals(expression.Sub[0])
+		for _, child := range expression.Sub[1:] {
+			other := mandatoryRegexLiterals(child)
+			for literal := range result {
+				if !other[literal] {
+					delete(result, literal)
+				}
+			}
+		}
+		return result
+	case syntax.OpPlus:
+		return mandatoryRegexLiterals(expression.Sub[0])
+	case syntax.OpRepeat:
+		if expression.Min > 0 {
+			return mandatoryRegexLiterals(expression.Sub[0])
+		}
+	}
+	return nil
 }
 
 var staticPatterns = []staticPattern{
@@ -233,16 +364,36 @@ var allStaticPatterns = func() []staticPattern {
 var (
 	codeExampleIndicators = []string{"```", "example:", "for example", "e.g.", "such as", "documentation", "# warning:", "# note:", "**warning**", "**note**", "// ✅", "// ❌", "// good:", "// bad:", "// correct:", "// incorrect:", "// wrong:"}
 	executionSignal       = regexp.MustCompile(`(?i)(?:\b\w+\s*=|\bos\.(?:environ|getenv|system)\b|\bshutil\.rmtree\b|\b(?:subprocess|eval|exec)\b|[|>]|\b(?:open|read_text|write_text)\s*\()`)
+	supplyChainURLToken   = regexp.MustCompile(`(?i)https?://[^\s|;&)]+|(?:[a-z0-9-]+\.)+[a-z]{2,}(?:/[^\s|;&)]*)?`)
+	safeInstallPattern    = regexp.MustCompile(`(?i)(?:pip|npm)\s+install`)
 )
 
-func analyzeSourceAndManifest(items []component, manifest map[string]any) []model.Finding {
-	findings := make([]model.Finding, 0)
-	for _, item := range items {
+var trustedSupplyChainDomains = []string{
+	"deb.nodesource.com", "rpm.nodesource.com", "get.docker.com", "install.python-poetry.org",
+	"raw.githubusercontent.com", "brew.sh", "rustup.rs", "pypa.io", "pip.pypa.io",
+	"astral.sh", "pypi.org", "npmjs.com", "github.com",
+}
+
+func analyzeSourceAndManifest(ctx context.Context, items []component, manifest map[string]any) ([]model.Finding, error) {
+	staticFindings, err := analyzeItemsParallel(ctx, items, func(item component) []model.Finding {
 		if isEvalDataset(item.Path) || len(item.Content) > maxFileBytes || isBinaryScannerPath(item.Path) || strings.Contains(item.Content[:min(len(item.Content), 512)], "\x00") {
-			continue
+			return nil
 		}
 		itemFindings := make([]model.Finding, 0)
+		unsupported := analyzeUnsupportedRegexSemantics(item)
+		// Python evaluates the generic, negative-lookahead sudo expression
+		// before its more specific PE2 expressions. Go's regexp engine cannot
+		// compile that lookahead, so preserve its analyzer position explicitly.
+		for _, finding := range unsupported {
+			if finding.ID == "PE2" {
+				itemFindings = append(itemFindings, finding)
+			}
+		}
+		lowerContent := strings.ToLower(item.Content)
 		for _, pattern := range allStaticPatterns {
+			if len(pattern.required) > 0 && !containsAny(lowerContent, pattern.required...) {
+				continue
+			}
 			for _, match := range pattern.compiled.FindAllStringIndex(item.Content, -1) {
 				if pattern.ID == "PE3" && isReadOnlyPasswdVolumeMatch(item.Content, match) {
 					continue
@@ -255,18 +406,103 @@ func analyzeSourceAndManifest(items []component, manifest map[string]any) []mode
 		}
 		itemFindings = append(itemFindings, repeatedContextMatches(item)...)
 		itemFindings = append(itemFindings, analyzeRA2HiddenPersistence(item)...)
-		itemFindings = append(itemFindings, analyzeUnsupportedRegexSemantics(item)...)
+		for _, finding := range unsupported {
+			if finding.ID != "PE2" {
+				itemFindings = append(itemFindings, finding)
+			}
+		}
 		itemFindings = append(itemFindings, analyzeSpecialStatic(item)...)
-		findings = append(findings, keepBestPrivilegeFindingPerLine(itemFindings)...)
+		return keepBestPrivilegeFindingPerLine(itemFindings)
+	})
+	if err != nil {
+		return nil, err
 	}
-	for _, item := range items {
-		findings = append(findings, analyzePythonBehavior(item)...)
+	behaviorFindings, err := analyzeItemsParallel(ctx, items, analyzePythonBehavior)
+	if err != nil {
+		return nil, err
 	}
+	findings := append(staticFindings, behaviorFindings...)
 	findings = append(findings, analyzeMCPRugPull(items, manifest)...)
 	findings = append(findings, analyzeMCPLeastPrivilege(items, manifest)...)
 	findings = append(findings, analyzeMCPToolPoisoning(manifest)...)
 	findings = deduplicateAntiRefusal(findings)
-	return findings
+	return findings, nil
+}
+
+func analyzeItemsParallel(ctx context.Context, items []component, analyze func(component) []model.Finding) ([]model.Finding, error) {
+	if len(items) == 0 {
+		return nil, ctx.Err()
+	}
+	type cacheKey struct {
+		content    string
+		fileType   string
+		executable bool
+		pathFlags  uint16
+	}
+	keyFor := func(item component) cacheKey {
+		normalized := strings.ToLower(strings.ReplaceAll(item.Path, "\\", "/"))
+		var flags uint16
+		for index, enabled := range []bool{
+			isEvalDataset(item.Path), isBinaryScannerPath(item.Path), strings.EqualFold(item.Path, "LICENSE"),
+			isDependencyFile(item.Path), isDocumentationMarkdown(item.Path), strings.HasSuffix(normalized, "skill.md"),
+			strings.HasSuffix(normalized, ".py"),
+		} {
+			if enabled {
+				flags |= 1 << index
+			}
+		}
+		return cacheKey{content: item.Content, fileType: item.Type, executable: item.Executable, pathFlags: flags}
+	}
+	representatives := make([]component, 0, len(items))
+	representativeFor := make([]int, len(items))
+	seen := make(map[cacheKey]int, len(items))
+	for index, item := range items {
+		key := keyFor(item)
+		representative, exists := seen[key]
+		if !exists {
+			representative = len(representatives)
+			seen[key] = representative
+			representatives = append(representatives, item)
+		}
+		representativeFor[index] = representative
+	}
+
+	workers := min(len(representatives), max(1, min(runtime.GOMAXPROCS(0), 16)))
+	results := make([][]model.Finding, len(representatives))
+	jobs := make(chan int)
+	var group sync.WaitGroup
+	group.Add(workers)
+	for range workers {
+		go func() {
+			defer group.Done()
+			for index := range jobs {
+				if ctx.Err() != nil {
+					continue
+				}
+				results[index] = analyze(representatives[index])
+			}
+		}()
+	}
+	for index := range representatives {
+		if ctx.Err() != nil {
+			break
+		}
+		jobs <- index
+	}
+	close(jobs)
+	group.Wait()
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	var findings []model.Finding
+	for index, item := range items {
+		for _, cached := range results[representativeFor[index]] {
+			finding := cached
+			finding.Location.File = item.Path
+			findings = append(findings, finding)
+		}
+	}
+	return findings, nil
 }
 
 func isBinaryScannerPath(path string) bool {
@@ -285,8 +521,17 @@ func findingFromStaticMatch(item component, pattern staticPattern, match []int) 
 }
 
 func findingFromStaticMatchWithContext(item component, pattern staticPattern, match []int, contextWindow int) (model.Finding, bool) {
+	if pattern.ID == "TM1" && match[0] > 0 && strings.EqualFold(item.Content[match[0]:min(match[1], match[0]+2)], "rm") {
+		previous, _ := utf8.DecodeLastRuneInString(item.Content[:match[0]])
+		if previous == '_' || unicode.IsLetter(previous) || unicode.IsNumber(previous) {
+			return model.Finding{}, false
+		}
+	}
 	context := contextAtOffset(item.Content, match[0], contextWindow)
 	confidence := pattern.Confidence
+	if pattern.ID == "PE3" && isEnvironmentFileDocumentationReference(item, context) {
+		return model.Finding{}, false
+	}
 
 	if strings.HasPrefix(pattern.ID, "AR") {
 		if pattern.ID == "AR3" && isSecurityReviewModeMatch(item.Content[match[0]:match[1]], context) {
@@ -315,6 +560,10 @@ func findingFromStaticMatchWithContext(item component, pattern staticPattern, ma
 
 	matched := item.Content[match[0]:match[1]]
 	severity := pattern.Severity
+	if pattern.ID == "SC2" && isSafeSupplyChainPattern(matched) {
+		confidence = math.Min(confidence, .15)
+		severity = "LOW"
+	}
 	if (pattern.ID == "E1" || pattern.ID == "OH1") && (item.Type == "python" || item.Type == "javascript" || item.Type == "shell") {
 		confidence = math.Min(1, confidence+.1)
 	}
@@ -332,7 +581,11 @@ func findingFromStaticMatchWithContext(item component, pattern staticPattern, ma
 	}
 
 	if isCodeExample(context) {
-		if !item.Executable {
+		// The oracle's static runner classifies only authored document/data
+		// types as non-executable here. Unknown extensions are downweighted,
+		// even though inventory metadata does not mark them executable for
+		// scoring.
+		if isStaticNonExecutableType(item.Type) {
 			return model.Finding{}, false
 		}
 		confidence *= .5
@@ -358,6 +611,30 @@ func findingFromStaticMatchWithContext(item component, pattern staticPattern, ma
 		Severity: severity, Confidence: confidence, Location: model.Location{File: item.Path, StartLine: line},
 		Finding: matched, MatchedText: matched, Explanation: explanation, Remediation: remediation, CodeSnippet: context,
 		Tags: []string{pattern.Category}}, true
+}
+
+func isSafeSupplyChainPattern(text string) bool {
+	if safeInstallPattern.MatchString(text) {
+		return true
+	}
+	for _, token := range supplyChainURLToken.FindAllString(text, -1) {
+		token = strings.Trim(token, `"'`+"`<>()[]{}")
+		candidate := token
+		if !strings.Contains(candidate, "://") {
+			candidate = "//" + candidate
+		}
+		parsed, err := url.Parse(candidate)
+		if err != nil {
+			continue
+		}
+		hostname := strings.ToLower(strings.TrimSuffix(parsed.Hostname(), "."))
+		for _, domain := range trustedSupplyChainDomains {
+			if hostname == domain || strings.HasSuffix(hostname, "."+domain) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func keepBestPrivilegeFindingPerLine(findings []model.Finding) []model.Finding {
@@ -390,13 +667,28 @@ func contextAtOffset(content string, offset, window int) string {
 }
 
 func pythonSplitLines(content string) []string {
-	normalized := strings.ReplaceAll(strings.ReplaceAll(content, "\r\n", "\n"), "\r", "\n")
-	if normalized == "" {
+	if content == "" {
 		return nil
 	}
-	lines := strings.Split(normalized, "\n")
-	if strings.HasSuffix(normalized, "\n") {
-		lines = lines[:len(lines)-1]
+	lines := make([]string, 0, pythonLineCount(content))
+	start := 0
+	for index := 0; index < len(content); {
+		character, size := utf8.DecodeRuneInString(content[index:])
+		boundary := character == '\n' || character == '\r' || character == '\v' || character == '\f' ||
+			(character >= '\x1c' && character <= '\x1e') || character == '\u0085' || character == '\u2028' || character == '\u2029'
+		if !boundary {
+			index += size
+			continue
+		}
+		lines = append(lines, content[start:index])
+		index += size
+		if character == '\r' && index < len(content) && content[index] == '\n' {
+			index++
+		}
+		start = index
+	}
+	if start < len(content) {
+		lines = append(lines, content[start:])
 	}
 	return lines
 }
@@ -420,6 +712,34 @@ func isDocumentationMarkdown(path string) bool {
 	for _, part := range parts[:max(0, len(parts)-1)] {
 		switch part {
 		case "docs", "documentation", "procedures", "references", "examples", "guides":
+			return true
+		}
+	}
+	return false
+}
+
+func isStaticNonExecutableType(fileType string) bool {
+	switch fileType {
+	case "markdown", "text", "json", "yaml", "toml":
+		return true
+	default:
+		return false
+	}
+}
+
+var environmentFileDocumentationAction = regexp.MustCompile(`(?i)(?:create|copy|rename|add|set up|configure|make)\s+.*\.env`)
+
+func isEnvironmentFileDocumentationReference(item component, context string) bool {
+	normalized := strings.ToLower(strings.ReplaceAll(item.Path, "\\", "/"))
+	if strings.HasSuffix(normalized, "skill.md") || (item.Type != "markdown" && item.Type != "text") || context == "" {
+		return false
+	}
+	if environmentFileDocumentationAction.MatchString(context) {
+		return true
+	}
+	lower := strings.ToLower(context)
+	for _, phrase := range []string{".env.example", "cp .env", "copy .env", "mv .env", "rename .env", ".env file", "environment file", "dotenv"} {
+		if strings.Contains(lower, phrase) {
 			return true
 		}
 	}

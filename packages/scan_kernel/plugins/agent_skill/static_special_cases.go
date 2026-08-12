@@ -11,7 +11,7 @@ import (
 
 var (
 	rp1NPX            = regexp.MustCompile(`(?i)npx\s+(?:-+\w+\s+)*((?:@?[a-zA-Z][\w.-]*/)?[a-zA-Z][\w.-]*)`)
-	rp1UVX            = regexp.MustCompile(`(?i)(?:uvx|uv\s+tool\s+run)\s+(?:-+\w+\s+)*([a-zA-Z][\w.-]*)`)
+	rp1UVX            = regexp.MustCompile(`(?i)(?:uvx|uv[\t\n\v\f\r \x{001c}-\x{001f}\x{0085}\x{00a0}\x{1680}\x{2000}-\x{200a}\x{2028}\x{2029}\x{202f}\x{205f}\x{3000}]+tool[\t\n\v\f\r \x{001c}-\x{001f}\x{0085}\x{00a0}\x{1680}\x{2000}-\x{200a}\x{2028}\x{2029}\x{202f}\x{205f}\x{3000}]+run)[\t\n\v\f\r \x{001c}-\x{001f}\x{0085}\x{00a0}\x{1680}\x{2000}-\x{200a}\x{2028}\x{2029}\x{202f}\x{205f}\x{3000}]+(?:-+\w+[\t\n\v\f\r \x{001c}-\x{001f}\x{0085}\x{00a0}\x{1680}\x{2000}-\x{200a}\x{2028}\x{2029}\x{202f}\x{205f}\x{3000}]+)*([a-zA-Z][\w.-]*)`)
 	rp1PIP            = regexp.MustCompile(`(?i)pip\d?\s+install\s+(?:-+\w+\s+)*([a-zA-Z][\w.-]*)`)
 	rp1Docker         = regexp.MustCompile(`(?i)docker\s+(?:pull|run|create)\s+\S+`)
 	versionPin        = regexp.MustCompile(`@[\d.]+\b|==[\d.]+|:[\d.]+|@sha256:`)
@@ -179,7 +179,14 @@ func rp1CommandFindings(item component) []model.Finding {
 				lineEnd += end
 			}
 			full := item.Content[match[0]:match[1]]
-			if versionPin.MatchString(full + item.Content[end:lineEnd]) {
+			versionText := full + item.Content[end:lineEnd]
+			// The oracle only checks the Docker image token captured by the
+			// expression. Text later on the command line (for example a mapped
+			// port) must not make an untagged image look pinned.
+			if kind == "docker" {
+				versionText = full
+			}
+			if versionPin.MatchString(versionText) {
 				continue
 			}
 			if packageFilter {
@@ -275,12 +282,21 @@ func repeatedContextMatches(item component) []model.Finding {
 	lineOffset := 0
 	for _, line := range strings.SplitAfter(item.Content, "\n") {
 		body := strings.TrimSuffix(line, "\n")
-		for start := 0; start < len(body); start++ {
+		runes := []rune(body)
+		byteOffsets := make([]int, len(runes)+1)
+		byteOffset := 0
+		for index, value := range runes {
+			byteOffsets[index] = byteOffset
+			byteOffset += len(string(value))
+		}
+		byteOffsets[len(runes)] = len(body)
+		for start := 0; start < len(runes); start++ {
 			matched := false
-			for width := 2; width <= 20 && start+width*21 <= len(body); width++ {
-				unit := body[start : start+width]
+			for width := 2; width <= 20 && start+width*21 <= len(runes); width++ {
+				unitRunes := runes[start : start+width]
+				unit := string(unitRunes)
 				count := 1
-				for start+(count+1)*width <= len(body) && body[start+count*width:start+(count+1)*width] == unit {
+				for start+(count+1)*width <= len(runes) && strings.EqualFold(string(runes[start+count*width:start+(count+1)*width]), unit) {
 					count++
 				}
 				if count < 21 {
@@ -289,7 +305,7 @@ func repeatedContextMatches(item component) []model.Finding {
 				end := start + count*width
 				if !trivialRepeatedUnit(unit) {
 					pattern := newStaticPattern("MP2", "Context Window Stuffing", "Memory Poisoning", "MEDIUM", .8, `a^`)
-					finding, ok := findingFromStaticMatch(item, pattern, []int{lineOffset + start, lineOffset + end})
+					finding, ok := findingFromStaticMatch(item, pattern, []int{lineOffset + byteOffsets[start], lineOffset + byteOffsets[end]})
 					if ok {
 						findings = append(findings, finding)
 					}

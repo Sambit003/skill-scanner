@@ -31,10 +31,13 @@ func summarize(findings []model.Finding, items []component) model.Summary {
 	score := 0.0
 	for _, finding := range ordered {
 		confidence := max(0, min(1, finding.Confidence))
+		if confidence <= 0 {
+			continue
+		}
 		id := ruleID(finding)
 		index := occurrences[id]
 		occurrences[id]++
-		if confidence <= 0 || index >= len(diminishingWeights) {
+		if index >= len(diminishingWeights) {
 			continue
 		}
 		points := severityPoints[strings.ToUpper(finding.Severity)]
@@ -100,14 +103,32 @@ func deduplicateForScoring(findings []model.Finding) []model.Finding {
 		crossFileBest[key] = len(result)
 		result = append(result, finding)
 	}
+	severityRank := map[string]int{"CRITICAL": 0, "HIGH": 1, "MEDIUM": 2, "LOW": 3}
+	sort.SliceStable(result, func(i, j int) bool {
+		leftRank, leftOK := severityRank[strings.ToUpper(result[i].Severity)]
+		rightRank, rightOK := severityRank[strings.ToUpper(result[j].Severity)]
+		if !leftOK {
+			leftRank = 4
+		}
+		if !rightOK {
+			rightRank = 4
+		}
+		if leftRank != rightRank {
+			return leftRank < rightRank
+		}
+		if result[i].Location.File != result[j].Location.File {
+			return result[i].Location.File < result[j].Location.File
+		}
+		return result[i].Location.StartLine < result[j].Location.StartLine
+	})
 	return result
 }
 
 func scoringMatchedText(finding model.Finding) string {
-	if finding.MatchedText != "" {
-		return finding.MatchedText
-	}
-	return finding.Finding
+	// Python's scoring identity is based exclusively on matched_text. A
+	// user-facing finding snippet is not a substitute: findings without a
+	// matched_text value deliberately remain distinct across files.
+	return finding.MatchedText
 }
 
 func renderReports(formats []string, summary model.Summary, findings []model.Finding) (map[string]model.Report, error) {

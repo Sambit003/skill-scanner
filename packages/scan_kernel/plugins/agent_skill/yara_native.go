@@ -3,15 +3,18 @@
 package agentskill
 
 import (
+	"context"
 	"embed"
 	"encoding/base64"
 	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"unicode/utf8"
 
 	"github.com/hillu/go-yara/v4"
@@ -25,7 +28,7 @@ type yaraSource struct {
 	path, namespace, content string
 }
 
-func scanYARA(items []component, customRules string) ([]model.Finding, error) {
+func scanYARA(ctx context.Context, items []component, customRules string) ([]model.Finding, error) {
 	sources, err := collectYARASources(customRules)
 	if err != nil {
 		return nil, err
@@ -58,25 +61,77 @@ func scanYARA(items []component, customRules string) ([]model.Finding, error) {
 	if err != nil {
 		return nil, err
 	}
-	scanner, err := yara.NewScanner(rules)
-	if err != nil {
+	type cachedYARAResult struct {
+		item     component
+		findings []model.Finding
+	}
+	cache := make(map[string]int, len(items))
+	results := make([]cachedYARAResult, 0, len(items))
+	resultFor := make([]int, len(items))
+	for index, item := range items {
+		if cached, exists := cache[item.Content]; exists {
+			resultFor[index] = cached
+			continue
+		}
+		resultFor[index] = len(results)
+		cache[item.Content] = len(results)
+		results = append(results, cachedYARAResult{item: item})
+	}
+	workers := min(len(results), max(1, min(runtime.GOMAXPROCS(0), 16)))
+	jobs := make(chan int)
+	errors := make(chan error, workers)
+	var group sync.WaitGroup
+	group.Add(workers)
+	for range workers {
+		go func() {
+			defer group.Done()
+			scanner, scannerErr := yara.NewScanner(rules)
+			if scannerErr != nil {
+				errors <- scannerErr
+				return
+			}
+			for index := range jobs {
+				if ctx.Err() != nil {
+					continue
+				}
+				item := results[index].item
+				if utf8.RuneCountInString(item.Content) > maxFileBytes {
+					continue
+				}
+				var matches yara.MatchRules
+				if err := scanner.SetCallback(&matches).ScanMem([]byte(item.Content)); err != nil {
+					// Python treats a per-file YARA match error as a skipped file.
+					continue
+				}
+				for _, match := range matches {
+					if finding, ok := yaraFinding(item, match); ok {
+						results[index].findings = append(results[index].findings, finding)
+					}
+				}
+			}
+		}()
+	}
+	for index := range results {
+		if ctx.Err() != nil {
+			break
+		}
+		jobs <- index
+	}
+	close(jobs)
+	group.Wait()
+	close(errors)
+	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-
+	for err := range errors {
+		return nil, err
+	}
 	var findings []model.Finding
-	for _, item := range items {
-		if utf8.RuneCountInString(item.Content) > maxFileBytes {
-			continue
-		}
-		var matches yara.MatchRules
-		if err := scanner.SetCallback(&matches).ScanMem([]byte(item.Content)); err != nil {
-			// Python treats a per-file YARA match error as a skipped file.
-			continue
-		}
-		for _, match := range matches {
-			if finding, ok := yaraFinding(item, match); ok {
-				findings = append(findings, finding)
-			}
+	for index, item := range items {
+		for _, cached := range results[resultFor[index]].findings {
+			finding := cached
+			finding.Location.File = item.Path
+			findings = append(findings, finding)
 		}
 	}
 	return findings, nil
@@ -221,8 +276,14 @@ func yaraFinding(item component, match yara.MatchRule) (model.Finding, bool) {
 		parts = append(parts, string(matched.Data))
 	}
 	matchedText := truncateRunes(strings.Join(parts, "; "), 200)
-	line := 1 + strings.Count(item.Content[:min(firstOffset, len(item.Content))], "\n")
-	context := contextAtOffset(item.Content, firstOffset, 3)
+	// yara-python reports byte offsets, but the oracle passes that offset to
+	// Python string slicing. Reproduce that character-index interpretation for
+	// exact line/context parity in UTF-8 files.
+	runes := []rune(item.Content)
+	characterOffset := min(firstOffset, len(runes))
+	prefix := string(runes[:characterOffset])
+	line := 1 + strings.Count(prefix, "\n")
+	context := contextAtOffset(item.Content, len(prefix), 3)
 	if isCodeExample(context) {
 		confidence *= .5
 	}

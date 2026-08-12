@@ -3,6 +3,7 @@
 package agentskill
 
 import (
+	"context"
 	"fmt"
 	"regexp"
 	"strings"
@@ -12,7 +13,7 @@ import (
 
 // The development build keeps a deterministic signature subset so contributors
 // can test without libyara. Release bundles enable the yara_native build tag.
-func scanYARA(items []component, customRules string) ([]model.Finding, error) {
+func scanYARA(ctx context.Context, items []component, customRules string) ([]model.Finding, error) {
 	if customRules != "" {
 		return nil, fmt.Errorf("custom YARA rules require a native-YARA build")
 	}
@@ -26,6 +27,9 @@ func scanYARA(items []component, customRules string) ([]model.Finding, error) {
 	}
 	var findings []model.Finding
 	for _, item := range items {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		for _, signature := range signatures {
 			compiled := regexp.MustCompile(signature.expression)
 			for _, match := range compiled.FindAllStringIndex(item.Content, 10) {
