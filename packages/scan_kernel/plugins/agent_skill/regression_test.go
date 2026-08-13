@@ -5,6 +5,7 @@ import (
 	"math"
 	"reflect"
 	"strconv"
+	"strings"
 	"testing"
 
 	"gitlab.com/superalign/labs/asset-scan-demo/packages/scan_kernel/internal/model"
@@ -450,6 +451,73 @@ def load_environment():
 	findings := analyzePythonBehavior(item)
 	if got := countRule(findings, "TT2"); got != 1 {
 		t.Fatalf("TT2 count=%d, want breadth-first oracle taint flow; findings=%#v", got, findings)
+	}
+}
+
+func TestPostParityWeakIsolationDetectors(t *testing.T) {
+	items := []component{
+		{Path: "Dockerfile", Type: "dockerfile", Executable: true, Content: "FROM alpine\nUSER root\n"},
+		{Path: "compose.yaml", Type: "yaml", Executable: true, Content: `services:
+  worker:
+    image: alpine
+    user: "0:0"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /root:/host-root
+    privileged: true
+    network_mode: host
+`},
+		{Path: "service.service", Type: "ini", Executable: true, Content: "[Service]\nUser=root\n"},
+	}
+	findings, err := analyzeSourceAndManifest(context.Background(), items, map[string]any{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, rule := range []string{"PE2", "PE4", "PE5"} {
+		if got := countRule(findings, rule); got == 0 {
+			t.Fatalf("missing %s; findings=%#v", rule, findings)
+		}
+	}
+	for _, finding := range findings {
+		if finding.ID == "TM4" && finding.Location.File == "compose.yaml" && finding.Location.StartLine == 8 {
+			t.Fatalf("TM4 duplicated PE5 same-line privileged finding: %#v", findings)
+		}
+	}
+}
+
+func TestPostParityUpdateDriftDetectors(t *testing.T) {
+	items := []component{
+		{Path: "requirements.txt", Type: "text", Content: "demo @ git+https://github.com/acme/demo.git#main\n"},
+		{Path: "package.json", Type: "json", Content: "{\n  \"branch\": \"latest\"\n}\n"},
+		{Path: "install.sh", Type: "shell", Executable: true, Content: "pip install http://packages.example/demo-1.0.0.whl\ncurl http://pypi.org/simple/demo\n"},
+	}
+	findings, err := analyzeSourceAndManifest(context.Background(), items, map[string]any{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, rule := range []string{"SC1", "SC2"} {
+		if got := countRule(findings, rule); got == 0 {
+			t.Fatalf("missing %s; findings=%#v", rule, findings)
+		}
+	}
+	for _, finding := range findings {
+		if finding.ID == "SC2" && strings.Contains(finding.MatchedText, "http://") && finding.Severity != "HIGH" {
+			t.Fatalf("plaintext HTTP SC2 must stay high severity: %#v", finding)
+		}
+	}
+}
+
+func TestPostParityIsolationExemptionsRemainNarrow(t *testing.T) {
+	item := component{Path: "run.sh", Type: "shell", Executable: true, Content: "docker run -v /etc/passwd:/etc/passwd:ro alpine\n--disable-content-trust=false\n"}
+	findings, err := analyzeSourceAndManifest(context.Background(), []component{item}, map[string]any{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := countRule(findings, "PE3"); got != 0 {
+		t.Fatalf("read-only passwd mount emitted PE3=%d; findings=%#v", got, findings)
+	}
+	if got := countRule(findings, "SC7"); got != 0 {
+		t.Fatalf("content-trust=false emitted SC7=%d; findings=%#v", got, findings)
 	}
 }
 

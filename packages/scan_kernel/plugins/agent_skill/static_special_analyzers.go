@@ -26,6 +26,10 @@ var sc1Patterns = []staticPattern{
 	newStaticPattern("SC1", "Unpinned Dependencies", "Supply Chain", "LOW", .4, `"[^"]+"\s*:\s*"\^[\d.]+"`),
 	newStaticPattern("SC1", "Unpinned Dependencies", "Supply Chain", "LOW", .6, `install\s+(?:the\s+)?latest\s+(?:version\s+)?(?:of\s+)?(?:all\s+)?(?:packages?|dependencies)`),
 	newStaticPattern("SC1", "Unpinned Dependencies", "Supply Chain", "LOW", .7, `(?:don't|do\s+not)\s+(?:pin|lock|specify)\s+(?:package\s+)?versions?`),
+	newStaticPattern("SC1", "Unpinned Dependencies", "Supply Chain", "LOW", .8, `git\+https?://[^\s#]+#(?:main|master|latest|head|dev|development|trunk)\b`),
+	newStaticPattern("SC1", "Unpinned Dependencies", "Supply Chain", "LOW", .8, `https?://github\.com/[^/\s]+/[^/\s]+/(?:tree|blob|raw)/(?:main|master|latest|dev)\b`),
+	newStaticPattern("SC1", "Unpinned Dependencies", "Supply Chain", "LOW", .8, `["'](?:ref|branch)["']\s*:\s*["'](?:main|master|latest|dev)["']`),
+	newStaticPattern("SC1", "Unpinned Dependencies", "Supply Chain", "LOW", .8, `git\s+clone\s+.*?--branch\s+(?:main|master|latest|dev)\b`),
 }
 
 var harmfulActionPatterns = []staticPattern{

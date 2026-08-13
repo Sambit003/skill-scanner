@@ -366,6 +366,9 @@ var (
 	executionSignal       = regexp.MustCompile(`(?i)(?:\b\w+\s*=|\bos\.(?:environ|getenv|system)\b|\bshutil\.rmtree\b|\b(?:subprocess|eval|exec)\b|[|>]|\b(?:open|read_text|write_text)\s*\()`)
 	supplyChainURLToken   = regexp.MustCompile(`(?i)https?://[^\s|;&)]+|(?:[a-z0-9-]+\.)+[a-z]{2,}(?:/[^\s|;&)]*)?`)
 	safeInstallPattern    = regexp.MustCompile(`(?i)(?:pip|npm)\s+install`)
+	plainHTTPArtifact     = regexp.MustCompile(`(?i)\bhttp://[^\s'"]+?\.(?:tar\.gz|tgz|zip|whl|gem)\b`)
+	plainHTTPPackageHost  = regexp.MustCompile(`(?i)\bhttp://(?:pypi\.org|registry\.npmjs\.org|github\.com|raw\.githubusercontent\.com|rubygems\.org)\b`)
+	plainHTTPPackageInst  = regexp.MustCompile(`(?i)(?:pip|npm|yarn|pnpm)\s+install\s+.*?\bhttp://`)
 )
 
 var trustedSupplyChainDomains = []string{
@@ -614,6 +617,9 @@ func findingFromStaticMatchWithContext(item component, pattern staticPattern, ma
 }
 
 func isSafeSupplyChainPattern(text string) bool {
+	if isPlaintextSupplyChainRisk(text) {
+		return false
+	}
 	if safeInstallPattern.MatchString(text) {
 		return true
 	}
@@ -637,15 +643,30 @@ func isSafeSupplyChainPattern(text string) bool {
 	return false
 }
 
+func isPlaintextSupplyChainRisk(text string) bool {
+	return plainHTTPArtifact.MatchString(text) || plainHTTPPackageHost.MatchString(text) || plainHTTPPackageInst.MatchString(text)
+}
+
 func keepBestPrivilegeFindingPerLine(findings []model.Finding) []model.Finding {
+	pe5Lines := map[string]bool{}
+	for _, finding := range findings {
+		if finding.ID == "PE5" {
+			key := finding.Location.File + "\x00" + fmt.Sprint(finding.Location.StartLine)
+			pe5Lines[key] = true
+		}
+	}
 	best := map[string]int{}
 	result := make([]model.Finding, 0, len(findings))
 	for _, finding := range findings {
+		lineKey := finding.Location.File + "\x00" + fmt.Sprint(finding.Location.StartLine)
+		if finding.ID == "TM4" && pe5Lines[lineKey] {
+			continue
+		}
 		if finding.ID != "PE4" && finding.ID != "PE5" {
 			result = append(result, finding)
 			continue
 		}
-		key := finding.ID + "\x00" + finding.Location.File + "\x00" + fmt.Sprint(finding.Location.StartLine)
+		key := finding.ID + "\x00" + lineKey
 		if index, exists := best[key]; exists {
 			if finding.Confidence > result[index].Confidence {
 				result[index] = finding
