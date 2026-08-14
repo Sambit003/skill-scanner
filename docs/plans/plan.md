@@ -2,7 +2,7 @@
 
 ## Goal
 
-Provide a deployable FastAPI, Celery, and Next.js application around the ScanKernel deterministic scanner.
+Provide a deployable FastAPI, Celery, and Next.js application around the deterministic scanner.
 
 ## Product boundary
 

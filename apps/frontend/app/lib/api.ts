@@ -93,7 +93,7 @@ async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
   try {
     res = await fetch(`${API_BASE}${path}`, init);
   } catch {
-    throw new ApiError(`Couldn't reach the ScanKernel API at ${API_BASE}. Make sure the backend is running.`);
+    throw new ApiError(`Couldn't reach the scanner API at ${API_BASE}. Make sure the backend is running.`);
   }
 
   if (!res.ok) {
@@ -123,8 +123,10 @@ export async function listScans(params?: {
   sort?: string;
 }): Promise<ScanListResponse> {
   const search = new URLSearchParams();
-  if (params?.page) search.set("page", String(params.page));
-  if (params?.pageSize) search.set("page_size", String(params.pageSize));
+  const page = params?.page ?? 1;
+  const pageSize = params?.pageSize ?? 50;
+  search.set("limit", String(pageSize));
+  search.set("offset", String((page - 1) * pageSize));
   if (params?.status) search.set("status", params.status);
   if (params?.severity) search.set("severity", params.severity);
   if (params?.target) search.set("target", params.target);
@@ -132,7 +134,15 @@ export async function listScans(params?: {
   if (params?.sort) search.set("sort", params.sort);
 
   const suffix = search.size ? `?${search.toString()}` : "";
-  return requestJson<ScanListResponse>(`/v1/scans${suffix}`);
+  const response = await requestJson<ScanListResponse | ScanStatusResponse[]>(`/v1/scans${suffix}`);
+  if (!Array.isArray(response)) return response;
+
+  return {
+    page,
+    page_size: pageSize,
+    total: response.length,
+    items: response,
+  };
 }
 
 export async function getScan(scanId: string): Promise<ScanStatusResponse> {

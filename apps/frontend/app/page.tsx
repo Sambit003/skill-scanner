@@ -1,4 +1,5 @@
 import { ScanConsole } from "@/app/components/scan-console";
+import { ScanResultsSection } from "@/app/components/scan-results-section";
 import { SiteHeader } from "@/app/components/site-header";
 
 type CardSize = "lg" | "wide" | "sm";
@@ -57,6 +58,8 @@ export default function Home() {
         <ScanConsole />
       </main>
 
+      <ScanResultsSection compact />
+
       <section
         id="coverage"
         className="flex w-full scroll-mt-20 flex-col justify-center py-16 sm:min-h-screen sm:py-24"
@@ -66,7 +69,7 @@ export default function Home() {
             What gets checked
           </h2>
           <p className="mx-auto mt-2 max-w-md text-muted-foreground">
-            Nineteen deterministic rule families, run the same way every time.
+            Nineteen deterministic check groups, run the same way every time.
           </p>
         </div>
         <div className="mt-10 grid flex-1 grid-cols-1 gap-3 px-6 sm:mt-14 sm:grid-cols-4 sm:grid-flow-dense sm:px-10 sm:[grid-auto-rows:minmax(140px,1fr)] lg:px-16">

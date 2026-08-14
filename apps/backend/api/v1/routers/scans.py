@@ -6,6 +6,7 @@ from backend.domain.models.schemas import (
     ScanCreateRequest,
     ScanDetailResponse,
     ScanFindingsResponse,
+    ScanListItemResponse,
     ScanResponse,
 )
 from backend.services.scan_service import ScanService
@@ -27,7 +28,7 @@ async def create_scan(
     """Initiate an asynchronous asset scan."""
     return await service.initiate_scan(request)
 
-@router.get("", response_model=List[ScanResponse])
+@router.get("", response_model=List[ScanListItemResponse])
 async def list_scans(
     limit: int = Query(default=50, ge=1, le=100),
     offset: int = Query(default=0, ge=0),

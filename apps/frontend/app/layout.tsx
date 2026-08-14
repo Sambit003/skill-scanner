@@ -18,7 +18,7 @@ const onest = Onest({
 });
 
 export const metadata: Metadata = {
-  title: "ScanKernel — know what an AI skill does before you install it",
+  title: "AI Skill Scanner — know what an AI skill does before you install it",
   description:
     "Static, reproducible security scanning for AI skills with deterministic analysis.",
 };

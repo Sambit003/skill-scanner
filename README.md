@@ -1,6 +1,6 @@
-# ScanKernel Demo
+# AI Skill Scanner Demo
 
-ScanKernel is a deterministic security scanner for AI Agent Skills. The core
+This project is a deterministic security scanner for AI Agent Skills. The core
 scanner, analyzers, rule catalog, YARA integration, report generation, and CLI
 are implemented in Go. Python is used only by the web application's FastAPI API
 and Celery worker to schedule scans, invoke the Go executable, and persist the

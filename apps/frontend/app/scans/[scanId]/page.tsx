@@ -1,6 +1,16 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type MouseEvent as ReactMouseEvent,
+  type ReactNode,
+} from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import {
@@ -14,12 +24,16 @@ import {
 } from "@/app/lib/api";
 import {
   RECOMMENDATION_STYLES,
-  SEVERITY_BAR_COLOR,
   SEVERITY_ORDER,
   SEVERITY_STYLES,
   formatDuration,
   formatRecommendation,
 } from "@/app/lib/severity";
+import {
+  AST_CATEGORIES,
+  astCategoriesForFamily,
+  getRuleFamilyDoc,
+} from "@/app/lib/framework";
 import { SiteHeader } from "@/app/components/site-header";
 import { CodeViewer } from "@/app/components/code-viewer";
 import { InfoPopover } from "@/app/components/info-popover";
@@ -27,6 +41,7 @@ import { ReportDownloadMenu } from "@/app/components/report-download-menu";
 import {
   AlertIcon,
   CloseIcon,
+  InfoIcon,
   LinkIcon,
   SearchIcon,
   SpinnerIcon,
@@ -43,68 +58,6 @@ const RISK_RING_COLOR: Record<string, string> = {
   LOW: "text-success",
 };
 
-const CATEGORY_EXPLAINERS: Record<
-  string,
-  {
-    title: string;
-    description: string;
-    remediation: string;
-  }
-> = {
-  "Code Execution": {
-    title: "Code execution",
-    description:
-      "The scan found patterns that can run commands or execute dynamic code from untrusted input.",
-    remediation: "Prefer fixed allowlists and safe wrappers over exec, eval, or shell passthrough.",
-  },
-  Injection: {
-    title: "Injection",
-    description:
-      "The scan found untrusted input reaching prompts, commands, queries, or downstream tools without enough control.",
-    remediation: "Validate input shape, constrain prompts, and block direct passthrough into sensitive sinks.",
-  },
-  "Data Leak": {
-    title: "Data leak",
-    description:
-      "The scan found possible exposure of secrets, local files, environment values, or user data to places they should not go.",
-    remediation: "Reduce data access, mask secrets, and require explicit allowlists before external transmission.",
-  },
-  "Privilege Escalation": {
-    title: "Privilege escalation",
-    description:
-      "The scan found permissions or runtime settings that could let a skill act beyond its intended boundary.",
-    remediation: "Drop dangerous capabilities, host access, and broad credential scope.",
-  },
-  "Supply Chain": {
-    title: "Supply chain",
-    description:
-      "The scan found dependency or package trust issues such as unpinned references, risky installs, or suspicious artifacts.",
-    remediation: "Pin versions, review upstream sources, and block implicit remote fetches where possible.",
-  },
-  "Excessive Agency": {
-    title: "Excessive agency",
-    description:
-      "The scan found tool access or automation scope that appears broader than the skill needs for its intended task.",
-    remediation: "Reduce permissions, narrow tool exposure, and require explicit user confirmation for high-impact actions.",
-  },
-  "Malware Signatures": {
-    title: "Malware signatures",
-    description:
-      "The scan found patterns that resemble known malicious tooling, exploit code, droppers, miners, or other unsafe payloads.",
-    remediation: "Quarantine the code path, review the matched files manually, and remove or replace suspicious artifacts.",
-  },
-  "MCP Hygiene": {
-    title: "MCP hygiene",
-    description:
-      "The scan found MCP-related trust or safety issues such as broad permissions, risky defaults, or weak version controls.",
-    remediation: "Apply least privilege, pin reviewed versions, and narrow tool and server scope before installation.",
-  },
-};
-
-function getCategoryExplainer(label: string) {
-  return CATEGORY_EXPLAINERS[label] ?? null;
-}
-
 export default function ScanDashboardPage() {
   const params = useParams<{ scanId: string }>();
   const scanId = params.scanId;
@@ -120,8 +73,9 @@ export default function ScanDashboardPage() {
   const [categoryFilter, setCategoryFilter] = useState<string>("ALL");
   const [search, setSearch] = useState("");
   const [selectedFinding, setSelectedFinding] = useState<FindingResponse | null>(null);
-  const [selectedRule, setSelectedRule] = useState<RuleDocResponse | null>(null);
-  const [ruleError, setRuleError] = useState<string | null>(null);
+  const [ruleDocs, setRuleDocs] = useState<Record<string, RuleDocResponse>>({});
+  const [ruleDocLoading, setRuleDocLoading] = useState<Record<string, boolean>>({});
+  const [ruleDocErrors, setRuleDocErrors] = useState<Record<string, string>>({});
   const [copied, setCopied] = useState(false);
 
   const findingsRequestKey = useMemo(
@@ -224,39 +178,49 @@ export default function ScanDashboardPage() {
     };
   }, [scanId, scan, findingsRequestKey, selectedFinding, severityFilter, categoryFilter, search]);
 
-  useEffect(() => {
-    let cancelled = false;
+  const ensureRuleDoc = useCallback(
+    async (ruleId: string) => {
+      if (ruleDocs[ruleId] || ruleDocLoading[ruleId]) return;
 
-    async function loadRule() {
-      if (!selectedFinding) {
-        setSelectedRule(null);
-        setRuleError(null);
-        return;
-      }
+      setRuleDocLoading((current) => ({ ...current, [ruleId]: true }));
+      setRuleDocErrors((current) => {
+        const next = { ...current };
+        delete next[ruleId];
+        return next;
+      });
+
       try {
-        const rule = await getRule(selectedFinding.rule_id);
-        if (!cancelled) {
-          setSelectedRule(rule);
-          setRuleError(null);
-        }
+        const rule = await getRule(ruleId);
+        setRuleDocs((current) => ({ ...current, [ruleId]: rule }));
       } catch (err) {
-        if (!cancelled) {
-          setSelectedRule(null);
-          setRuleError(err instanceof Error ? err.message : "Couldn't load rule details.");
-        }
+        setRuleDocErrors((current) => ({
+          ...current,
+          [ruleId]: err instanceof Error ? err.message : "Couldn't load rule reference.",
+        }));
+      } finally {
+        setRuleDocLoading((current) => ({ ...current, [ruleId]: false }));
       }
-    }
+    },
+    [ruleDocs, ruleDocLoading]
+  );
 
-    void loadRule();
-    return () => {
-      cancelled = true;
-    };
-  }, [selectedFinding]);
+  useEffect(() => {
+    if (selectedFinding) {
+      void ensureRuleDoc(selectedFinding.rule_id);
+    }
+  }, [ensureRuleDoc, selectedFinding]);
 
   const categories = useMemo(() => {
     if (!scan) return [];
     return scan.category_breakdown.map((item) => item.label);
   }, [scan]);
+
+  const owaspAreasWithFindings = useMemo(
+    () => countOwaspAreas(findings ?? []),
+    [findings]
+  );
+  const selectedRule = selectedFinding ? ruleDocs[selectedFinding.rule_id] ?? null : null;
+  const selectedRuleError = selectedFinding ? ruleDocErrors[selectedFinding.rule_id] ?? null : null;
 
   async function handleCopyLink() {
     try {
@@ -330,7 +294,7 @@ export default function ScanDashboardPage() {
       )}
 
       {loadState === "ready" && scan && scan.status === "completed" && (
-        <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col px-6 py-10">
+        <main className="mx-auto flex w-full max-w-[92rem] flex-1 flex-col px-6 py-10">
           <section className="grid grid-cols-1 gap-4 lg:grid-cols-12">
             <div className="flex flex-col items-center gap-6 rounded-card border border-border bg-card p-6 sm:p-8 md:flex-row lg:col-span-8">
               <RiskRing score={scan.risk_score} severity={scan.severity} />
@@ -428,77 +392,27 @@ export default function ScanDashboardPage() {
             </div>
           </section>
 
-          <section className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
-            <div className="rounded-card border border-border bg-card p-6">
-              <h3 className="mb-5 text-sm font-medium text-foreground">Findings by severity</h3>
-              <div className="space-y-4">
-                {SEVERITY_ORDER.map((severity) => {
-                  const count = scan.findings_by_severity[severity] ?? 0;
-                  const total = scan.findings_count || 1;
-                  const width = Math.min(100, (count / total) * 100);
-                  return (
-                    <div key={severity} className="flex items-center gap-4">
-                      <span className="w-16 shrink-0 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                        {severity}
-                      </span>
-                      <div className="h-2 flex-grow overflow-hidden rounded-full bg-muted">
-                        <div
-                          className={`h-full ${SEVERITY_BAR_COLOR[severity] ?? "bg-muted-foreground"}`}
-                          style={{ width: `${width}%` }}
-                        />
-                      </div>
-                      <span className="w-4 shrink-0 text-right text-sm font-semibold text-foreground">
-                        {count}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            <div className="rounded-card border border-border bg-card p-6">
-              <h3 className="mb-5 text-sm font-medium text-foreground">Findings by category</h3>
-              {scan.category_breakdown.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No findings to categorize.</p>
-              ) : (
-                <div className="space-y-2">
-                  {scan.category_breakdown.map((item) => (
-                    <div
-                      key={item.label}
-                      className="flex items-center justify-between rounded-xl bg-muted px-4 py-3"
-                    >
-                      <span className="inline-flex items-center gap-2 text-sm text-foreground">
-                        <span>{item.label}</span>
-                        {getCategoryExplainer(item.label) ? (
-                          <InfoPopover
-                            title={getCategoryExplainer(item.label)!.title}
-                            description={getCategoryExplainer(item.label)!.description}
-                            remediation={getCategoryExplainer(item.label)!.remediation}
-                          />
-                        ) : null}
-                      </span>
-                      <span className="font-mono text-xs text-muted-foreground">
-                        {item.count} finding{item.count === 1 ? "" : "s"}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </section>
-
           <section className="mt-4 flex flex-1 flex-col">
-            <div className="mb-4 flex flex-col items-start justify-between gap-4 md:flex-row md:items-center">
-              <h2 className="text-sm font-medium text-foreground">Scan findings</h2>
-              <div className="flex flex-wrap items-center gap-3">
-                <div className="relative">
-                  <SearchIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <div className="sticky top-[65px] z-10 mb-4 grid gap-3 rounded-card border border-border bg-background/95 px-4 py-3 backdrop-blur-md lg:grid-cols-[minmax(13rem,1fr)_auto] lg:items-center">
+              <div className="min-w-0">
+                <h2 className="text-sm font-medium text-foreground">Findings</h2>
+                <p className="mt-0.5 max-w-md text-xs leading-5 text-muted-foreground">Mapped to OWASP review areas.</p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2 lg:justify-end">
+                <span className="rounded-full bg-muted px-2.5 py-1 font-mono text-[11px] text-muted-foreground">
+                  {findings?.length ?? scan.findings_count ?? 0} findings
+                </span>
+                <span className="rounded-full bg-muted px-2.5 py-1 font-mono text-[11px] text-muted-foreground">
+                  {owaspAreasWithFindings}/10 OWASP areas
+                </span>
+                <div className="relative w-full sm:w-64">
+                  <SearchIcon className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
                   <input
                     type="text"
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                     placeholder="Search file or category…"
-                    className="w-56 rounded-full border border-border bg-card py-1.5 pl-9 pr-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/25"
+                    className="w-full rounded-full border border-border bg-card py-1.5 pl-8 pr-3 text-xs text-foreground placeholder:text-muted-foreground transition-shadow duration-150 focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/25"
                   />
                 </div>
                 <div className="flex overflow-hidden rounded-full border border-border">
@@ -507,7 +421,7 @@ export default function ScanDashboardPage() {
                       key={severity}
                       type="button"
                       onClick={() => setSeverityFilter(severity)}
-                      className={`px-3 py-1.5 text-xs font-medium transition-colors duration-150 ${
+                      className={`px-2.5 py-1.5 text-[11px] font-medium transition-colors duration-150 ${
                         severityFilter === severity
                           ? "bg-foreground text-background"
                           : "bg-card text-muted-foreground hover:bg-muted"
@@ -521,7 +435,7 @@ export default function ScanDashboardPage() {
                   <select
                     value={categoryFilter}
                     onChange={(e) => setCategoryFilter(e.target.value)}
-                    className="rounded-full border border-border bg-card px-3 py-1.5 text-xs font-medium text-foreground focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/25"
+                    className="w-40 rounded-full border border-border bg-card px-3 py-1.5 text-xs font-medium text-foreground focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/25"
                   >
                     <option value="ALL">All categories</option>
                     {categories.map((category) => (
@@ -555,183 +469,132 @@ export default function ScanDashboardPage() {
             )}
 
             {findings !== null && findings.length > 0 && (
-              <div className="flex flex-1 overflow-hidden rounded-card border border-border bg-card">
-                <div className="flex-1 overflow-auto">
-                  <table className="w-full text-left">
-                    <thead className="sticky top-0 z-10 bg-muted">
-                      <tr>
-                        <th className="px-4 py-3 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                          ID
-                        </th>
-                        <th className="px-4 py-3 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                          Severity
-                        </th>
-                        <th className="px-4 py-3 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                          Category
-                        </th>
-                        <th className="px-4 py-3 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                          File
-                        </th>
-                        <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                          Action
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-border">
-                      {findings.map((finding) => {
-                        const key = `${finding.id}-${finding.location.file}-${finding.location.start_line}`;
-                        const isSelected =
-                          selectedFinding?.id === finding.id &&
-                          selectedFinding.location.file === finding.location.file &&
-                          selectedFinding.location.start_line === finding.location.start_line;
-                        return (
-                          <tr
-                            key={key}
-                            className={`cursor-pointer transition-colors duration-150 hover:bg-muted ${
-                              isSelected ? "bg-muted" : ""
-                            }`}
-                            onClick={() => setSelectedFinding(finding)}
-                          >
-                            <td className="px-4 py-3 font-mono text-xs text-muted-foreground">
-                              {finding.rule_id}
-                            </td>
-                            <td className="px-4 py-3">
-                              <span
-                                className={`rounded-full px-2 py-0.5 text-[11px] font-semibold uppercase ${
-                                  SEVERITY_STYLES[finding.severity] ?? "bg-muted text-muted-foreground"
+              <div
+                className={`grid flex-1 gap-4 transition-[grid-template-columns] duration-300 ease-out lg:items-start ${
+                  selectedFinding ? "lg:grid-cols-[minmax(0,1fr)_26rem]" : "lg:grid-cols-1"
+                }`}
+              >
+                <div className="h-[calc(100vh-14rem)] overflow-hidden rounded-card border border-border bg-card">
+                  <div className="h-full overflow-y-auto">
+                    <table className="w-full table-fixed text-left">
+                      <colgroup>
+                        <col className="w-[7%]" />
+                        <col className="w-[12%]" />
+                        <col className="w-[19%]" />
+                        <col className="w-[8%]" />
+                        <col className="w-[13%]" />
+                        <col />
+                      </colgroup>
+                      <thead className="sticky top-0 z-[1] border-b border-border bg-muted">
+                        <tr>
+                          <th className="px-3 py-2.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                            Check ID
+                          </th>
+                          <th className="px-3 py-2.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                            OWASP area
+                          </th>
+                          <th className="px-3 py-2.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                            Evidence type
+                          </th>
+                          <th className="px-3 py-2.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                            Severity
+                          </th>
+                          <th className="px-3 py-2.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                            Category
+                          </th>
+                          <th className="px-3 py-2.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                            File
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-border">
+                        {findings.map((finding) => {
+                          const key = `${finding.id}-${finding.location.file}-${finding.location.start_line}`;
+                          const isSelected =
+                            selectedFinding?.id === finding.id &&
+                            selectedFinding.location.file === finding.location.file &&
+                            selectedFinding.location.start_line === finding.location.start_line;
+                          return (
+                            <tr
+                              key={key}
+                              className={`group cursor-pointer transition-colors duration-150 hover:bg-muted/70 ${
+                                isSelected ? "bg-muted" : "bg-card"
+                              }`}
+                              onClick={() => setSelectedFinding(finding)}
+                            >
+                              <td
+                                className={`border-l-2 px-3 py-2.5 transition-colors duration-150 ${
+                                  isSelected
+                                    ? "border-accent text-foreground"
+                                    : "border-transparent text-muted-foreground group-hover:border-border-strong"
                                 }`}
                               >
-                                {finding.severity}
-                              </span>
-                            </td>
-                            <td className="px-4 py-3 text-sm text-foreground">{finding.category ?? "—"}</td>
-                            <td className="px-4 py-3 font-mono text-xs text-muted-foreground">
-                              {finding.file_path_display ?? finding.location.file}
-                            </td>
-                            <td className="px-4 py-3 text-right">
-                              <button
-                                type="button"
-                                onClick={(event) => {
-                                  event.stopPropagation();
-                                  setSelectedFinding(finding);
-                                }}
-                                className="text-xs font-medium text-accent hover:underline"
-                              >
-                                View
-                              </button>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
+                                <CheckReferenceCell
+                                  finding={finding}
+                                  rule={ruleDocs[finding.rule_id] ?? null}
+                                  loading={ruleDocLoading[finding.rule_id] ?? false}
+                                  error={ruleDocErrors[finding.rule_id] ?? null}
+                                  onOpen={() => void ensureRuleDoc(finding.rule_id)}
+                                />
+                              </td>
+                              <td className="px-3 py-2.5">
+                                <OwaspReferenceBadges finding={finding} />
+                              </td>
+                              <td className="px-3 py-2.5">
+                                <EvidenceTypeCell finding={finding} />
+                              </td>
+                              <td className="px-3 py-2.5">
+                                <span
+                                  className={`rounded-full px-2 py-0.5 text-[11px] font-semibold uppercase ${
+                                    SEVERITY_STYLES[finding.severity] ?? "bg-muted text-muted-foreground"
+                                  }`}
+                                >
+                                  {finding.severity}
+                                </span>
+                              </td>
+                              <td className="px-3 py-2.5 text-sm leading-5 text-foreground">{finding.category ?? "—"}</td>
+                              <td className="break-all px-3 py-2.5 font-mono text-xs leading-5 text-muted-foreground">
+                                {finding.file_path_display ?? finding.location.file}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
 
                 {selectedFinding && (
-                  <aside className="hidden w-96 shrink-0 flex-col border-l border-border lg:flex">
-                    <div className="flex items-center justify-between border-b border-border p-6">
-                      <h3 className="text-sm font-medium text-foreground">Finding details</h3>
-                      <button
-                        type="button"
-                        onClick={() => setSelectedFinding(null)}
-                        aria-label="Close finding details"
-                        className="text-muted-foreground transition-colors duration-150 hover:text-foreground"
-                      >
-                        <CloseIcon className="h-4 w-4" />
-                      </button>
-                    </div>
-                    <div className="flex-1 space-y-6 overflow-auto p-6">
-                      <div>
-                        <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                          Rule
-                        </span>
-                        <div className="flex items-start gap-2">
-                          <p className="text-sm font-medium text-foreground">
-                            {selectedRule?.title ?? selectedFinding.title ?? selectedFinding.rule_id}
-                          </p>
-                          {(selectedRule?.description || selectedFinding.explanation) ? (
-                            <InfoPopover
-                              title={selectedRule?.title ?? selectedFinding.title ?? selectedFinding.rule_id}
-                              description={
-                                selectedRule?.description ??
-                                selectedFinding.explanation ??
-                                "Potential security issue detected."
-                              }
-                              remediation={selectedRule?.remediation ?? selectedFinding.remediation ?? undefined}
-                              meta={
-                                selectedRule?.category ??
-                                selectedFinding.category ??
-                                selectedFinding.rule_family ??
-                                undefined
-                              }
-                              align="center"
-                            />
-                          ) : null}
-                        </div>
-                        <p className="mt-1 font-mono text-xs text-muted-foreground">
-                          {selectedFinding.rule_id}
-                          {selectedFinding.rule_family ? ` · ${selectedFinding.rule_family}` : ""}
-                        </p>
-                      </div>
-
-                      <div>
-                        <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                          Location
-                        </span>
-                        <code className="font-mono text-sm text-accent">
-                          {selectedFinding.file_path_display ??
-                            `${selectedFinding.location.file}:${selectedFinding.location.start_line}`}
-                        </code>
-                      </div>
-
-                      {selectedFinding.code_snippet && (
-                        <div>
-                          <span className="mb-2 block text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                            Vulnerable code
-                          </span>
-                          <CodeViewer
-                            code={selectedFinding.code_snippet}
-                            filePath={selectedFinding.file_path_display ?? selectedFinding.location.file}
-                            startLine={selectedFinding.location.start_line || 1}
-                          />
-                        </div>
-                      )}
-
-                      {(selectedFinding.explanation || selectedRule?.description) && (
-                        <div>
-                          <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                            Why it matters
-                          </span>
-                          <p className="text-sm leading-6 text-muted-foreground">
-                            {selectedFinding.explanation ?? selectedRule?.description}
-                          </p>
-                        </div>
-                      )}
-
-                      {(selectedFinding.remediation || selectedRule?.remediation) && (
-                        <div>
-                          <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                            Remediation
-                          </span>
-                          <p className="text-sm leading-6 text-muted-foreground">
-                            {selectedFinding.remediation ?? selectedRule?.remediation}
-                          </p>
-                        </div>
-                      )}
-
-                      <div>
-                        <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                          Confidence
-                        </span>
-                        <p className="text-sm text-foreground">{Math.round(selectedFinding.confidence * 100)}%</p>
-                      </div>
-
-                      {ruleError && (
-                        <div className="rounded-xl bg-danger-bg px-4 py-3 text-sm text-danger">{ruleError}</div>
-                      )}
-                    </div>
+                  <aside className="animate-rail-open sticky top-[145px] hidden h-[calc(100vh-14rem)] overflow-hidden rounded-card border border-border bg-card lg:flex lg:flex-col">
+                    <FindingDetailsPanel
+                      key={`${selectedFinding.id}-${selectedFinding.location.file}-${selectedFinding.location.start_line}`}
+                      finding={selectedFinding}
+                      rule={selectedRule}
+                      ruleError={selectedRuleError}
+                      onClose={() => setSelectedFinding(null)}
+                    />
                   </aside>
                 )}
+              </div>
+            )}
+
+            {selectedFinding && (
+              <div className="fixed inset-0 z-30 lg:hidden">
+                <button
+                  type="button"
+                  aria-label="Close finding details"
+                  className="absolute inset-0 bg-background/65 backdrop-blur-sm"
+                  onClick={() => setSelectedFinding(null)}
+                />
+                <div className="animate-sheet-up absolute inset-x-0 bottom-0 max-h-[82vh] overflow-hidden rounded-t-card border border-border bg-card shadow-2xl">
+                  <FindingDetailsPanel
+                    key={`${selectedFinding.id}-${selectedFinding.location.file}-${selectedFinding.location.start_line}-mobile`}
+                    finding={selectedFinding}
+                    rule={selectedRule}
+                    ruleError={selectedRuleError}
+                    onClose={() => setSelectedFinding(null)}
+                  />
+                </div>
               </div>
             )}
           </section>
@@ -740,7 +603,7 @@ export default function ScanDashboardPage() {
 
       <footer className="border-t border-border">
         <div className="mx-auto flex w-full max-w-7xl flex-col items-center gap-2 px-6 py-6 text-xs text-muted-foreground sm:flex-row sm:justify-between">
-          <span>ScanKernel</span>
+          <span>AI Skill Scanner</span>
           <span>Deterministic scans never execute the code they analyze.</span>
         </div>
       </footer>
@@ -783,6 +646,554 @@ function MetaTile({
       >
         {value}
       </span>
+    </div>
+  );
+}
+
+type ReferenceSection = {
+  label: string;
+  body: string | null | undefined;
+};
+
+type ReferencePopoverPosition = {
+  left: number;
+  top: number;
+};
+
+function ReferencePopover({
+  title,
+  meta,
+  sections,
+  href,
+  hrefLabel = "Open rule reference",
+  loading = false,
+  error = null,
+  align = "left",
+  onOpen,
+  children,
+}: {
+  title: string;
+  meta?: string;
+  sections: ReferenceSection[];
+  href?: string | null;
+  hrefLabel?: string;
+  loading?: boolean;
+  error?: string | null;
+  align?: "left" | "center" | "right";
+  onOpen?: () => void;
+  children: ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  const [position, setPosition] = useState<ReferencePopoverPosition>({ left: 16, top: 16 });
+  const rootRef = useRef<HTMLSpanElement | null>(null);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const popoverRef = useRef<HTMLSpanElement | null>(null);
+  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const popoverId = useId();
+
+  const updatePosition = useCallback(() => {
+    const trigger = triggerRef.current;
+    if (!trigger) return;
+
+    const rect = trigger.getBoundingClientRect();
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+    const margin = 12;
+    const gap = 8;
+    const popoverWidth = popoverRef.current?.offsetWidth ?? 352;
+    const popoverHeight = popoverRef.current?.offsetHeight ?? 320;
+
+    let left =
+      align === "right"
+        ? rect.right - popoverWidth
+        : align === "center"
+          ? rect.left + rect.width / 2 - popoverWidth / 2
+          : rect.left;
+    left = Math.max(margin, Math.min(left, viewportWidth - popoverWidth - margin));
+
+    const below = rect.bottom + gap;
+    const above = rect.top - popoverHeight - gap;
+    const top = below + popoverHeight <= viewportHeight - margin ? below : Math.max(margin, above);
+
+    setPosition({ left, top });
+  }, [align]);
+
+  const openPopover = useCallback(() => {
+    if (closeTimerRef.current) {
+      clearTimeout(closeTimerRef.current);
+      closeTimerRef.current = null;
+    }
+    setOpen((current) => {
+      if (!current) onOpen?.();
+      return true;
+    });
+  }, [onOpen]);
+
+  const closePopover = useCallback(() => {
+    if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+    closeTimerRef.current = setTimeout(() => setOpen(false), 120);
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    updatePosition();
+
+    function handlePointerDown(event: MouseEvent | TouchEvent) {
+      if (!rootRef.current?.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setOpen(false);
+      }
+    }
+
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("touchstart", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("touchstart", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [open, updatePosition]);
+
+  useEffect(() => {
+    if (!open) return;
+    window.addEventListener("resize", updatePosition);
+    window.addEventListener("scroll", updatePosition, true);
+
+    return () => {
+      window.removeEventListener("resize", updatePosition);
+      window.removeEventListener("scroll", updatePosition, true);
+    };
+  }, [open, updatePosition]);
+
+  useEffect(() => {
+    return () => {
+      if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+    };
+  }, []);
+
+  useLayoutEffect(() => {
+    if (open) updatePosition();
+  }, [open, updatePosition, sections, loading, error]);
+
+  function toggle(event: ReactMouseEvent<HTMLButtonElement>) {
+    event.stopPropagation();
+    if (closeTimerRef.current) {
+      clearTimeout(closeTimerRef.current);
+      closeTimerRef.current = null;
+    }
+    setOpen((current) => {
+      const next = !current;
+      if (next) onOpen?.();
+      return next;
+    });
+  }
+
+  return (
+    <span
+      ref={rootRef}
+      className="relative inline-flex"
+      onMouseEnter={openPopover}
+      onMouseLeave={closePopover}
+      onFocus={openPopover}
+      onBlur={(event) => {
+        if (!rootRef.current?.contains(event.relatedTarget as Node | null)) {
+          closePopover();
+        }
+      }}
+    >
+      <button
+        ref={triggerRef}
+        type="button"
+        aria-label={`Reference for ${title}`}
+        aria-expanded={open}
+        aria-controls={popoverId}
+        onClick={toggle}
+        className="inline-flex items-center"
+      >
+        {children}
+      </button>
+
+      {open && (
+        <span
+          ref={popoverRef}
+          id={popoverId}
+          role="dialog"
+          aria-label={title}
+          onMouseEnter={openPopover}
+          onMouseLeave={closePopover}
+          onClick={(event) => event.stopPropagation()}
+          style={{ left: position.left, top: position.top }}
+          className="fixed z-30 w-[22rem] rounded-card border border-border bg-card p-4 text-left shadow-[0_18px_52px_rgba(0,0,0,0.24)]"
+        >
+          <span className="block text-sm font-semibold text-foreground">{title}</span>
+          {meta ? (
+            <span className="mt-1 block font-mono text-[11px] uppercase tracking-wide text-muted-foreground">
+              {meta}
+            </span>
+          ) : null}
+
+          <span className="mt-3 block space-y-3">
+            {loading ? (
+              <span className="flex items-center gap-2 text-xs text-muted-foreground">
+                <SpinnerIcon className="h-3.5 w-3.5 animate-spin text-accent" />
+                Loading reference...
+              </span>
+            ) : null}
+
+            {error ? (
+              <span className="block rounded-xl bg-danger-bg px-3 py-2 text-xs leading-5 text-danger">
+                {error}
+              </span>
+            ) : null}
+
+            {sections
+              .filter((section) => section.body)
+              .map((section) => (
+                <span key={section.label} className="block">
+                  <span className="block text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                    {section.label}
+                  </span>
+                  <span className="mt-1 block text-xs leading-5 text-muted-foreground">{section.body}</span>
+                </span>
+              ))}
+          </span>
+
+          {href ? (
+            <a
+              href={href}
+              target="_blank"
+              rel="noreferrer"
+              className="mt-4 inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-xs font-medium text-foreground transition-colors duration-150 hover:border-border-strong hover:bg-muted"
+            >
+              <LinkIcon className="h-3.5 w-3.5" />
+              {hrefLabel}
+            </a>
+          ) : null}
+        </span>
+      )}
+    </span>
+  );
+}
+
+function CheckReferenceCell({
+  finding,
+  rule,
+  loading,
+  error,
+  onOpen,
+}: {
+  finding: FindingResponse;
+  rule: RuleDocResponse | null;
+  loading: boolean;
+  error: string | null;
+  onOpen: () => void;
+}) {
+  const title = rule?.title ?? finding.title ?? finding.rule_id;
+  const description = rule?.description ?? finding.explanation;
+  const remediation = rule?.remediation ?? finding.remediation;
+  const documentationUrl = ruleReferenceHref(finding.rule_id);
+  const familyDoc = getRuleFamilyDoc(finding.rule_family);
+
+  return (
+    <span className="inline-flex max-w-full items-center gap-1.5">
+      <span className="truncate font-mono text-xs">{finding.rule_id}</span>
+      <ReferencePopover
+        title={title}
+        meta={`${finding.rule_id}${familyDoc ? ` · ${familyDoc.title}` : ""}`}
+        sections={[
+          { label: "Why it matters", body: description },
+          { label: "Remediation", body: remediation },
+        ]}
+        href={documentationUrl}
+        loading={loading}
+        error={error}
+        onOpen={onOpen}
+      >
+        <span className="inline-flex h-[18px] w-[18px] items-center justify-center rounded-full border border-border bg-background text-muted-foreground transition-colors duration-150 hover:border-border-strong hover:text-foreground">
+          <InfoIcon className="h-3 w-3" />
+        </span>
+      </ReferencePopover>
+    </span>
+  );
+}
+
+function EvidenceTypeCell({ finding }: { finding: FindingResponse }) {
+  const familyDoc = getRuleFamilyDoc(finding.rule_family);
+
+  if (!familyDoc) {
+    return <span className="text-xs text-muted-foreground">—</span>;
+  }
+
+  return (
+    <span title={familyDoc.summary} className="block truncate text-sm leading-5 text-foreground">
+      {familyDoc.title}
+    </span>
+  );
+}
+
+function FindingDetailsPanel({
+  finding,
+  rule,
+  ruleError,
+  onClose,
+}: {
+  finding: FindingResponse;
+  rule: RuleDocResponse | null;
+  ruleError: string | null;
+  onClose: () => void;
+}) {
+  return (
+    <>
+      <div className="flex items-center justify-between border-b border-border px-5 py-4">
+        <h3 className="text-sm font-medium text-foreground">Finding details</h3>
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Close finding details"
+          className="text-muted-foreground transition-colors duration-150 hover:text-foreground"
+        >
+          <CloseIcon className="h-4 w-4" />
+        </button>
+      </div>
+      <div className="animate-detail-in flex-1 space-y-5 overflow-auto p-5">
+        <div>
+          <span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+            Check
+          </span>
+          <div className="flex items-start gap-2">
+            <p className="text-sm font-medium text-foreground">{rule?.title ?? finding.title ?? finding.rule_id}</p>
+            {(rule?.description || finding.explanation) ? (
+              <InfoPopover
+                title={rule?.title ?? finding.title ?? finding.rule_id}
+                description={rule?.description ?? finding.explanation ?? "Potential security issue detected."}
+                remediation={rule?.remediation ?? finding.remediation ?? undefined}
+                meta={rule?.category ?? finding.category ?? finding.rule_family ?? undefined}
+                align="center"
+              />
+            ) : null}
+          </div>
+          <p className="mt-1 font-mono text-xs text-muted-foreground">{finding.rule_id}</p>
+        </div>
+
+        <RuleGrouping finding={finding} />
+
+        <FindingReferences finding={finding} rule={rule} />
+
+        <div>
+          <span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+            Location
+          </span>
+          <code className="break-all font-mono text-xs text-accent">
+            {finding.file_path_display ?? `${finding.location.file}:${finding.location.start_line}`}
+          </code>
+        </div>
+
+        {finding.code_snippet && (
+          <div>
+            <span className="mb-2 block text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+              Vulnerable code
+            </span>
+            <CodeViewer
+              code={finding.code_snippet}
+              filePath={finding.file_path_display ?? finding.location.file}
+              startLine={finding.location.start_line || 1}
+            />
+          </div>
+        )}
+
+        {(finding.explanation || rule?.description) && (
+          <div>
+            <span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+              Why it matters
+            </span>
+            <p className="text-sm leading-6 text-muted-foreground">{finding.explanation ?? rule?.description}</p>
+          </div>
+        )}
+
+        {(finding.remediation || rule?.remediation) && (
+          <div>
+            <span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+              Remediation
+            </span>
+            <p className="text-sm leading-6 text-muted-foreground">{finding.remediation ?? rule?.remediation}</p>
+          </div>
+        )}
+
+        <div>
+          <span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+            Confidence
+          </span>
+          <p className="text-sm text-foreground">{Math.round(finding.confidence * 100)}%</p>
+        </div>
+
+        {ruleError && <div className="rounded-xl bg-danger-bg px-4 py-3 text-sm text-danger">{ruleError}</div>}
+      </div>
+    </>
+  );
+}
+
+function FindingReferences({ finding, rule }: { finding: FindingResponse; rule: RuleDocResponse | null }) {
+  const astDocs = astCategoriesForFamily(finding.rule_family);
+  const familyDoc = getRuleFamilyDoc(finding.rule_family);
+  const documentationUrl = ruleReferenceHref(finding.rule_id);
+  const description = rule?.description ?? finding.explanation;
+  const remediation = rule?.remediation ?? finding.remediation;
+
+  return (
+    <div>
+      <span className="mb-2 block text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+        References
+      </span>
+      <div className="space-y-3 rounded-xl border border-border bg-background/40 px-3 py-3">
+        <div>
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-sm font-medium text-foreground">{rule?.title ?? finding.title ?? finding.rule_id}</span>
+            <span className="font-mono text-[11px] text-muted-foreground">{finding.rule_id}</span>
+          </div>
+          {familyDoc ? (
+            <p className="mt-1 text-xs leading-5 text-muted-foreground">
+              Evidence type: <span className="text-foreground">{familyDoc.title}</span>
+            </p>
+          ) : null}
+          {description ? <p className="mt-2 text-xs leading-5 text-muted-foreground">{description}</p> : null}
+          {remediation ? (
+            <p className="mt-2 rounded-lg bg-muted px-2.5 py-2 text-xs leading-5 text-foreground">{remediation}</p>
+          ) : null}
+          {documentationUrl ? (
+            <a
+              href={documentationUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="mt-3 inline-flex items-center gap-1.5 text-xs font-medium text-accent hover:underline"
+            >
+              <LinkIcon className="h-3.5 w-3.5" />
+              Open rule reference
+            </a>
+          ) : null}
+        </div>
+
+        {astDocs.length > 0 ? (
+          <div className="border-t border-border pt-3">
+            <span className="block text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+              OWASP mapping
+            </span>
+            <div className="mt-2 space-y-2">
+              {astDocs.map((category) => (
+                <div key={category.id}>
+                  <div className="flex items-center gap-2">
+                    <span className="rounded-full border border-border px-2 py-0.5 font-mono text-[10px] text-muted-foreground">
+                      {category.id}
+                    </span>
+                    <span className="text-xs font-medium text-foreground">{category.title}</span>
+                  </div>
+                  <p className="mt-1 text-xs leading-5 text-muted-foreground">{category.reviewFocus}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function countOwaspAreas(findings: FindingResponse[]): number {
+  const ids = new Set<string>();
+  for (const finding of findings) {
+    for (const category of astCategoriesForFamily(finding.rule_family)) {
+      ids.add(category.id);
+    }
+  }
+  return AST_CATEGORIES.filter((category) => ids.has(category.id)).length;
+}
+
+function OwaspReferenceBadges({ finding }: { finding: FindingResponse }) {
+  const categories = astCategoriesForFamily(finding.rule_family);
+
+  if (categories.length === 0) {
+    return <span className="text-xs text-muted-foreground">—</span>;
+  }
+
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {categories.slice(0, 3).map((category) => (
+        <ReferencePopover
+          key={category.id}
+          title={`${category.id} ${category.title}`}
+          meta={`OWASP · ${category.severity}`}
+          sections={[
+            { label: "Risk area", body: category.summary },
+            { label: "Scanner evidence", body: category.scannerEvidence },
+            { label: "Reviewer focus", body: category.reviewFocus },
+          ]}
+          align="center"
+          href="/framework"
+          hrefLabel="Open framework"
+        >
+          <span className="rounded-full border border-border px-2 py-0.5 font-mono text-[10px] text-muted-foreground transition-colors duration-150 hover:border-border-strong hover:text-foreground">
+            {category.id}
+          </span>
+        </ReferencePopover>
+      ))}
+      {categories.length > 3 && (
+        <span
+          title={categories.slice(3).map((category) => `${category.id} ${category.title}`).join(", ")}
+          className="rounded-full border border-border px-2 py-0.5 font-mono text-[10px] text-muted-foreground"
+        >
+          +{categories.length - 3}
+        </span>
+      )}
+    </div>
+  );
+}
+
+function ruleReferenceHref(ruleId: string): string {
+  const encoded = encodeURIComponent(ruleId);
+  return `/framework?rule=${encoded}#check-${encoded}`;
+}
+
+function RuleGrouping({ finding }: { finding: FindingResponse }) {
+  const familyDoc = getRuleFamilyDoc(finding.rule_family);
+  const astDocs = astCategoriesForFamily(finding.rule_family);
+
+  if (!familyDoc && astDocs.length === 0) return null;
+
+  return (
+    <div>
+      <span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+        Evidence type
+      </span>
+      {familyDoc && (
+        <div className="rounded-xl bg-muted px-3 py-3">
+          <div className="flex items-center gap-2">
+            <span className="rounded-full bg-card px-2 py-0.5 font-mono text-[10px] text-accent">
+              {familyDoc.id}
+            </span>
+            <span className="text-sm font-medium text-foreground">{familyDoc.title}</span>
+          </div>
+          <p className="mt-2 text-sm leading-5 text-muted-foreground">{familyDoc.summary}</p>
+        </div>
+      )}
+      {astDocs.length > 0 && (
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {astDocs.map((category) => (
+            <span
+              key={category.id}
+              title={category.title}
+              className="rounded-full border border-border px-2 py-1 font-mono text-[11px] text-muted-foreground"
+            >
+              {category.id}
+            </span>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

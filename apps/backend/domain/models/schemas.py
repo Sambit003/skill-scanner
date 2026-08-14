@@ -123,6 +123,18 @@ class ScanResponse(BaseModel):
         if self.status:
             self.status = self.status.lower()
 
+class ScanListItemResponse(ScanResponse):
+    display_target: Optional[str] = None
+    duration_seconds: Optional[float] = None
+    is_terminal: bool = False
+    risk_score: Optional[int] = None
+    severity: Optional[str] = None
+    recommendation: Optional[str] = None
+    safe_to_install: Optional[bool] = None
+    headline: Optional[str] = None
+    summary: Optional[str] = None
+    findings_count: int = 0
+
 class BreakdownItem(BaseModel):
     label: str
     count: int
