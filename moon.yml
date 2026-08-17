@@ -45,3 +45,10 @@ tasks:
     options:
       cache: false
       runInCI: false
+
+  bundle-hsbc:
+    command: "bash packages/scan_kernel/scripts/build-scanner.sh --profile hsbc"
+    toolchains: "system"
+    options:
+      cache: false
+      runInCI: false

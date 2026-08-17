@@ -158,7 +158,7 @@ Examples:
 ./packages/scan_kernel/dist/dev/scan-kernel-engine \
   scan --type skill --format terminal ./path/to/skill
 
-# Produce JSON without remote target resolution or OSV lookups.
+# Produce JSON without remote target resolution.
 ./packages/scan_kernel/dist/dev/scan-kernel-engine \
   scan --type skill --format json --offline ./path/to/skill.zip
 
@@ -189,6 +189,13 @@ YARA behavior. Use a certified Linux bundle for customer delivery.
 The checked-in `skill` profile contains only the `agent_skill` plugin. Its
 compile-time tags exclude scanners that are not part of that profile, producing
 a dedicated Agent Skill scanner for distribution to another team.
+
+For HSBC-facing delivery, use the `hsbc` profile. It builds the same Agent Skill
+scanner with dependency advisory checks disabled:
+
+```bash
+moon run workspace:bundle-hsbc -- --version 1.0.0
+```
 
 Build both supported customer targets:
 
@@ -422,8 +429,8 @@ conflicting local process or change the corresponding host-side port mapping in
 - `docker-compose.yml` is a local/demo configuration. Replace its database
   password and `SECRET_KEY` before using the services outside a trusted local
   environment.
-- Scanned source is processed locally by the Go executable. Online dependency
-  scans may query OSV for current advisories; `--offline` disables advisory
-  lookups and remote target resolution.
+- Scanned source is processed locally by the Go executable. The HSBC profile
+  disables dependency advisory checks; `--offline` also rejects remote target
+  resolution.
 - The application Compose file intentionally does not manage a Cloudflare
   Tunnel. Run externally managed ingress or tunnel services separately.

@@ -6,6 +6,7 @@ ARG YARA_SHA256=586c9c21878f8b4d1b9423b89ac937f21f8057b03e3e9706f310549d453966fa
 ARG SCAN_KERNEL_VERSION=1.0.0
 ARG SCAN_KERNEL_COMMIT=unknown
 ARG SCAN_KERNEL_BUILD_TIME=unknown
+ARG SCAN_KERNEL_BUILD_TAGS=netgo,osusergo,custom_plugins,plugin_agent_skill,yara_native
 
 RUN apk add --no-cache \
     autoconf \
@@ -37,7 +38,7 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
     CGO_LDFLAGS="-lyara -lm -lcrypto -ldl -pthread" \
     PKG_CONFIG_PATH=/usr/local/lib/pkgconfig \
     go build -trimpath \
-      -tags "netgo,osusergo,custom_plugins,plugin_agent_skill,yara_native" \
+      -tags "${SCAN_KERNEL_BUILD_TAGS}" \
       -ldflags "-s -w -linkmode external -extldflags=-static \
         -X gitlab.com/superalign/labs/asset-scan-demo/packages/scan_kernel/internal/buildinfo.Version=${SCAN_KERNEL_VERSION} \
         -X gitlab.com/superalign/labs/asset-scan-demo/packages/scan_kernel/internal/buildinfo.Commit=${SCAN_KERNEL_COMMIT} \

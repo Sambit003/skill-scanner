@@ -37,7 +37,7 @@ async def get_rule(rule_id: str, client: ScannerClient = Depends(get_scanner_cli
         if exc.code == "INVALID_REQUEST":
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Rule '{rule_id}' not found",
+                detail="Rule documentation is not available",
             ) from exc
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,

@@ -105,29 +105,34 @@ func analyzeDependencies(ctx context.Context, items []component, offline bool) [
 			continue
 		}
 		covered := map[string]bool{}
-		osvReachable := true
-		if !offline {
-			var osvFindings []model.Finding
-			osvFindings, covered, osvReachable = analyzeOSVCoordinates(ctx, coordinates)
-			findings = append(findings, osvFindings...)
-		}
-		fallback := fallbackPyPI
 		popular := popularPyPI
 		if coordinates[0].Ecosystem == "npm" {
-			fallback, popular = fallbackNPM, popularNPM
+			popular = popularNPM
 		}
-		uncovered := make([]dependencyCoordinate, 0, len(coordinates))
-		for _, coordinate := range coordinates {
-			if !covered[normalizePackageName(coordinate.Name)] {
-				uncovered = append(uncovered, coordinate)
+		if dependencyAdvisoriesEnabled() {
+			osvReachable := true
+			if !offline {
+				var osvFindings []model.Finding
+				osvFindings, covered, osvReachable = analyzeOSVCoordinates(ctx, coordinates)
+				findings = append(findings, osvFindings...)
 			}
-		}
-		fallbackFindings := analyzeFallbackVulnerabilities(uncovered, fallback)
-		findings = append(findings, fallbackFindings...)
-		if !offline && !osvReachable && len(uncovered) > 0 && len(fallbackFindings) == 0 {
-			findings = append(findings, supplyChainFinding("SC4", "LOW", 1, item.Path, 1,
-				fmt.Sprintf("🟡 SC4: OSV.dev unreachable, using static fallback (%d packages). Results may be incomplete. Set SCAN_KERNEL_OSV_TIMEOUT to increase timeout or check network connectivity to api.osv.dev.", len(fallback)),
-				"SC4 fallback active"))
+			fallback := fallbackPyPI
+			if coordinates[0].Ecosystem == "npm" {
+				fallback = fallbackNPM
+			}
+			uncovered := make([]dependencyCoordinate, 0, len(coordinates))
+			for _, coordinate := range coordinates {
+				if !covered[normalizePackageName(coordinate.Name)] {
+					uncovered = append(uncovered, coordinate)
+				}
+			}
+			fallbackFindings := analyzeFallbackVulnerabilities(uncovered, fallback)
+			findings = append(findings, fallbackFindings...)
+			if !offline && !osvReachable && len(uncovered) > 0 && len(fallbackFindings) == 0 {
+				findings = append(findings, supplyChainFinding("SC4", "LOW", 1, item.Path, 1,
+					fmt.Sprintf("🟡 SC4: OSV.dev unreachable, using static fallback (%d packages). Results may be incomplete. Set SCAN_KERNEL_OSV_TIMEOUT to increase timeout or check network connectivity to api.osv.dev.", len(fallback)),
+					"SC4 fallback active"))
+			}
 		}
 		for _, coordinate := range coordinates {
 			normalized := normalizePackageName(coordinate.Name)

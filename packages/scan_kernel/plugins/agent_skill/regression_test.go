@@ -92,7 +92,10 @@ func TestSupplyChainDependencyRegressionOffline(t *testing.T) {
 		{Path: "package.json", Type: "json", Content: "{\n  \"dependencies\": {\n    \"request\": \"^2.88.2\",\n    \"lodahs\": \"4.17.21\"\n  }\n}\n"},
 	}
 	findings := analyzeDependencies(context.Background(), items, true)
-	want := map[string]int{"SC4": 2, "SC5": 2, "SC6": 2}
+	want := map[string]int{"SC5": 2, "SC6": 2}
+	if dependencyAdvisoriesEnabled() {
+		want["SC4"] = 2
+	}
 	for _, finding := range findings {
 		want[finding.ID]--
 	}
@@ -415,6 +418,9 @@ func TestPythonOracleDriftRuleFixtures(t *testing.T) {
 }
 
 func TestPythonOracleSupplyChainDriftFixtures(t *testing.T) {
+	if !dependencyAdvisoriesEnabled() {
+		t.Skip("SC4 parity fixture is disabled for builds without dependency advisories")
+	}
 	item := component{Path: "requirements.txt", Type: "text", Content: "requests==2.30.0\nreqeusts==2.0.0\n"}
 	findings := analyzeDependencies(context.Background(), []component{item}, true)
 	if got := countRule(findings, "SC4"); got != 1 {

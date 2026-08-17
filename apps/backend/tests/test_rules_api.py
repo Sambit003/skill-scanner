@@ -9,7 +9,7 @@ from backend.services.scanner_client import ScannerClientError
 
 class MissingRuleClient:
     async def get_rule(self, rule_id: str):
-        raise ScannerClientError(f'unknown rule_id "{rule_id}"', code="INVALID_REQUEST")
+        raise ScannerClientError("rule documentation is not available", code="INVALID_REQUEST")
 
 
 class FailedScannerClient:
@@ -18,12 +18,12 @@ class FailedScannerClient:
 
 
 @pytest.mark.asyncio
-async def test_unknown_rule_is_reported_as_not_found() -> None:
+async def test_missing_rule_is_reported_as_unavailable() -> None:
     with pytest.raises(HTTPException) as exc_info:
         await get_rule("missing-rule", client=MissingRuleClient())
 
     assert exc_info.value.status_code == 404
-    assert exc_info.value.detail == "Rule 'missing-rule' not found"
+    assert exc_info.value.detail == "Rule documentation is not available"
 
 
 @pytest.mark.asyncio

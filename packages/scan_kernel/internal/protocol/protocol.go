@@ -47,7 +47,7 @@ func Execute(parent context.Context, registry *engine.Registry, raw []byte) (Env
 	case "get_rule":
 		rule, exists := registry.Rule(request.RuleID)
 		if !exists {
-			return failure("INVALID_REQUEST", fmt.Sprintf("unknown rule_id %q", request.RuleID)), 2
+			return failure("INVALID_REQUEST", "rule documentation is not available"), 2
 		}
 		return success(map[string]any{"kind": "rule", "rule": rule}), 0
 	case "scan":

@@ -10,7 +10,7 @@ targets="linux/amd64,linux/arm64"
 yara_mode="native-static"
 
 usage() {
-  printf '%s\n' "usage: build-scanner.sh [--profile skill] [--version VERSION] [--targets os/arch,...] [--output DIR] [--yara native-static|fallback]"
+  printf '%s\n' "usage: build-scanner.sh [--profile skill|hsbc] [--version VERSION] [--targets os/arch,...] [--output DIR] [--yara native-static|fallback]"
 }
 
 while [ "$#" -gt 0 ]; do
@@ -98,6 +98,7 @@ EOF
 			--build-arg "SCAN_KERNEL_VERSION=$version" \
 			--build-arg "SCAN_KERNEL_COMMIT=$commit" \
 			--build-arg "SCAN_KERNEL_BUILD_TIME=$build_time" \
+			--build-arg "SCAN_KERNEL_BUILD_TAGS=netgo,osusergo,$BUILD_TAGS,yara_native" \
 			"$module_dir"
 		if ! file "$stage/$binary" | grep -q 'statically linked'; then
 			printf 'native-static build is not fully static: %s\n' "$stage/$binary" >&2

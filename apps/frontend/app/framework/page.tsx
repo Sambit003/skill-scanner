@@ -225,7 +225,7 @@ function FrameworkContent() {
 
           {selectedRuleId && state === "ready" && !selectedRule && (
             <div className="mb-3 rounded-card border border-border bg-warning-bg px-5 py-4 text-sm text-warning">
-              No scanner documentation was found for <span className="font-mono">{selectedRuleId}</span>.
+              The requested scanner documentation is not available.
             </div>
           )}
 

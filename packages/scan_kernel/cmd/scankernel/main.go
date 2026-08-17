@@ -103,7 +103,7 @@ func rules(args []string, docs []model.RuleDocument, output, diagnostic io.Write
 				return 0
 			}
 		}
-		fmt.Fprintf(diagnostic, "unknown rule %q\n", args[1])
+		fmt.Fprintln(diagnostic, "rule documentation is not available")
 		return 2
 	}
 	fmt.Fprintln(diagnostic, "usage: scan-kernel-engine rules [list|show RULE_ID]")

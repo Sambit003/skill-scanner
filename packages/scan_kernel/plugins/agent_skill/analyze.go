@@ -166,6 +166,9 @@ func ruleDocuments() []model.RuleDocument {
 		}
 	}
 	for _, spec := range ruleSpecs {
+		if spec.ID == "SC4" && !dependencyAdvisoriesEnabled() {
+			continue
+		}
 		if seen[spec.ID] {
 			continue
 		}

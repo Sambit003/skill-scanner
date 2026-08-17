@@ -13,7 +13,7 @@ const CATEGORIES: { title: string; detail: string; size: CardSize }[] = [
   },
   { title: "Data exfiltration", detail: "Env harvesting, file enumeration, external transmission", size: "sm" },
   { title: "Privilege escalation", detail: "Sudo, credential access, container escape", size: "sm" },
-  { title: "Supply chain", detail: "Unpinned deps, typosquats, known CVEs, obfuscation", size: "sm" },
+  { title: "Supply chain", detail: "Unpinned deps, typosquats, unsigned images, obfuscation", size: "sm" },
   { title: "Excessive agency", detail: "Unrestricted tools, scope creep, unbounded resources", size: "sm" },
   {
     title: "Dangerous execution",
