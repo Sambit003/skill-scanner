@@ -10,6 +10,7 @@ from backend.domain.models.schemas import (
     ScanResponse,
 )
 from backend.services.scan_service import ScanService
+from backend.services.score_visibility import visible_risk_score
 
 router = APIRouter(prefix="/scans", tags=["Scans"])
 
@@ -32,10 +33,11 @@ async def create_scan(
 async def list_scans(
     limit: int = Query(default=50, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
+    target: Optional[str] = Query(default=None, description="Exact skill target to retrieve history for"),
     service: ScanService = Depends(get_scan_service),
 ):
     """List historical asset scans."""
-    return await service.list_scans(limit=limit, offset=offset)
+    return await service.list_scans(limit=limit, offset=offset, target=target)
 
 @router.get("/{scan_id}", response_model=ScanDetailResponse)
 async def get_scan_by_id(
@@ -138,7 +140,7 @@ async def get_scan_share_summary(
         "scan_id": scan_id,
         "headline": scan.headline,
         "summary": scan.summary,
-        "risk_score": scan.risk_score,
+        "risk_score": visible_risk_score(scan.risk_score),
         "severity": scan.severity,
         "recommendation": "Review high-confidence findings before execution.",
         "target": scan.target,

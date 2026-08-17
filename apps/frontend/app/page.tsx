@@ -47,12 +47,6 @@ export default function Home() {
               actually does before you install it.
             </span>
           </h1>
-          <p
-            className="animate-fade-up mt-5 max-w-md text-base text-muted-foreground"
-            style={{ animationDelay: "340ms" }}
-          >
-            Deterministic by default. No code execution.
-          </p>
         </div>
 
         <ScanConsole />
@@ -69,7 +63,7 @@ export default function Home() {
             What gets checked
           </h2>
           <p className="mx-auto mt-2 max-w-md text-muted-foreground">
-            Nineteen deterministic check groups, run the same way every time.
+            Nineteen security check groups covering code, dependencies, permissions, and behavior.
           </p>
         </div>
         <div className="mt-10 grid flex-1 grid-cols-1 gap-3 px-6 sm:mt-14 sm:grid-cols-4 sm:grid-flow-dense sm:px-10 sm:[grid-auto-rows:minmax(140px,1fr)] lg:px-16">

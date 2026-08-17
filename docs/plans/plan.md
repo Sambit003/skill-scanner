@@ -51,13 +51,14 @@ Core routes:
 - The application starts with `docker compose up --build`.
 - A scan completes without external credentials.
 - No scan content leaves the scanner runtime.
-- Report formats agree on findings and risk score.
+- Customer-facing report formats agree on findings, severity, recommendation,
+  and install verdict without exposing a numeric score.
 - The frontend can start and inspect a completed scan.
 - Go formatting, vet, tests and protocol contracts pass alongside backend tests,
   frontend lint/build, Docker configuration, and a direct binary smoke test.
 - The pinned scanner corpus passes `moon run scan-kernel:regression`:
-  the readable identity fields, every user-visible finding field, risk score,
-  severity/category breakdowns, recommendation, and install verdict must match.
+  the readable identity fields, every user-visible finding field, severity/category
+  breakdowns, recommendation, install verdict, and internal scanner score must match.
 - The Compose scanner uses native YARA with stable bundled-rule namespaces,
   metadata overrides, match snippets, and custom-rule loading behavior.
 - The skill-only profile produces six target archives with manifests, checksums,

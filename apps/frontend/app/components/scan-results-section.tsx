@@ -1,8 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { listScans, type ScanStatusResponse } from "@/app/lib/api";
+import { SHOW_RISK_SCORES } from "@/app/lib/score-visibility";
 import {
   RECOMMENDATION_STYLES,
   SEVERITY_ORDER,
@@ -12,6 +14,20 @@ import {
 import { AlertIcon, ArrowRightIcon, ChevronDownIcon, SearchIcon, SpinnerIcon } from "@/app/components/icons";
 
 type PageState = "loading" | "ready" | "error";
+type HistoryTab = "trend" | "runs";
+
+const ScanHistoryChart = dynamic(
+  () => import("@/app/components/scan-history-chart").then((module) => module.ScanHistoryChart),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex h-72 items-center justify-center gap-2 text-sm text-muted-foreground">
+        <SpinnerIcon className="h-4 w-4 animate-spin text-accent" />
+        Loading trend...
+      </div>
+    ),
+  }
+);
 
 interface ScanGroup {
   key: string;
@@ -23,6 +39,12 @@ interface ScanGroup {
 
 interface ScanResultsSectionProps {
   compact?: boolean;
+}
+
+interface HistoryState {
+  scans: ScanStatusResponse[];
+  loading: boolean;
+  error: string | null;
 }
 
 function canonicalTarget(target: string): string {
@@ -134,13 +156,137 @@ function ResultBadges({ scan }: { scan: ScanStatusResponse }) {
   );
 }
 
+function ScanHistoryPanel({
+  scans,
+  loading,
+  error,
+  onRetry,
+}: {
+  scans: ScanStatusResponse[];
+  loading: boolean;
+  error: string | null;
+  onRetry: () => void;
+}) {
+  const [tab, setTab] = useState<HistoryTab>("trend");
+  const sortedScans = useMemo(
+    () => [...scans].sort((left, right) => timestamp(right) - timestamp(left)),
+    [scans]
+  );
+  const completedCount = sortedScans.filter((scan) => scan.status === "completed").length;
+
+  return (
+    <div className="border-t border-border bg-background/45 px-4 py-5 lg:px-5">
+      <div className="overflow-hidden rounded-lg border border-border bg-card">
+        <div className="flex flex-col gap-3 border-b border-border px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <h2 className="text-sm font-semibold text-foreground">Scan history</h2>
+              {loading && <SpinnerIcon className="h-3.5 w-3.5 animate-spin text-accent" />}
+            </div>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {completedCount} completed {completedCount === 1 ? "run" : "runs"} across {sortedScans.length} total
+            </p>
+          </div>
+          <div className="inline-flex w-fit overflow-hidden rounded-md border border-border bg-background p-0.5" role="tablist" aria-label="Scan history view">
+            {(["trend", "runs"] as const).map((option) => (
+              <button
+                key={option}
+                type="button"
+                role="tab"
+                aria-selected={tab === option}
+                onClick={() => setTab(option)}
+                className={`min-w-16 rounded px-3 py-1.5 text-xs font-medium transition-colors duration-150 ${
+                  tab === option ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {option === "trend" ? "Trend" : "Runs"}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {error && (
+          <div className="flex flex-col gap-2 border-b border-border bg-danger-bg px-4 py-3 text-xs text-danger sm:flex-row sm:items-center sm:justify-between">
+            <span className="flex items-center gap-2">
+              <AlertIcon className="h-3.5 w-3.5 shrink-0" />
+              Complete history could not be loaded. Showing the scans already available.
+            </span>
+            <button type="button" onClick={onRetry} className="w-fit font-semibold underline underline-offset-2">
+              Retry
+            </button>
+          </div>
+        )}
+
+        {tab === "trend" ? (
+          <div role="tabpanel" className="px-2 pb-3 pt-4 sm:px-4">
+            <ScanHistoryChart scans={sortedScans} />
+            <p className="px-2 text-[11px] text-muted-foreground">
+              {SHOW_RISK_SCORES
+                ? "Findings use the left axis. Risk score uses the right axis from 0 to 100. Only completed runs are plotted."
+                : "Findings are plotted for completed runs only."}
+            </p>
+          </div>
+        ) : (
+          <div role="tabpanel" className="max-h-[24rem] overflow-y-auto">
+            <div className="sticky top-0 z-10 hidden grid-cols-[minmax(9rem,1.5fr)_minmax(11rem,1.2fr)_6rem_5rem_2rem] gap-4 border-b border-border bg-muted px-4 py-2.5 lg:grid lg:items-center">
+              <span className="text-[10px] font-medium uppercase text-muted-foreground">Scanned</span>
+              <span className="text-[10px] font-medium uppercase text-muted-foreground">Verdict</span>
+              <span className="text-[10px] font-medium uppercase text-muted-foreground">Findings</span>
+              <span className="text-[10px] font-medium uppercase text-muted-foreground">Duration</span>
+              <span className="sr-only">Open</span>
+            </div>
+            <div className="divide-y divide-border">
+              {sortedScans.map((scan, index) => (
+                <div
+                  key={scan.scan_id}
+                  className="grid gap-3 px-4 py-3 lg:grid-cols-[minmax(9rem,1.5fr)_minmax(11rem,1.2fr)_6rem_5rem_2rem] lg:items-center lg:gap-4"
+                >
+                  <div className="min-w-0 text-xs text-muted-foreground">
+                    <div className="flex items-center gap-2">
+                      <span>{formatDate(scan.created_at)}</span>
+                      {index === 0 && (
+                        <span className="rounded bg-muted px-1.5 py-0.5 text-[9px] font-semibold uppercase text-foreground">Latest</span>
+                      )}
+                    </div>
+                    <div className="mt-1 font-mono">#{scan.scan_id.slice(0, 8)}</div>
+                  </div>
+                  <div>
+                    <span className="mb-1 block text-[10px] font-medium uppercase text-muted-foreground lg:hidden">Verdict</span>
+                    <ResultBadges scan={scan} />
+                  </div>
+                  <div className="text-sm text-foreground">
+                    <span className="mr-2 text-[10px] font-medium uppercase text-muted-foreground lg:hidden">Findings</span>
+                    {scan.findings_count ?? 0}
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    <span className="mr-2 text-[10px] font-medium uppercase lg:hidden">Duration</span>
+                    {formatDuration(scan.duration_seconds)}
+                  </div>
+                  <Link
+                    href={`/scans/${scan.scan_id}`}
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-full text-accent transition-colors duration-150 hover:bg-accent/10"
+                    aria-label={`Open scan ${scan.scan_id.slice(0, 8)}`}
+                  >
+                    <ArrowRightIcon className="h-4 w-4" />
+                  </Link>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function ScanResultsSection({ compact = false }: ScanResultsSectionProps) {
   const [state, setState] = useState<PageState>("loading");
   const [error, setError] = useState<string | null>(null);
   const [allScans, setAllScans] = useState<ScanStatusResponse[]>([]);
   const [search, setSearch] = useState("");
   const [severityFilter, setSeverityFilter] = useState("ALL");
-  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+  const [expandedGroup, setExpandedGroup] = useState<string | null>(null);
+  const [historyByGroup, setHistoryByGroup] = useState<Record<string, HistoryState>>({});
 
   useEffect(() => {
     let cancelled = false;
@@ -181,13 +327,44 @@ export function ScanResultsSection({ compact = false }: ScanResultsSectionProps)
     return compact ? filtered.slice(0, 6) : filtered;
   }, [compact, groups, search, severityFilter]);
 
-  const toggleHistory = (key: string) => {
-    setExpandedGroups((current) => {
-      const next = new Set(current);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
+  const loadHistory = async (group: ScanGroup, force = false) => {
+    if (!force && historyByGroup[group.key]) return;
+
+    setHistoryByGroup((current) => ({
+      ...current,
+      [group.key]: {
+        scans: current[group.key]?.scans ?? group.scans,
+        loading: true,
+        error: null,
+      },
+    }));
+
+    try {
+      const response = await listScans({ page: 1, pageSize: 100, target: group.target });
+      setHistoryByGroup((current) => ({
+        ...current,
+        [group.key]: { scans: response.items, loading: false, error: null },
+      }));
+    } catch (err) {
+      setHistoryByGroup((current) => ({
+        ...current,
+        [group.key]: {
+          scans: current[group.key]?.scans ?? group.scans,
+          loading: false,
+          error: err instanceof Error ? err.message : "Couldn't load complete scan history.",
+        },
+      }));
+    }
+  };
+
+  const toggleHistory = (group: ScanGroup) => {
+    if (expandedGroup === group.key) {
+      setExpandedGroup(null);
+      return;
+    }
+
+    setExpandedGroup(group.key);
+    void loadHistory(group);
   };
 
   return (
@@ -275,8 +452,9 @@ export function ScanResultsSection({ compact = false }: ScanResultsSectionProps)
               </div>
               <div className="divide-y divide-border">
               {visibleGroups.map((group) => {
-                const expanded = expandedGroups.has(group.key);
-                const previousScans = group.scans.slice(1);
+                const expanded = expandedGroup === group.key;
+                const historyState = historyByGroup[group.key];
+                const historyScans = historyState?.scans ?? group.scans;
                 return (
                   <div key={group.key}>
                     <div className="grid gap-4 px-4 py-4 transition-colors duration-150 hover:bg-muted lg:grid-cols-[minmax(0,2fr)_minmax(0,1.15fr)_5rem_8.5rem_6rem_2rem] lg:items-center lg:px-5">
@@ -304,11 +482,11 @@ export function ScanResultsSection({ compact = false }: ScanResultsSectionProps)
                         {group.scans.length > 1 ? (
                           <button
                             type="button"
-                            onClick={() => toggleHistory(group.key)}
+                            onClick={() => toggleHistory(group)}
                             aria-expanded={expanded}
                             className="inline-flex items-center gap-1.5 rounded-full border border-border px-2.5 py-1.5 text-xs text-muted-foreground transition-colors duration-150 hover:bg-muted hover:text-foreground"
                           >
-                            {group.scans.length} runs
+                            {historyScans.length} runs
                             <ChevronDownIcon className={`h-3.5 w-3.5 transition-transform duration-200 ${expanded ? "rotate-180" : ""}`} />
                           </button>
                         ) : (
@@ -320,50 +498,13 @@ export function ScanResultsSection({ compact = false }: ScanResultsSectionProps)
                       </Link>
                     </div>
 
-                    {expanded && previousScans.length > 0 && (
-                      <div className="animate-detail-in border-t border-border bg-muted/35">
-                        <div className="max-h-[22rem] overflow-y-auto">
-                          <div className="sticky top-0 z-10 hidden grid-cols-[minmax(0,2fr)_minmax(0,1.15fr)_5rem_8.5rem_6rem_2rem] gap-4 border-b border-border bg-card/95 px-5 py-2.5 backdrop-blur-md lg:grid lg:items-center">
-                            <span className="text-[10px] font-medium uppercase text-muted-foreground">Previous scan</span>
-                            <span className="text-[10px] font-medium uppercase text-muted-foreground">Verdict</span>
-                            <span className="text-[10px] font-medium uppercase text-muted-foreground">Findings</span>
-                            <span className="text-[10px] font-medium uppercase text-muted-foreground">Duration</span>
-                            <span aria-hidden="true" />
-                            <span className="sr-only">Open</span>
-                          </div>
-                          <div className="divide-y divide-border/70">
-                            {previousScans.map((scan) => (
-                              <div key={scan.scan_id} className="grid gap-3 px-4 py-3.5 lg:grid-cols-[minmax(0,2fr)_minmax(0,1.15fr)_5rem_8.5rem_6rem_2rem] lg:items-center lg:gap-4 lg:px-5">
-                                <div className="text-xs text-muted-foreground">
-                                  <span className="mb-1.5 block text-[10px] font-medium uppercase lg:hidden">Previous scan</span>
-                                  <div>{formatDate(scan.created_at)}</div>
-                                  <div className="mt-1 font-mono">#{scan.scan_id.slice(0, 8)}</div>
-                                </div>
-                                <div>
-                                  <span className="mb-1.5 block text-[10px] font-medium uppercase text-muted-foreground lg:hidden">Verdict</span>
-                                  <ResultBadges scan={scan} />
-                                </div>
-                                <div className="text-xs text-muted-foreground">
-                                  <span className="mb-1.5 block text-[10px] font-medium uppercase lg:hidden">Findings</span>
-                                  {scan.findings_count ?? 0}
-                                </div>
-                                <div className="text-xs text-muted-foreground">
-                                  <span className="mb-1.5 block text-[10px] font-medium uppercase lg:hidden">Duration</span>
-                                  {formatDuration(scan.duration_seconds)}
-                                </div>
-                                <span aria-hidden="true" className="hidden lg:block" />
-                                <Link
-                                  href={`/scans/${scan.scan_id}`}
-                                  className="inline-flex h-8 w-8 items-center justify-center rounded-full text-accent transition-colors duration-150 hover:bg-accent/10"
-                                  aria-label={`Open scan ${scan.scan_id.slice(0, 8)}`}
-                                >
-                                  <ArrowRightIcon className="h-4 w-4" />
-                                </Link>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      </div>
+                    {expanded && (
+                      <ScanHistoryPanel
+                        scans={historyScans}
+                        loading={historyState?.loading ?? false}
+                        error={historyState?.error ?? null}
+                        onRetry={() => void loadHistory(group, true)}
+                      />
                     )}
                   </div>
                 );

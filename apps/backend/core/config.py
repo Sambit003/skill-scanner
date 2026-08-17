@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     # Language-neutral scanner process contract
     SCAN_KERNEL_EXECUTABLE: str = "scan-kernel-engine"
     SCAN_KERNEL_TIMEOUT_SECONDS: float = 300.0
+    SHOW_RISK_SCORES: bool = False
     
     # Security & CORS
     CORS_ORIGINS: List[str] = ["http://localhost:3000", "http://localhost:8000"]

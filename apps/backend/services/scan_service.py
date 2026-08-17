@@ -7,6 +7,7 @@ from backend.domain.models.schemas import (
     ScanResponse,
 )
 from backend.repositories.scan_repository import ScanRepository
+from backend.services.score_visibility import redact_report_content, visible_risk_score
 from backend.workers.scan_worker import run_asset_scan_task
 
 class ScanService:
@@ -126,7 +127,7 @@ class ScanService:
             duration_ms=duration_ms,
             error_message=scan.error_message,
             error=scan.error_message,
-            risk_score=scan.risk_score,
+            risk_score=visible_risk_score(scan.risk_score),
             severity=scan.severity,
             recommendation=scan.recommendation,
             safe_to_install=scan.safe_to_install,
@@ -145,9 +146,14 @@ class ScanService:
             is_terminal=is_terminal,
         )
 
-    async def list_scans(self, limit: int = 50, offset: int = 0) -> List[ScanListItemResponse]:
+    async def list_scans(
+        self,
+        limit: int = 50,
+        offset: int = 0,
+        target: Optional[str] = None,
+    ) -> List[ScanListItemResponse]:
         """List historical scans."""
-        scans = await self.repo.list_scans(limit=limit, offset=offset)
+        scans = await self.repo.list_scans(limit=limit, offset=offset, target=target)
         items = []
         for scan in scans:
             duration_seconds = None
@@ -178,7 +184,7 @@ class ScanService:
                 display_target=display_target,
                 duration_seconds=duration_seconds,
                 is_terminal=scan.status in ["COMPLETED", "FAILED", "CANCELED"],
-                risk_score=scan.risk_score,
+                risk_score=visible_risk_score(scan.risk_score),
                 severity=scan.severity,
                 recommendation=scan.recommendation,
                 safe_to_install=scan.safe_to_install,
@@ -193,4 +199,8 @@ class ScanService:
         scan = await self.repo.get_scan_by_id(scan_id)
         if not scan or not scan.reports_blob:
             return None
-        return scan.reports_blob.get(report_format.lower())
+        fmt = report_format.lower()
+        content = scan.reports_blob.get(fmt)
+        if content is None:
+            return None
+        return redact_report_content(content, fmt)

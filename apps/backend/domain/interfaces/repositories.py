@@ -15,6 +15,11 @@ class IScanRepository(Protocol):
         """Update the async status of a scan."""
         ...
 
-    async def list_scans(self, limit: int = 50, offset: int = 0) -> List[Dict[str, Any]]:
+    async def list_scans(
+        self,
+        limit: int = 50,
+        offset: int = 0,
+        target: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
         """List historical scan records."""
         ...

@@ -4,13 +4,13 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createScan, getScan, type ScanStatusResponse } from "@/app/lib/api";
+import { SHOW_RISK_SCORES } from "@/app/lib/score-visibility";
 import { RECOMMENDATION_STYLES, SEVERITY_STYLES, formatRecommendation } from "@/app/lib/severity";
 import { ReportDownloadMenu } from "@/app/components/report-download-menu";
 import {
   AlertIcon,
   ArrowRightIcon,
   GithubIcon,
-  ShieldIcon,
   SpinnerIcon,
 } from "@/app/components/icons";
 
@@ -19,9 +19,11 @@ type Phase = "idle" | "loading" | "done";
 const MAX_POLL_ATTEMPTS = 60;
 
 function isLikelyValidTarget(value: string): boolean {
-  if (!value) return false;
-  if (/\s/.test(value)) return false;
-  return true;
+  try {
+    return new URL(value).protocol === "https:";
+  } catch {
+    return false;
+  }
 }
 
 export function ScanConsole() {
@@ -85,7 +87,7 @@ export function ScanConsole() {
     setApiError(null);
 
     if (!isLikelyValidTarget(target.trim())) {
-      setFieldError("Enter a GitHub repository URL, local path, or skill file.");
+      setFieldError("Enter a repository URL or direct SKILL.md URL.");
       return;
     }
 
@@ -105,7 +107,7 @@ export function ScanConsole() {
     scanStatus?.status === "queued"
       ? "Queued…"
       : scanStatus?.status === "running"
-        ? "Running deterministic analysis…"
+        ? "Analyzing skill…"
         : "Starting scan…";
 
   return (
@@ -115,7 +117,7 @@ export function ScanConsole() {
         className="rounded-card border border-border bg-card p-6 shadow-[0_1px_2px_rgba(28,26,23,0.04),0_12px_32px_-16px_rgba(28,26,23,0.12)] sm:p-8"
       >
         <label htmlFor="target" className="mb-2 block text-sm font-medium text-foreground">
-          Repository, path, or skill file
+          Repository or SKILL.md URL
         </label>
         <div className="relative">
           <GithubIcon className="pointer-events-none absolute left-4 top-1/2 h-4.5 w-4.5 -translate-y-1/2 text-muted-foreground" />
@@ -144,20 +146,9 @@ export function ScanConsole() {
           </p>
         ) : (
           <p className="mt-2 text-sm text-muted-foreground">
-            Public GitHub URL, a local directory path, or a single SKILL.md.
+            Repository URL or direct HTTPS link to a raw SKILL.md file.
           </p>
         )}
-
-        <div className="mt-6">
-          <span className="mb-2 block text-sm font-medium text-foreground">Scan strategy</span>
-          <div className="flex items-center gap-2 rounded-xl border border-border bg-muted px-4 py-3 text-sm font-medium text-foreground">
-              <ShieldIcon className="h-4 w-4" />
-              Deterministic
-          </div>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Static parsing, pattern matching, and taint analysis only. No code execution or external model calls.
-          </p>
-        </div>
 
         <button
           type="submit"
@@ -203,12 +194,23 @@ export function ScanConsole() {
         {phase === "done" && scanStatus && (
           <div className="rounded-card border border-border bg-card p-6 sm:p-8">
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="flex items-center gap-3">
-                <span className="text-3xl font-semibold tracking-tight text-foreground">
-                  {scanStatus.risk_score ?? "—"}
-                </span>
-                <span className="text-sm text-muted-foreground">risk score</span>
-              </div>
+              {SHOW_RISK_SCORES ? (
+                <div className="flex items-center gap-3">
+                  <span className="text-3xl font-semibold tracking-tight text-foreground">
+                    {scanStatus.risk_score ?? "—"}
+                  </span>
+                  <span className="text-sm text-muted-foreground">risk score</span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-3">
+                  <span className="text-3xl font-semibold tracking-tight text-foreground">
+                    {scanStatus.findings_count ?? 0}
+                  </span>
+                  <span className="text-sm text-muted-foreground">
+                    {(scanStatus.findings_count ?? 0) === 1 ? "finding" : "findings"}
+                  </span>
+                </div>
+              )}
               {scanStatus.recommendation && (
                 <span
                   className={`rounded-full px-3 py-1 text-sm font-medium ${

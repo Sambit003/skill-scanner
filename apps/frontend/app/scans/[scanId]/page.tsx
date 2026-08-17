@@ -22,6 +22,7 @@ import {
   type RuleDocResponse,
   type ScanStatusResponse,
 } from "@/app/lib/api";
+import { SHOW_RISK_SCORES } from "@/app/lib/score-visibility";
 import {
   RECOMMENDATION_STYLES,
   SEVERITY_ORDER,
@@ -36,6 +37,7 @@ import {
 } from "@/app/lib/framework";
 import { SiteHeader } from "@/app/components/site-header";
 import { CodeViewer } from "@/app/components/code-viewer";
+import { CategoryFilterMenu } from "@/app/components/category-filter-menu";
 import { InfoPopover } from "@/app/components/info-popover";
 import { ReportDownloadMenu } from "@/app/components/report-download-menu";
 import {
@@ -44,6 +46,7 @@ import {
   InfoIcon,
   LinkIcon,
   SearchIcon,
+  ShieldIcon,
   SpinnerIcon,
 } from "@/app/components/icons";
 
@@ -297,7 +300,11 @@ export default function ScanDashboardPage() {
         <main className="mx-auto flex w-full max-w-[92rem] flex-1 flex-col px-6 py-10">
           <section className="grid grid-cols-1 gap-4 lg:grid-cols-12">
             <div className="flex flex-col items-center gap-6 rounded-card border border-border bg-card p-6 sm:p-8 md:flex-row lg:col-span-8">
-              <RiskRing score={scan.risk_score} severity={scan.severity} />
+              {SHOW_RISK_SCORES ? (
+                <RiskRing score={scan.risk_score} severity={scan.severity} />
+              ) : (
+                <VerdictMark severity={scan.severity} />
+              )}
 
               <div className="flex-grow text-center md:text-left">
                 <div className="mb-2 flex flex-wrap items-center justify-center gap-2 md:justify-start">
@@ -432,18 +439,11 @@ export default function ScanDashboardPage() {
                   ))}
                 </div>
                 {categories.length > 0 && (
-                  <select
+                  <CategoryFilterMenu
+                    categories={categories}
                     value={categoryFilter}
-                    onChange={(e) => setCategoryFilter(e.target.value)}
-                    className="w-40 rounded-full border border-border bg-card px-3 py-1.5 text-xs font-medium text-foreground focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/25"
-                  >
-                    <option value="ALL">All categories</option>
-                    {categories.map((category) => (
-                      <option key={category} value={category}>
-                        {category}
-                      </option>
-                    ))}
-                  </select>
+                    onChange={setCategoryFilter}
+                  />
                 )}
               </div>
             </div>
@@ -1226,6 +1226,19 @@ function RiskRing({ score, severity }: { score: number | null; severity: string 
         <span className="font-mono text-3xl font-semibold text-foreground">{score ?? "—"}</span>
         <span className="mt-1 text-[10px] font-medium uppercase tracking-widest text-muted-foreground">Risk score</span>
       </div>
+    </div>
+  );
+}
+
+function VerdictMark({ severity }: { severity: string | null }) {
+  const colorClass = (severity && RISK_RING_COLOR[severity]) || "text-muted-foreground";
+
+  return (
+    <div className="flex h-32 w-32 shrink-0 flex-col items-center justify-center gap-2 rounded-full border border-border bg-muted/45">
+      <div className={`flex h-14 w-14 items-center justify-center rounded-full bg-card ${colorClass}`}>
+        <ShieldIcon className="h-7 w-7" />
+      </div>
+      <span className="text-[10px] font-medium uppercase tracking-widest text-muted-foreground">Verdict</span>
     </div>
   );
 }

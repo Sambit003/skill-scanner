@@ -107,10 +107,18 @@ class ScanRepository:
         )
         await self.session.commit()
 
-    async def list_scans(self, limit: int = 50, offset: int = 0) -> List[ScanModel]:
+    async def list_scans(
+        self,
+        limit: int = 50,
+        offset: int = 0,
+        target: Optional[str] = None,
+    ) -> List[ScanModel]:
         """Fetch historical scans sorted by created_at desc."""
+        query = select(ScanModel)
+        if target:
+            query = query.where(ScanModel.asset_target == target)
         result = await self.session.execute(
-            select(ScanModel).order_by(desc(ScanModel.created_at)).limit(limit).offset(offset)
+            query.order_by(desc(ScanModel.created_at)).limit(limit).offset(offset)
         )
         return list(result.scalars().all())
 

@@ -20,7 +20,7 @@ const onest = Onest({
 export const metadata: Metadata = {
   title: "AI Skill Scanner — know what an AI skill does before you install it",
   description:
-    "Static, reproducible security scanning for AI skills with deterministic analysis.",
+    "Security scanning for AI skills before installation.",
 };
 
 export default function RootLayout({
