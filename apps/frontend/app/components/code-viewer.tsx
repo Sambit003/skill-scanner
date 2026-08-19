@@ -78,9 +78,9 @@ function ReadOnlyPane({
       height={paneHeight(code)}
       language={language}
       value={code}
-      theme="vs-dark"
+      theme="vs"
       loading={
-        <div className="flex h-full items-center justify-center gap-2 bg-[#1e1e1e] py-4 text-xs text-zinc-400">
+        <div className="flex h-full items-center justify-center gap-2 bg-card py-4 text-xs text-muted-foreground">
           <SpinnerIcon className="h-3.5 w-3.5 animate-spin" />
           Loading editor…
         </div>
@@ -123,11 +123,11 @@ export function CodeViewer({
     const bodyLines = code.split("\n").slice(frontmatter.bodyStartIndex);
     return (
       <div className="overflow-hidden rounded-xl border border-border/60">
-        <div className="border-b border-white/10 bg-[#1e1e1e] px-3 py-1.5 text-[10px] font-medium uppercase tracking-wide text-zinc-400">
+        <div className="border-b border-border bg-muted px-3 py-1.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
           Front matter
         </div>
         <ReadOnlyPane code={frontmatter.frontmatter} language="yaml" startLine={startLine + 1} />
-        <div className="border-y border-white/10 bg-[#1e1e1e] px-3 py-1.5 text-[10px] font-medium uppercase tracking-wide text-zinc-400">
+        <div className="border-y border-border bg-muted px-3 py-1.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
           Markdown
         </div>
         <ReadOnlyPane
