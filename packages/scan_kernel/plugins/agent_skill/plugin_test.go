@@ -2,6 +2,7 @@ package agentskill
 
 import (
 	"context"
+	"fmt"
 	"path/filepath"
 	"runtime"
 	"testing"
@@ -63,8 +64,8 @@ func TestRiskScorePreservesPythonEmptyMatchedTextDeduplication(t *testing.T) {
 		{ID: "P1", Severity: "HIGH", Confidence: .6, Finding: "display three", Location: model.Location{File: "b.md", StartLine: 1}},
 	}
 	summary := summarize(findings, []component{{Path: "a.md"}, {Path: "b.md"}})
-	if summary.RiskScore != 27 {
-		t.Fatalf("risk score=%d, want 27", summary.RiskScore)
+	if summary.RiskScore != 28 {
+		t.Fatalf("risk score=%d, want 28", summary.RiskScore)
 	}
 }
 
@@ -75,12 +76,12 @@ func TestRiskSeverityBandBoundaries(t *testing.T) {
 		findings                       []model.Finding
 		score                          int
 	}{
-		{name: "20", score: 20, severity: "LOW", recommendation: "SAFE", safe: true, findings: []model.Finding{{ID: "A", Severity: "HIGH", Confidence: .8, MatchedText: "a"}}},
-		{name: "21", score: 21, severity: "MEDIUM", recommendation: "CAUTION", findings: []model.Finding{{ID: "A", Severity: "HIGH", Confidence: .84, MatchedText: "a"}}},
-		{name: "50", score: 50, severity: "MEDIUM", recommendation: "CAUTION", findings: []model.Finding{{ID: "A", Severity: "CRITICAL", Confidence: 1, MatchedText: "a"}}},
-		{name: "51", score: 51, severity: "HIGH", recommendation: "DO_NOT_INSTALL", findings: []model.Finding{{ID: "A", Severity: "CRITICAL", Confidence: 1, MatchedText: "a"}, {ID: "B", Severity: "LOW", Confidence: .2, MatchedText: "b"}}},
-		{name: "80", score: 80, severity: "HIGH", recommendation: "DO_NOT_INSTALL", findings: []model.Finding{{ID: "A", Severity: "CRITICAL", Confidence: 1, MatchedText: "a"}, {ID: "B", Severity: "HIGH", Confidence: 1, MatchedText: "b"}, {ID: "C", Severity: "LOW", Confidence: 1, MatchedText: "c"}}},
-		{name: "81", score: 81, severity: "CRITICAL", recommendation: "DO_NOT_INSTALL", findings: []model.Finding{{ID: "A", Severity: "CRITICAL", Confidence: 1, MatchedText: "a"}, {ID: "B", Severity: "HIGH", Confidence: 1, MatchedText: "b"}, {ID: "C", Severity: "LOW", Confidence: 1, MatchedText: "c"}, {ID: "D", Severity: "LOW", Confidence: .2, MatchedText: "d"}}},
+		{name: "20", score: 20, severity: "LOW", recommendation: "SAFE", safe: true, findings: []model.Finding{{ID: "P1", Severity: "HIGH", Confidence: .8, MatchedText: "a"}}},
+		{name: "21", score: 21, severity: "MEDIUM", recommendation: "CAUTION", findings: []model.Finding{{ID: "P1", Severity: "HIGH", Confidence: .84, MatchedText: "a"}}},
+		{name: "50", score: 50, severity: "MEDIUM", recommendation: "CAUTION", findings: []model.Finding{{ID: "P1", Severity: "CRITICAL", Confidence: 1, MatchedText: "a"}}},
+		{name: "51", score: 51, severity: "HIGH", recommendation: "DO_NOT_INSTALL", findings: []model.Finding{{ID: "P1", Severity: "CRITICAL", Confidence: 1, MatchedText: "a"}, {ID: "P3", Severity: "LOW", Confidence: .2, MatchedText: "b"}}},
+		{name: "80", score: 80, severity: "HIGH", recommendation: "DO_NOT_INSTALL", findings: []model.Finding{{ID: "P1", Severity: "CRITICAL", Confidence: 1, MatchedText: "a"}, {ID: "P3", Severity: "HIGH", Confidence: 1, MatchedText: "b"}, {ID: "P5", Severity: "LOW", Confidence: 1, MatchedText: "c"}}},
+		{name: "81", score: 81, severity: "CRITICAL", recommendation: "DO_NOT_INSTALL", findings: []model.Finding{{ID: "P1", Severity: "CRITICAL", Confidence: 1, MatchedText: "a"}, {ID: "P3", Severity: "HIGH", Confidence: 1, MatchedText: "b"}, {ID: "P5", Severity: "LOW", Confidence: 1, MatchedText: "c"}, {ID: "P6", Severity: "LOW", Confidence: .2, MatchedText: "d"}}},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -92,5 +93,48 @@ func TestRiskSeverityBandBoundaries(t *testing.T) {
 				t.Fatalf("summary=%#v, want score=%d severity=%s recommendation=%s safe=%v", summary, test.score, test.severity, test.recommendation, test.safe)
 			}
 		})
+	}
+}
+
+func TestEvidenceGatedRiskScore(t *testing.T) {
+	findings := []model.Finding{
+		{ID: "P1", Category: "Prompt Injection", Severity: "HIGH", Confidence: 1, MatchedText: "override", Location: model.Location{File: "SKILL.md", StartLine: 1}},
+		{ID: "E2", Category: "Data Exfiltration", Severity: "CRITICAL", Confidence: 1, MatchedText: "env", Location: model.Location{File: "run.py", StartLine: 1}},
+		{ID: "SC1", Category: "Supply Chain", Severity: "CRITICAL", Confidence: 1, MatchedText: "latest", Location: model.Location{File: "package.json", StartLine: 1}},
+	}
+	summary := summarize(findings, []component{{Path: "SKILL.md"}, {Path: "run.py", Executable: true}, {Path: "package.json"}})
+	if summary.VulnerabilityScore != 25 {
+		t.Fatalf("vulnerability score=%d, want evidence-only score 25", summary.VulnerabilityScore)
+	}
+	if summary.ExposureScore != 20.4 {
+		t.Fatalf("exposure score=%v, want 20.4", summary.ExposureScore)
+	}
+	if summary.RiskScore != 29 {
+		t.Fatalf("combined risk score=%d, want 29", summary.RiskScore)
+	}
+}
+
+func TestExposureAloneCannotExceedThirty(t *testing.T) {
+	findings := make([]model.Finding, 0, 200)
+	items := make([]component, 0, 200)
+	for index := 0; index < 200; index++ {
+		findings = append(findings, model.Finding{ID: "UNKNOWN", Category: "Capability", Severity: "CRITICAL", Confidence: 1,
+			MatchedText: fmt.Sprintf("capability-%d", index), Location: model.Location{File: fmt.Sprintf("file-%d.py", index), StartLine: 1}})
+		items = append(items, component{Path: fmt.Sprintf("file-%d.py", index), Executable: true})
+	}
+	summary := summarize(findings, items)
+	if summary.VulnerabilityScore != 0 || summary.RiskScore > 30 {
+		t.Fatalf("summary=%#v, want V=0 and combined score <=30", summary)
+	}
+}
+
+func TestEvidenceContextGate(t *testing.T) {
+	findings := []model.Finding{
+		{ID: "P1", Category: "Prompt Injection", Severity: "HIGH", Confidence: 1, MatchedText: "code", Location: model.Location{File: "run.py", StartLine: 1}},
+		{ID: "PE5", Category: "Privilege Escalation", Severity: "HIGH", Confidence: 1, MatchedText: "docs", Location: model.Location{File: "SKILL.md", StartLine: 1}},
+	}
+	summary := summarize(findings, nil)
+	if summary.VulnerabilityScore != 0 || summary.ExposureScore != 0 || summary.RiskScore != 0 {
+		t.Fatalf("context-invalid evidence affected scoring: %#v", summary)
 	}
 }

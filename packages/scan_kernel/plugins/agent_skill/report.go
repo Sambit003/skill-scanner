@@ -3,6 +3,7 @@ package agentskill
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"sort"
 	"strings"
 	"unicode"
@@ -14,12 +15,43 @@ import (
 var severityPoints = map[string]float64{"CRITICAL": 50, "HIGH": 25, "MEDIUM": 10, "LOW": 5}
 var diminishingWeights = []float64{1, .5, .25}
 
+const exposureFullScale = 8.5
+
 func summarize(findings []model.Finding, items []component) model.Summary {
+	ordered := deduplicateForScoring(findings)
+	evidence := make([]model.Finding, 0, len(ordered))
+	capabilities := make([]model.Finding, 0, len(ordered))
+	for _, finding := range ordered {
+		if isEvidenceFinding(finding) {
+			evidence = append(evidence, finding)
+		}
+		if isCapabilityFinding(finding) {
+			capabilities = append(capabilities, finding)
+		}
+	}
+	vulnerability := computeVulnerabilityScore(evidence, items)
+	exposure := computeExposureScore(capabilities, len(items))
+	combined := float64(vulnerability) + (1-float64(vulnerability)/100)*.30*exposure
+	risk := min(100, max(0, int(combined)))
+	severity, recommendation := riskBand(risk)
+
+	bySeverity, byCategory := map[string]int{}, map[string]int{}
+	for _, finding := range findings {
+		bySeverity[finding.Severity]++
+		byCategory[finding.Category]++
+	}
+	return model.Summary{RiskScore: risk, VulnerabilityScore: vulnerability, ExposureScore: exposure,
+		Severity: severity, Recommendation: recommendation, SafeToInstall: risk <= 20,
+		FindingsCount: len(findings), FindingsBySeverity: bySeverity, FindingsByCategory: byCategory,
+		ScannerVersion: scannerVersion, ScanMode: "deterministic"}
+}
+
+func computeVulnerabilityScore(findings []model.Finding, items []component) int {
 	executable := map[string]bool{}
 	for _, item := range items {
 		executable[item.Path] = item.Executable
 	}
-	ordered := deduplicateForScoring(findings)
+	ordered := append([]model.Finding(nil), findings...)
 	rank := map[string]int{"CRITICAL": 0, "HIGH": 1, "MEDIUM": 2, "LOW": 3}
 	sort.SliceStable(ordered, func(i, j int) bool {
 		if ruleID(ordered[i]) != ruleID(ordered[j]) {
@@ -50,7 +82,28 @@ func summarize(findings []model.Finding, items []component) model.Summary {
 		}
 		score += contribution
 	}
-	risk := min(100, max(0, int(score)))
+	return min(100, max(0, int(score)))
+}
+
+func computeExposureScore(findings []model.Finding, componentCount int) float64 {
+	categories := map[string]bool{}
+	for _, finding := range findings {
+		if finding.Category != "" {
+			categories[finding.Category] = true
+		}
+	}
+	if len(categories) == 0 && componentCount <= 0 {
+		return 0
+	}
+	breadth := math.Log2(1 + float64(len(categories)))
+	volume := math.Log2(1 + float64(len(findings)))
+	size := math.Log2(1 + float64(componentCount))
+	raw := .40*breadth*2.2 + .35*volume + .25*size
+	score := min(100, 100*raw/exposureFullScale)
+	return math.Round(score*10) / 10
+}
+
+func riskBand(risk int) (string, string) {
 	severity, recommendation := "LOW", "SAFE"
 	switch {
 	case risk >= 81:
@@ -60,14 +113,7 @@ func summarize(findings []model.Finding, items []component) model.Summary {
 	case risk >= 21:
 		severity, recommendation = "MEDIUM", "CAUTION"
 	}
-	bySeverity, byCategory := map[string]int{}, map[string]int{}
-	for _, finding := range findings {
-		bySeverity[finding.Severity]++
-		byCategory[finding.Category]++
-	}
-	return model.Summary{RiskScore: risk, Severity: severity, Recommendation: recommendation, SafeToInstall: risk <= 20,
-		FindingsCount: len(findings), FindingsBySeverity: bySeverity, FindingsByCategory: byCategory,
-		ScannerVersion: scannerVersion, ScanMode: "deterministic"}
+	return severity, recommendation
 }
 
 func deduplicateForScoring(findings []model.Finding) []model.Finding {

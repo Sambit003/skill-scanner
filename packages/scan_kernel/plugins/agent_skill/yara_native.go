@@ -276,9 +276,8 @@ func yaraFinding(item component, match yara.MatchRule) (model.Finding, bool) {
 		parts = append(parts, string(matched.Data))
 	}
 	matchedText := truncateRunes(strings.Join(parts, "; "), 200)
-	// yara-python reports byte offsets, but the oracle passes that offset to
-	// Python string slicing. Reproduce that character-index interpretation for
-	// exact line/context parity in UTF-8 files.
+	// Interpret the reported byte offset as a character index to retain stable
+	// line and context handling for UTF-8 files.
 	runes := []rune(item.Content)
 	characterOffset := min(firstOffset, len(runes))
 	prefix := string(runes[:characterOffset])

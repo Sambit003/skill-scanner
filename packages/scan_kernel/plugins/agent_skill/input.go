@@ -381,9 +381,8 @@ func readComponents(root string) ([]component, map[string]any, error) {
 			return err
 		}
 		content := pythonDecodeUTF8(raw)
-		// Path.read_text() uses universal-newline mode in the Python oracle.
-		// Normalize before any offsets, line numbers, or analyzer matches are
-		// computed so mixed CRLF/CR inputs have identical scanner semantics.
+		// Normalize newlines before offsets, line numbers, or analyzer matches
+		// are computed so mixed CRLF/CR inputs have stable scanner semantics.
 		content = strings.ReplaceAll(strings.ReplaceAll(content, "\r\n", "\n"), "\r", "\n")
 		components = append(components, component{
 			Path: filepath.ToSlash(relative), Type: kind, Lines: pythonLineCount(content),

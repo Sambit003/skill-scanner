@@ -82,6 +82,8 @@ func optionalString(value string) *string {
 
 type Summary struct {
 	RiskScore          int            `json:"risk_score"`
+	VulnerabilityScore int            `json:"vulnerability_score"`
+	ExposureScore      float64        `json:"exposure_score"`
 	Severity           string         `json:"severity"`
 	Recommendation     string         `json:"recommendation"`
 	SafeToInstall      bool           `json:"safe_to_install"`

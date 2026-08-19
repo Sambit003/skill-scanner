@@ -22,6 +22,7 @@ _TERMINAL_RISK_RE = re.compile(
     r"^ScanKernel:\s*risk\s+\d+\s*/\s*100\s+([A-Z_]+)\s+—\s+(.+)$",
     flags=re.MULTILINE,
 )
+_NUMERIC_SCORE_FIELDS = ("risk_score", "vulnerability_score", "exposure_score")
 
 
 def risk_scores_visible() -> bool:
@@ -53,10 +54,13 @@ def _redact_json_report(content: str) -> str:
         return content
 
     if isinstance(payload, dict):
-        if "risk_score" in payload:
-            payload["risk_score"] = None
+        for field in _NUMERIC_SCORE_FIELDS:
+            if field in payload:
+                payload[field] = None
         summary = payload.get("summary")
-        if isinstance(summary, dict) and "risk_score" in summary:
-            summary["risk_score"] = None
+        if isinstance(summary, dict):
+            for field in _NUMERIC_SCORE_FIELDS:
+                if field in summary:
+                    summary[field] = None
 
     return json.dumps(payload, indent=2)

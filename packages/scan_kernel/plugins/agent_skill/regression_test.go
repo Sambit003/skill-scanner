@@ -384,7 +384,7 @@ func TestFindingTextSanitization(t *testing.T) {
 	}
 }
 
-func TestPythonOracleDriftRuleFixtures(t *testing.T) {
+func TestCanonicalDriftRuleFixtures(t *testing.T) {
 	tests := []struct {
 		name, rule, path, kind, content string
 		count                           int
@@ -417,9 +417,9 @@ func TestPythonOracleDriftRuleFixtures(t *testing.T) {
 	}
 }
 
-func TestPythonOracleSupplyChainDriftFixtures(t *testing.T) {
+func TestCanonicalSupplyChainDriftFixtures(t *testing.T) {
 	if !dependencyAdvisoriesEnabled() {
-		t.Skip("SC4 parity fixture is disabled for builds without dependency advisories")
+		t.Skip("SC4 fixture is disabled for builds without dependency advisories")
 	}
 	item := component{Path: "requirements.txt", Type: "text", Content: "requests==2.30.0\nreqeusts==2.0.0\n"}
 	findings := analyzeDependencies(context.Background(), []component{item}, true)
@@ -431,7 +431,7 @@ func TestPythonOracleSupplyChainDriftFixtures(t *testing.T) {
 	}
 }
 
-func TestPythonOracleSafeSupplyChainFixture(t *testing.T) {
+func TestSafeSupplyChainFixture(t *testing.T) {
 	item := component{Path: "SKILL.md", Type: "markdown", Content: "curl -sfL https://raw.githubusercontent.com/example/install.sh | sh\n"}
 	findings, err := analyzeSourceAndManifest(context.Background(), []component{item}, map[string]any{})
 	if err != nil {
@@ -456,11 +456,11 @@ def load_environment():
 `}
 	findings := analyzePythonBehavior(item)
 	if got := countRule(findings, "TT2"); got != 1 {
-		t.Fatalf("TT2 count=%d, want breadth-first oracle taint flow; findings=%#v", got, findings)
+		t.Fatalf("TT2 count=%d, want breadth-first taint flow; findings=%#v", got, findings)
 	}
 }
 
-func TestPostParityWeakIsolationDetectors(t *testing.T) {
+func TestWeakIsolationDetectors(t *testing.T) {
 	items := []component{
 		{Path: "Dockerfile", Type: "dockerfile", Executable: true, Content: "FROM alpine\nUSER root\n"},
 		{Path: "compose.yaml", Type: "yaml", Executable: true, Content: `services:
@@ -491,7 +491,58 @@ func TestPostParityWeakIsolationDetectors(t *testing.T) {
 	}
 }
 
-func TestPostParityUpdateDriftDetectors(t *testing.T) {
+func TestPE5OwnsDeclarativeKubernetesIsolation(t *testing.T) {
+	item := component{Path: "daemonset.yaml", Type: "yaml", Executable: true, Content: `spec:
+  template:
+    spec:
+      hostPID: true
+      hostIPC: true
+      hostNetwork: true
+      volumes:
+        - hostPath:
+            path: /
+      containers:
+        - securityContext:
+            privileged: true
+`}
+	findings, err := analyzeSourceAndManifest(context.Background(), []component{item}, map[string]any{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := countRule(findings, "PE5"); got < 5 {
+		t.Fatalf("PE5 count=%d, want at least 5 isolation findings; findings=%#v", got, findings)
+	}
+	if got := countRule(findings, "TM4"); got != 0 {
+		t.Fatalf("TM4 count=%d, want declarative isolation owned by PE5; findings=%#v", got, findings)
+	}
+}
+
+func TestPE5CanonicalizesOverlappingKubernetesCommand(t *testing.T) {
+	item := component{Path: "deploy.sh", Type: "shell", Executable: true, Content: "kubectl run probe --image=alpine --privileged\n"}
+	findings, err := analyzeSourceAndManifest(context.Background(), []component{item}, map[string]any{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := countRule(findings, "PE5"); got != 1 {
+		t.Fatalf("PE5 count=%d, want 1; findings=%#v", got, findings)
+	}
+	if got := countRule(findings, "TM4"); got != 0 {
+		t.Fatalf("TM4 count=%d, want same-line overlap canonicalized to PE5; findings=%#v", got, findings)
+	}
+}
+
+func TestTM4RetainsNonOverlappingDeploymentCommand(t *testing.T) {
+	item := component{Path: "deploy.sh", Type: "shell", Executable: true, Content: "helm upgrade app ./chart --set securityContext.privileged=true\n"}
+	findings, err := analyzeSourceAndManifest(context.Background(), []component{item}, map[string]any{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := countRule(findings, "TM4"); got != 1 {
+		t.Fatalf("TM4 count=%d, want 1 command-level finding; findings=%#v", got, findings)
+	}
+}
+
+func TestUpdateDriftDetectors(t *testing.T) {
 	items := []component{
 		{Path: "requirements.txt", Type: "text", Content: "demo @ git+https://github.com/acme/demo.git#main\n"},
 		{Path: "package.json", Type: "json", Content: "{\n  \"branch\": \"latest\"\n}\n"},
@@ -513,7 +564,7 @@ func TestPostParityUpdateDriftDetectors(t *testing.T) {
 	}
 }
 
-func TestPostParityIsolationExemptionsRemainNarrow(t *testing.T) {
+func TestIsolationExemptionsRemainNarrow(t *testing.T) {
 	item := component{Path: "run.sh", Type: "shell", Executable: true, Content: "docker run -v /etc/passwd:/etc/passwd:ro alpine\n--disable-content-trust=false\n"}
 	findings, err := analyzeSourceAndManifest(context.Background(), []component{item}, map[string]any{})
 	if err != nil {

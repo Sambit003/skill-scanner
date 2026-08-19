@@ -180,9 +180,9 @@ func rp1CommandFindings(item component) []model.Finding {
 			}
 			full := item.Content[match[0]:match[1]]
 			versionText := full + item.Content[end:lineEnd]
-			// The oracle only checks the Docker image token captured by the
-			// expression. Text later on the command line (for example a mapped
-			// port) must not make an untagged image look pinned.
+			// Check only the Docker image token captured by the expression. Text
+			// later on the command line (for example a mapped port) must not make
+			// an untagged image look pinned.
 			if kind == "docker" {
 				versionText = full
 			}

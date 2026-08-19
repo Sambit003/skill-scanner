@@ -79,21 +79,6 @@ tasks:
       cache: false
       runInCI: false
 
-  parity:
-    command: "bash scripts/verify-parity.sh"
-    toolchains: "system"
-    inputs:
-      - "**/*.go"
-      - "go.mod"
-      - "go.sum"
-      - "build/**/*"
-      - "scripts/verify-parity.sh"
-      - "scripts/oracle_runner.py"
-      - "testdata/parity/**/*"
-    options:
-      cache: false
-      runInCI: false
-
   bundle:
     command: "bash scripts/build-scanner.sh"
     toolchains: "system"

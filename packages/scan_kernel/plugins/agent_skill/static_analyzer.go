@@ -584,10 +584,9 @@ func findingFromStaticMatchWithContext(item component, pattern staticPattern, ma
 	}
 
 	if isCodeExample(context) {
-		// The oracle's static runner classifies only authored document/data
-		// types as non-executable here. Unknown extensions are downweighted,
-		// even though inventory metadata does not mark them executable for
-		// scoring.
+		// Only authored document/data types are non-executable here. Unknown
+		// extensions are downweighted even when inventory metadata does not
+		// mark them executable for scoring.
 		if isStaticNonExecutableType(item.Type) {
 			return model.Finding{}, false
 		}

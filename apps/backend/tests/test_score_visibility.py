@@ -12,13 +12,28 @@ def test_scores_can_be_enabled(monkeypatch) -> None:
     assert visible_risk_score(87) == 87
 
 
-def test_json_report_redacts_summary_score() -> None:
-    report = '{"summary":{"risk_score":87,"severity":"HIGH"},"findings":[]}'
+def test_json_report_redacts_all_summary_scores() -> None:
+    report = (
+        '{"summary":{"risk_score":87,"vulnerability_score":75,'
+        '"exposure_score":42.5,"severity":"HIGH"},"findings":[]}'
+    )
 
     redacted = redact_report_content(report, "json")
 
     assert '"risk_score": null' in redacted
+    assert '"vulnerability_score": null' in redacted
+    assert '"exposure_score": null' in redacted
     assert '"severity": "HIGH"' in redacted
+
+
+def test_json_report_redacts_top_level_scores() -> None:
+    report = '{"risk_score":87,"vulnerability_score":75,"exposure_score":42.5}'
+
+    redacted = redact_report_content(report, "json")
+
+    assert '"risk_score": null' in redacted
+    assert '"vulnerability_score": null' in redacted
+    assert '"exposure_score": null' in redacted
 
 
 def test_markdown_report_replaces_score_with_severity() -> None:

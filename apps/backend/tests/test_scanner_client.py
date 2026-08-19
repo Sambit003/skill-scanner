@@ -59,6 +59,28 @@ async def test_high_risk_result_is_not_treated_as_process_failure(tmp_path: Path
 
 
 @pytest.mark.asyncio
+async def test_scanner_summary_accepts_evidence_gated_scores(tmp_path: Path) -> None:
+    response = success_payload()
+    summary = response["result"]["summary"]
+    summary["vulnerability_score"] = 75
+    summary["exposure_score"] = 42.5
+    payload = json.dumps(response)
+    executable = make_executable(
+        tmp_path,
+        f"import sys\nsys.stdin.read()\nprint({payload!r})\n",
+    )
+
+    result = await ScannerClient(executable=executable, timeout_seconds=5).scan(
+        target="fixture",
+        asset_type="agent_skill",
+        output_formats=["json"],
+    )
+
+    assert result.summary.vulnerability_score == 75
+    assert result.summary.exposure_score == 42.5
+
+
+@pytest.mark.asyncio
 async def test_nonzero_machine_error_is_reported(tmp_path: Path) -> None:
     payload = json.dumps(
         {
