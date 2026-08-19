@@ -22,6 +22,8 @@ type rawRequest struct {
 	OutputFormats   []string `json:"output_formats,omitempty"`
 	TimeoutSeconds  float64  `json:"timeout_seconds,omitempty"`
 	RuleID          string   `json:"rule_id,omitempty"`
+	ScanScope       *string  `json:"scan_scope,omitempty"`
+	IncludeReadme   *bool    `json:"include_readme,omitempty"`
 }
 
 type Envelope struct {
@@ -37,46 +39,62 @@ type ProtocolError struct {
 }
 
 func Execute(parent context.Context, registry *engine.Registry, raw []byte) (Envelope, int) {
+	errorVersion := model.ProtocolVersion
+	var versionProbe struct {
+		ProtocolVersion string `json:"protocol_version"`
+	}
+	if json.Unmarshal(raw, &versionProbe) == nil && (versionProbe.ProtocolVersion == model.LegacyProtocolVersion || versionProbe.ProtocolVersion == model.ProtocolVersion) {
+		errorVersion = versionProbe.ProtocolVersion
+	}
 	request, err := decode(raw)
 	if err != nil {
-		return failure("INVALID_REQUEST", err.Error()), 2
+		return failure(errorVersion, "INVALID_REQUEST", err.Error()), 2
 	}
 	switch request.Operation {
 	case "list_rules":
-		return success(map[string]any{"kind": "rules", "items": registry.Rules()}), 0
+		return success(request.ProtocolVersion, map[string]any{"kind": "rules", "items": registry.Rules()}), 0
 	case "get_rule":
 		rule, exists := registry.Rule(request.RuleID)
 		if !exists {
-			return failure("INVALID_REQUEST", "rule documentation is not available"), 2
+			return failure(request.ProtocolVersion, "INVALID_REQUEST", "rule documentation is not available"), 2
 		}
-		return success(map[string]any{"kind": "rule", "rule": rule}), 0
+		return success(request.ProtocolVersion, map[string]any{"kind": "rule", "rule": rule}), 0
 	case "scan":
 		ctx, cancel := context.WithTimeout(parent, time.Duration(request.TimeoutSeconds*float64(time.Second)))
 		defer cancel()
+		scope, includeReadme := model.ScanScopeRepository, true
+		if request.ProtocolVersion == model.ProtocolVersion {
+			scope, includeReadme = *request.ScanScope, *request.IncludeReadme
+		}
 		result, err := registry.Scan(ctx, model.ScanRequest{Target: request.Target, AssetType: request.AssetType,
-			OutputFormats: request.OutputFormats, TimeoutSeconds: request.TimeoutSeconds})
+			OutputFormats: request.OutputFormats, TimeoutSeconds: request.TimeoutSeconds,
+			ScanScope: scope, IncludeReadme: includeReadme})
 		if err == nil {
-			return success(result), 0
+			if request.ProtocolVersion == model.LegacyProtocolVersion {
+				result.Summary.ScanScope = ""
+				result.Summary.IncludeReadme = nil
+			}
+			return success(request.ProtocolVersion, result), 0
 		}
 		if errors.Is(err, context.DeadlineExceeded) || errors.Is(ctx.Err(), context.DeadlineExceeded) {
-			return failure("TIMEOUT", "Scanner execution timed out"), 3
+			return failure(request.ProtocolVersion, "TIMEOUT", "Scanner execution timed out"), 3
 		}
 		if strings.Contains(err.Error(), "no plugin compiled") {
-			return failure("UNSUPPORTED_ASSET_TYPE", err.Error()), 2
+			return failure(request.ProtocolVersion, "UNSUPPORTED_ASSET_TYPE", err.Error()), 2
 		}
-		return failure("SCAN_FAILED", err.Error()), 3
+		return failure(request.ProtocolVersion, "SCAN_FAILED", err.Error()), 3
 	default:
-		return failure("INVALID_REQUEST", fmt.Sprintf("unsupported operation %q", request.Operation)), 2
+		return failure(request.ProtocolVersion, "INVALID_REQUEST", fmt.Sprintf("unsupported operation %q", request.Operation)), 2
 	}
 }
 
 func Serve(ctx context.Context, registry *engine.Registry, input io.Reader, output, diagnostic io.Writer) int {
 	raw, err := io.ReadAll(io.LimitReader(input, 10*1024*1024+1))
 	if err != nil {
-		return write(output, failure("INVALID_REQUEST", err.Error()), 2)
+		return write(output, failure(model.ProtocolVersion, "INVALID_REQUEST", err.Error()), 2)
 	}
 	if len(raw) > 10*1024*1024 {
-		return write(output, failure("INVALID_REQUEST", "request exceeds 10 MiB"), 2)
+		return write(output, failure(model.ProtocolVersion, "INVALID_REQUEST", "request exceeds 10 MiB"), 2)
 	}
 	envelope, exitCode := Execute(ctx, registry, raw)
 	if exitCode == 3 && envelope.Error != nil {
@@ -95,8 +113,8 @@ func decode(raw []byte) (rawRequest, error) {
 	if decoder.Decode(&struct{}{}) != io.EOF {
 		return rawRequest{}, errors.New("request must contain exactly one JSON value")
 	}
-	if request.ProtocolVersion != model.ProtocolVersion {
-		return rawRequest{}, fmt.Errorf("protocol_version must be %q", model.ProtocolVersion)
+	if request.ProtocolVersion != model.LegacyProtocolVersion && request.ProtocolVersion != model.ProtocolVersion {
+		return rawRequest{}, fmt.Errorf("protocol_version must be %q or %q", model.LegacyProtocolVersion, model.ProtocolVersion)
 	}
 	switch request.Operation {
 	case "scan":
@@ -119,15 +137,30 @@ func decode(raw []byte) (rawRequest, error) {
 		if request.RuleID != "" {
 			return rawRequest{}, errors.New("scan does not accept rule_id")
 		}
+		if request.ProtocolVersion == model.LegacyProtocolVersion {
+			if request.ScanScope != nil || request.IncludeReadme != nil {
+				return rawRequest{}, errors.New("protocol v1 scan does not accept scan_scope or include_readme")
+			}
+		} else {
+			if request.ScanScope == nil || request.IncludeReadme == nil {
+				return rawRequest{}, errors.New("protocol v2 scan requires scan_scope and include_readme")
+			}
+			if *request.ScanScope != model.ScanScopeSkillFiles && *request.ScanScope != model.ScanScopeSkillFolders && *request.ScanScope != model.ScanScopeRepository {
+				return rawRequest{}, fmt.Errorf("invalid scan_scope %q", *request.ScanScope)
+			}
+			if *request.ScanScope == model.ScanScopeSkillFiles && *request.IncludeReadme {
+				return rawRequest{}, errors.New("include_readme is not applicable to skill_files scope")
+			}
+		}
 	case "list_rules":
-		if request.Target != "" || request.AssetType != "" || request.OutputFormats != nil || request.TimeoutSeconds != 0 || request.RuleID != "" {
+		if request.Target != "" || request.AssetType != "" || request.OutputFormats != nil || request.TimeoutSeconds != 0 || request.RuleID != "" || request.ScanScope != nil || request.IncludeReadme != nil {
 			return rawRequest{}, errors.New("list_rules accepts only operation and protocol_version")
 		}
 	case "get_rule":
 		if strings.TrimSpace(request.RuleID) == "" {
 			return rawRequest{}, errors.New("get_rule requires rule_id")
 		}
-		if request.Target != "" || request.AssetType != "" || request.OutputFormats != nil || request.TimeoutSeconds != 0 {
+		if request.Target != "" || request.AssetType != "" || request.OutputFormats != nil || request.TimeoutSeconds != 0 || request.ScanScope != nil || request.IncludeReadme != nil {
 			return rawRequest{}, errors.New("get_rule accepts only operation, protocol_version, and rule_id")
 		}
 	default:
@@ -136,12 +169,12 @@ func decode(raw []byte) (rawRequest, error) {
 	return request, nil
 }
 
-func success(result any) Envelope {
-	return Envelope{ProtocolVersion: model.ProtocolVersion, OK: true, Result: result}
+func success(version string, result any) Envelope {
+	return Envelope{ProtocolVersion: version, OK: true, Result: result}
 }
 
-func failure(code, message string) Envelope {
-	return Envelope{ProtocolVersion: model.ProtocolVersion, OK: false, Error: &ProtocolError{Code: code, Message: message}}
+func failure(version, code, message string) Envelope {
+	return Envelope{ProtocolVersion: version, OK: false, Error: &ProtocolError{Code: code, Message: message}}
 }
 
 func write(output io.Writer, envelope Envelope, exitCode int) int {

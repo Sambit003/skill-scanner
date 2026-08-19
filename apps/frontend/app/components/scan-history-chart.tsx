@@ -3,10 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   CartesianGrid,
-  Legend,
   Line,
   LineChart,
-  ReferenceDot,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -14,12 +12,16 @@ import {
   type TooltipContentProps,
 } from "recharts";
 import type { NameType, ValueType } from "recharts/types/component/DefaultTooltipContent";
-import type { ScanStatusResponse } from "@/app/lib/api";
+import { scanConfigurationLabel, type ScanStatusResponse } from "@/app/lib/api";
 import { SHOW_RISK_SCORES } from "@/app/lib/score-visibility";
+
+type HistoryMetric = "findings" | "risk";
 
 interface HistoryDatum {
   scanId: string;
   createdAt: string;
+  target: string;
+  configurationLabel: string;
   findings: number;
   riskScore: number | null;
   severity: string | null;
@@ -56,8 +58,10 @@ function HistoryTooltip({ active, payload }: TooltipContentProps<ValueType, Name
   if (!datum) return null;
 
   return (
-    <div className="min-w-52 rounded-lg border border-border bg-card px-3 py-2.5 shadow-xl">
-      <div className="text-xs font-medium text-foreground">{formatTimestamp(datum.createdAt)}</div>
+    <div className="min-w-60 max-w-80 rounded-lg border border-border bg-card px-3 py-2.5 shadow-xl">
+      <div className="text-xs font-medium text-foreground">{datum.configurationLabel}</div>
+      <div className="mt-1 text-xs text-muted-foreground">{formatTimestamp(datum.createdAt)}</div>
+      <div className="mt-1 truncate font-mono text-[11px] text-muted-foreground" title={datum.target}>{datum.target}</div>
       <div className="mt-1 font-mono text-[11px] text-muted-foreground">#{datum.scanId.slice(0, 8)}</div>
       <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs">
         <dt className="text-muted-foreground">Findings</dt>
@@ -91,7 +95,7 @@ function useReducedMotion(): boolean {
   return reduced;
 }
 
-export function ScanHistoryChart({ scans }: { scans: ScanStatusResponse[] }) {
+export function ScanHistoryChart({ scans, metric }: { scans: ScanStatusResponse[]; metric: HistoryMetric }) {
   const reducedMotion = useReducedMotion();
   const data = useMemo<HistoryDatum[]>(
     () =>
@@ -101,6 +105,8 @@ export function ScanHistoryChart({ scans }: { scans: ScanStatusResponse[] }) {
         .map((scan) => ({
           scanId: scan.scan_id,
           createdAt: scan.created_at,
+          target: scan.target,
+          configurationLabel: scanConfigurationLabel(scan),
           findings: scan.findings_count ?? 0,
           riskScore: scan.risk_score,
           severity: scan.severity,
@@ -109,23 +115,31 @@ export function ScanHistoryChart({ scans }: { scans: ScanStatusResponse[] }) {
     [scans]
   );
 
-  if (data.length < 2) {
+  if (data.length === 0) {
     return (
-      <div className="flex h-64 items-center justify-center px-6 text-center text-sm text-muted-foreground">
-        At least two completed runs are needed to draw a trend.
+      <div className="flex h-52 items-center justify-center px-6 text-center text-sm text-muted-foreground">
+        No completed runs are available for this configuration.
       </div>
     );
   }
 
-  const latest = data.at(-1)!;
+  if (data.length === 1) {
+    return (
+      <div className="flex h-52 flex-col items-center justify-center px-6 text-center">
+        <p className="text-sm font-medium text-foreground">One completed run</p>
+        <p className="mt-1 max-w-md text-xs leading-relaxed text-muted-foreground">
+          Run this configuration again to see how its findings change over time.
+        </p>
+      </div>
+    );
+  }
+
+  const metricLabel = metric === "risk" ? "Risk score" : "Findings";
 
   return (
-    <div
-      className="h-72 w-full"
-      aria-label={SHOW_RISK_SCORES ? "Historical findings and risk score chart" : "Historical findings chart"}
-    >
+    <div className="h-72 w-full" aria-label={`${metricLabel} history for the selected scan configuration`}>
       <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={data} margin={{ top: 8, right: 8, bottom: 4, left: 0 }} accessibilityLayer>
+        <LineChart data={data} margin={{ top: 12, right: 12, bottom: 4, left: 0 }} accessibilityLayer>
           <CartesianGrid stroke="var(--border)" strokeDasharray="3 5" vertical={false} />
           <XAxis
             dataKey="scanId"
@@ -137,81 +151,27 @@ export function ScanHistoryChart({ scans }: { scans: ScanStatusResponse[] }) {
             minTickGap={36}
           />
           <YAxis
-            yAxisId="findings"
-            allowDecimals={false}
-            domain={[0, "auto"]}
+            allowDecimals={metric !== "findings"}
+            domain={metric === "risk" ? [0, 100] : [0, "auto"]}
+            ticks={metric === "risk" ? [0, 25, 50, 75, 100] : undefined}
             tick={{ fill: "var(--muted-foreground)", fontSize: 11 }}
             tickLine={false}
             axisLine={false}
             width={34}
           />
-          {SHOW_RISK_SCORES && (
-            <YAxis
-              yAxisId="risk"
-              orientation="right"
-              domain={[0, 100]}
-              ticks={[0, 25, 50, 75, 100]}
-              tick={{ fill: "var(--muted-foreground)", fontSize: 11 }}
-              tickLine={false}
-              axisLine={false}
-              width={34}
-            />
-          )}
           <Tooltip content={HistoryTooltip} cursor={{ stroke: "var(--border-strong)", strokeDasharray: "3 3" }} />
-          <Legend
-            verticalAlign="top"
-            height={34}
-            iconType="line"
-            wrapperStyle={{ color: "var(--muted-foreground)", fontSize: 12 }}
-          />
           <Line
-            yAxisId="findings"
             type="monotone"
-            dataKey="findings"
-            name="Findings"
+            dataKey={metric === "risk" ? "riskScore" : "findings"}
+            name={metricLabel}
             stroke="var(--accent)"
             strokeWidth={2.5}
             dot={{ r: 3, fill: "var(--card)", strokeWidth: 2 }}
             activeDot={{ r: 5 }}
+            connectNulls={false}
             isAnimationActive={!reducedMotion}
             animationDuration={450}
           />
-          {SHOW_RISK_SCORES && (
-            <Line
-              yAxisId="risk"
-              type="monotone"
-              dataKey="riskScore"
-              name="Risk score"
-              stroke="var(--info)"
-              strokeWidth={2}
-              strokeDasharray="6 4"
-              dot={{ r: 3, fill: "var(--card)", strokeWidth: 2 }}
-              activeDot={{ r: 5 }}
-              connectNulls={false}
-              isAnimationActive={!reducedMotion}
-              animationDuration={450}
-            />
-          )}
-          <ReferenceDot
-            yAxisId="findings"
-            x={latest.scanId}
-            y={latest.findings}
-            r={5}
-            fill="var(--card)"
-            stroke="var(--accent)"
-            strokeWidth={3}
-          />
-          {SHOW_RISK_SCORES && latest.riskScore !== null && (
-            <ReferenceDot
-              yAxisId="risk"
-              x={latest.scanId}
-              y={latest.riskScore}
-              r={5}
-              fill="var(--card)"
-              stroke="var(--info)"
-              strokeWidth={3}
-            />
-          )}
         </LineChart>
       </ResponsiveContainer>
     </div>

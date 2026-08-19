@@ -6,7 +6,13 @@ import (
 	"time"
 )
 
-const ProtocolVersion = "1"
+const (
+	LegacyProtocolVersion = "1"
+	ProtocolVersion       = "2"
+	ScanScopeSkillFiles   = "skill_files"
+	ScanScopeSkillFolders = "skill_folders"
+	ScanScopeRepository   = "repository"
+)
 
 type ScanRequest struct {
 	Target         string   `json:"target"`
@@ -18,6 +24,8 @@ type ScanRequest struct {
 	ShowSuppressed bool     `json:"-"`
 	Recursive      bool     `json:"-"`
 	Offline        bool     `json:"-"`
+	ScanScope      string   `json:"-"`
+	IncludeReadme  bool     `json:"-"`
 }
 
 type Location struct {
@@ -92,6 +100,8 @@ type Summary struct {
 	FindingsByCategory map[string]int `json:"findings_by_category"`
 	ScannerVersion     string         `json:"scanner_version"`
 	ScanMode           string         `json:"scan_mode"`
+	ScanScope          string         `json:"scan_scope,omitempty"`
+	IncludeReadme      *bool          `json:"include_readme,omitempty"`
 }
 
 type Report struct {

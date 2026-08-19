@@ -3,7 +3,14 @@ from typing import Any, Dict, List, Optional, Protocol
 class IScanRepository(Protocol):
     """Abstract interface defining persistence operations for asset scans."""
 
-    async def create_scan_record(self, asset_target: str, asset_type: str) -> str:
+    async def create_scan_record(
+        self,
+        asset_target: str,
+        repository_key: str,
+        asset_type: str,
+        scan_scope: str,
+        include_readme: bool,
+    ) -> str:
         """Create a new scan record in QUEUED state and return the scan_id."""
         ...
 
@@ -20,6 +27,7 @@ class IScanRepository(Protocol):
         limit: int = 50,
         offset: int = 0,
         target: Optional[str] = None,
+        repository_key: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         """List historical scan records."""
         ...

@@ -10,7 +10,7 @@ CORPUS_COMMIT="84fdeffd12f2ee307994d1eb6feb48173b6e0502"
 # Canonical hashes for CORPUS_COMMIT. The first covers every user-visible
 # engine finding field; the second covers the complete summary.
 EXPECTED_FINDINGS_SHA256="a2dc460ecf96030776f23f7711fcb06a8375ebb3505d7082c82622b0ba9f754d"
-EXPECTED_SUMMARY_SHA256="2818c102d56c6f94ec159df0225d2c3edda36992956035de5b38d2478956dede"
+EXPECTED_SUMMARY_SHA256="b4f2a68e0e2891920e598b33dd891b959d2f940c7e592efc6472d837ebdf60b2"
 REGRESSION_TMP="$(mktemp -d /tmp/scankernel-regression.XXXXXX)"
 trap 'rm -rf "${REGRESSION_TMP}"' EXIT
 SCAN_KERNEL_DOCKER_IMAGE=""
@@ -27,13 +27,13 @@ run_scanner() {
   local scan_target="$1"
   local output="$2"
   if [[ -n "${SCAN_KERNEL_BINARY:-}" ]]; then
-    "${SCAN_KERNEL_BINARY}" scan --offline --format json "${scan_target}" > "${output}"
+    "${SCAN_KERNEL_BINARY}" scan --offline --scope repository --include-readme --format json "${scan_target}" > "${output}"
     return
   fi
   docker run --rm --network none \
     -v "$(cd "${scan_target}" && pwd):/scan-target:ro" \
     "${SCAN_KERNEL_DOCKER_IMAGE}" \
-    /out/scan-kernel-engine scan --offline --format json /scan-target > "${output}"
+    /out/scan-kernel-engine scan --offline --scope repository --include-readme --format json /scan-target > "${output}"
 }
 
 if [[ -z "${SCAN_KERNEL_BINARY:-}" ]]; then

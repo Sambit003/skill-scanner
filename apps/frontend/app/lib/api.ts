@@ -2,12 +2,32 @@ const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 export type ReportFormat = "json" | "markdown" | "sarif" | "terminal";
 export type ScanStatus = "queued" | "running" | "completed" | "failed" | "canceled";
+export type ScanScope = "skill_files" | "skill_folders" | "repository";
+
+export const SCAN_SCOPE_LABELS: Record<ScanScope, string> = {
+  skill_files: "SKILL.md only",
+  skill_folders: "Skill folders",
+  repository: "Whole repository",
+};
+
+export function scanConfigurationKey(scan: Pick<ScanStatusResponse, "scan_scope" | "include_readme">): string {
+  const includeReadme = scan.scan_scope === "skill_files" ? false : scan.include_readme;
+  return `${scan.scan_scope}:${includeReadme ? "readme" : "no-readme"}`;
+}
+
+export function scanConfigurationLabel(scan: Pick<ScanStatusResponse, "scan_scope" | "include_readme">): string {
+  if (scan.scan_scope === "skill_files") return SCAN_SCOPE_LABELS.skill_files;
+  return `${SCAN_SCOPE_LABELS[scan.scan_scope]} · ${scan.include_readme ? "w/ README" : "w/o README"}`;
+}
 
 export interface CreateScanResponse {
   scan_id: string;
   status: ScanStatus;
   mode: string;
   created_at: string;
+  repository_key: string;
+  scan_scope: ScanScope;
+  include_readme: boolean;
 }
 
 export interface BreakdownItemResponse {
@@ -31,6 +51,7 @@ export interface ScanLinksResponse {
 export interface ScanStatusResponse {
   scan_id: string;
   target: string;
+  repository_key: string;
   display_target: string | null;
   mode: string;
   status: ScanStatus;
@@ -60,6 +81,8 @@ export interface ScanStatusResponse {
   links: ScanLinksResponse | null;
   scanner_version: string | null;
   scan_mode: string | null;
+  scan_scope: ScanScope;
+  include_readme: boolean;
 }
 
 export interface ScanListResponse {
@@ -102,13 +125,19 @@ async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
   return res.json();
 }
 
-export async function createScan(target: string): Promise<CreateScanResponse> {
+export async function createScan(
+  target: string,
+  scanScope: ScanScope,
+  includeReadme: boolean,
+): Promise<CreateScanResponse> {
   return requestJson<CreateScanResponse>("/v1/scans", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       target,
       asset_type: "agent_skill",
+      scan_scope: scanScope,
+      include_readme: includeReadme,
     }),
   });
 }
@@ -119,8 +148,11 @@ export async function listScans(params?: {
   status?: string;
   severity?: string;
   target?: string;
+  repositoryKey?: string;
   scanId?: string;
   sort?: string;
+  scanScope?: ScanScope;
+  includeReadme?: boolean;
 }): Promise<ScanListResponse> {
   const search = new URLSearchParams();
   const page = params?.page ?? 1;
@@ -130,8 +162,11 @@ export async function listScans(params?: {
   if (params?.status) search.set("status", params.status);
   if (params?.severity) search.set("severity", params.severity);
   if (params?.target) search.set("target", params.target);
+  if (params?.repositoryKey) search.set("repository_key", params.repositoryKey);
   if (params?.scanId) search.set("scan_id", params.scanId);
   if (params?.sort) search.set("sort", params.sort);
+  if (params?.scanScope) search.set("scan_scope", params.scanScope);
+  if (params?.includeReadme !== undefined) search.set("include_readme", String(params.includeReadme));
 
   const suffix = search.size ? `?${search.toString()}` : "";
   const response = await requestJson<ScanListResponse | ScanStatusResponse[]>(`/v1/scans${suffix}`);

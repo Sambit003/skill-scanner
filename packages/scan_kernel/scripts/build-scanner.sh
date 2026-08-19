@@ -125,7 +125,7 @@ EOF
   "go_version": "$(go version | awk '{print $3}')",
   "target": "$target",
   "plugins": ["$(printf '%s' "$PLUGIN_IDS" | sed 's/,/", "/g')"],
-  "protocol_version": "1",
+  "protocol_version": "2",
   "yara_mode": "$yara_mode",
   "yara_version": "$(if [ "$yara_mode" = native-static ]; then printf 4.5.4; fi)",
   "binary": "$binary"

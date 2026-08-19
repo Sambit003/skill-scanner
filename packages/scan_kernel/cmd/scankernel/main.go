@@ -64,6 +64,8 @@ func scan(args []string, registry scanner, output, diagnostic io.Writer) int {
 	baseline := flags.String("baseline", "", "baseline YAML or JSON")
 	yaraRules := flags.String("yara-rules", "", "custom YARA rule directory")
 	offline := flags.Bool("offline", false, "disable remote targets")
+	scanScope := flags.String("scope", model.ScanScopeSkillFolders, "scan scope: skill_files, skill_folders, repository")
+	includeReadme := flags.Bool("include-readme", false, "include README and README.* files in the selected scope")
 	if err := flags.Parse(args); err != nil || flags.NArg() != 1 {
 		fmt.Fprintln(diagnostic, "usage: scan-kernel-engine scan [flags] <target>")
 		return 2
@@ -75,7 +77,8 @@ func scan(args []string, registry scanner, output, diagnostic io.Writer) int {
 	ctx, cancel := context.WithTimeout(context.Background(), *timeout)
 	defer cancel()
 	result, err := registry.Scan(ctx, model.ScanRequest{Target: flags.Arg(0), AssetType: *assetType, OutputFormats: requested,
-		TimeoutSeconds: timeout.Seconds(), BaselinePath: *baseline, YARARulesDir: *yaraRules, Offline: *offline})
+		TimeoutSeconds: timeout.Seconds(), BaselinePath: *baseline, YARARulesDir: *yaraRules, Offline: *offline,
+		ScanScope: *scanScope, IncludeReadme: *includeReadme})
 	if err != nil {
 		fmt.Fprintf(diagnostic, "ScanKernel scan failed: %v\n", err)
 		return 3
@@ -116,11 +119,14 @@ func baseline(args []string, registry scanner, output, diagnostic io.Writer) int
 	destination := flags.String("output", ".scan_kernel-baseline.yaml", "baseline YAML or JSON path")
 	reason := flags.String("reason", "Accepted finding (auto-generated baseline)", "recorded suppression reason")
 	offline := flags.Bool("offline", false, "disable remote targets and advisory lookups")
+	scanScope := flags.String("scope", model.ScanScopeSkillFolders, "scan scope: skill_files, skill_folders, repository")
+	includeReadme := flags.Bool("include-readme", false, "include README and README.* files in the selected scope")
 	if err := flags.Parse(args); err != nil || flags.NArg() != 1 {
 		fmt.Fprintln(diagnostic, "usage: scan-kernel-engine baseline [flags] <target>")
 		return 2
 	}
-	result, err := registry.Scan(context.Background(), model.ScanRequest{Target: flags.Arg(0), AssetType: "skill", OutputFormats: []string{"json"}, TimeoutSeconds: 300, Offline: *offline})
+	result, err := registry.Scan(context.Background(), model.ScanRequest{Target: flags.Arg(0), AssetType: "skill", OutputFormats: []string{"json"}, TimeoutSeconds: 300, Offline: *offline,
+		ScanScope: *scanScope, IncludeReadme: *includeReadme})
 	if err != nil {
 		fmt.Fprintf(diagnostic, "ScanKernel baseline failed: %v\n", err)
 		return 3
@@ -154,8 +160,10 @@ func baseline(args []string, registry scanner, output, diagnostic io.Writer) int
 }
 
 type mcpScanInput struct {
-	Target  string `json:"target" jsonschema:"path or approved remote URL of the Agent Skill"`
-	Offline bool   `json:"offline,omitempty" jsonschema:"disable remote target resolution"`
+	Target        string `json:"target" jsonschema:"path or approved remote URL of the Agent Skill"`
+	Offline       bool   `json:"offline,omitempty" jsonschema:"disable remote target resolution"`
+	ScanScope     string `json:"scan_scope,omitempty" jsonschema:"scan scope: skill_files, skill_folders, or repository"`
+	IncludeReadme bool   `json:"include_readme,omitempty" jsonschema:"include README files in the selected scope"`
 }
 
 type mcpScanOutput struct {
@@ -168,7 +176,12 @@ func serveMCP(registry scanner, diagnostic io.Writer) int {
 	server := mcp.NewServer(&mcp.Implementation{Name: "ScanKernel", Version: buildinfo.Version}, nil)
 	mcp.AddTool(server, &mcp.Tool{Name: "scan_skill", Description: "Scan an Agent Skill for deterministic security findings"},
 		func(ctx context.Context, _ *mcp.CallToolRequest, input mcpScanInput) (*mcp.CallToolResult, mcpScanOutput, error) {
-			result, err := registry.Scan(ctx, model.ScanRequest{Target: input.Target, AssetType: "skill", OutputFormats: []string{"json"}, TimeoutSeconds: 300, Offline: input.Offline})
+			scope := input.ScanScope
+			if scope == "" {
+				scope = model.ScanScopeSkillFolders
+			}
+			result, err := registry.Scan(ctx, model.ScanRequest{Target: input.Target, AssetType: "skill", OutputFormats: []string{"json"}, TimeoutSeconds: 300, Offline: input.Offline,
+				ScanScope: scope, IncludeReadme: input.IncludeReadme})
 			return nil, mcpScanOutput{Result: result}, err
 		})
 	if err := server.Run(context.Background(), &mcp.StdioTransport{}); err != nil {

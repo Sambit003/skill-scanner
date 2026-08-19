@@ -72,7 +72,7 @@ export function InfoPopover({
           id={popoverId}
           role="dialog"
           aria-label={title}
-          className={`absolute top-6 z-30 w-72 rounded-2xl border border-border bg-card p-3 shadow-[0_14px_40px_rgba(0,0,0,0.08)] ${
+          className={`absolute top-6 z-30 w-72 rounded-2xl border border-border bg-card p-3 text-left font-sans font-normal tracking-normal shadow-[0_14px_40px_rgba(0,0,0,0.08)] ${
             align === "right"
               ? "right-0"
               : align === "center"

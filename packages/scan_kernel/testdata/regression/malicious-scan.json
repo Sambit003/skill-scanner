@@ -1,6 +1,8 @@
 {
   "summary": {
     "risk_score": 100,
+    "vulnerability_score": 100,
+    "exposure_score": 47.4,
     "severity": "CRITICAL",
     "recommendation": "DO_NOT_INSTALL",
     "safe_to_install": false,
@@ -22,7 +24,9 @@
       "MCP Least Privilege": 1
     },
     "scanner_version": "1.0.0",
-    "scan_mode": "deterministic"
+    "scan_mode": "deterministic",
+    "scan_scope": "repository",
+    "include_readme": true
   },
   "findings": [
     {

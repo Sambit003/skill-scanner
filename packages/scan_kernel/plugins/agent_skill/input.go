@@ -46,7 +46,14 @@ type preparedInput struct {
 	SourceType string
 	TempDir    string
 	Components []component
-	Manifest   map[string]any
+	Skills     []skillInput
+}
+
+type skillInput struct {
+	Root         string
+	ManifestPath string
+	Components   []component
+	Manifest     map[string]any
 }
 
 func (p *preparedInput) cleanup() {
@@ -55,7 +62,7 @@ func (p *preparedInput) cleanup() {
 	}
 }
 
-func prepare(ctx context.Context, target string, offline bool) (*preparedInput, error) {
+func prepare(ctx context.Context, target string, offline bool, scanScope string, includeReadme bool) (*preparedInput, error) {
 	target = strings.TrimSpace(target)
 	if target == "" {
 		return nil, errors.New("target must not be empty")
@@ -65,12 +72,92 @@ func prepare(ctx context.Context, target string, offline bool) (*preparedInput, 
 		return nil, err
 	}
 	prepared := &preparedInput{Root: root, SourceType: sourceType, TempDir: tempDir}
-	prepared.Components, prepared.Manifest, err = readComponents(root)
+	allComponents, _, readErr := readComponents(root)
+	if readErr != nil {
+		prepared.cleanup()
+		return nil, readErr
+	}
+	prepared.Components, prepared.Skills, err = selectComponents(allComponents, scanScope, includeReadme)
 	if err != nil {
 		prepared.cleanup()
 		return nil, err
 	}
 	return prepared, nil
+}
+
+func selectComponents(all []component, scanScope string, includeReadme bool) ([]component, []skillInput, error) {
+	if scanScope == "" {
+		scanScope = "skill_folders"
+	}
+	if scanScope != "skill_files" && scanScope != "skill_folders" && scanScope != "repository" {
+		return nil, nil, fmt.Errorf("invalid scan scope %q", scanScope)
+	}
+	if scanScope == "skill_files" && includeReadme {
+		return nil, nil, errors.New("include_readme is not applicable to skill_files scope")
+	}
+
+	manifestPaths := make([]string, 0)
+	for _, item := range all {
+		if filepath.Base(filepath.FromSlash(item.Path)) == "SKILL.md" {
+			manifestPaths = append(manifestPaths, item.Path)
+		}
+	}
+	if scanScope != "repository" && len(manifestPaths) == 0 {
+		return nil, nil, errors.New("no specification-compliant SKILL.md files were found in the target")
+	}
+
+	selected := make([]component, 0, len(all))
+	for _, item := range all {
+		if !includeReadme && isReadmePath(item.Path) {
+			continue
+		}
+		include := scanScope == "repository"
+		if scanScope == "skill_files" {
+			include = filepath.Base(filepath.FromSlash(item.Path)) == "SKILL.md"
+		} else if scanScope == "skill_folders" {
+			for _, manifestPath := range manifestPaths {
+				if pathWithinSkill(item.Path, filepath.ToSlash(filepath.Dir(filepath.FromSlash(manifestPath)))) {
+					include = true
+					break
+				}
+			}
+		}
+		if include {
+			selected = append(selected, item)
+		}
+	}
+
+	skills := make([]skillInput, 0, len(manifestPaths))
+	for _, manifestPath := range manifestPaths {
+		root := filepath.ToSlash(filepath.Dir(filepath.FromSlash(manifestPath)))
+		unit := skillInput{Root: root, ManifestPath: manifestPath}
+		for _, item := range selected {
+			if !pathWithinSkill(item.Path, root) {
+				continue
+			}
+			relative := item.Path
+			if root != "." {
+				relative = strings.TrimPrefix(item.Path, root+"/")
+			}
+			copy := item
+			copy.Path = relative
+			unit.Components = append(unit.Components, copy)
+			if item.Path == manifestPath {
+				unit.Manifest = parseFrontmatter(item.Content)
+			}
+		}
+		skills = append(skills, unit)
+	}
+	return selected, skills, nil
+}
+
+func pathWithinSkill(path, root string) bool {
+	return root == "." || path == root || strings.HasPrefix(path, root+"/")
+}
+
+func isReadmePath(path string) bool {
+	name := strings.ToLower(filepath.Base(filepath.FromSlash(path)))
+	return name == "readme" || strings.HasPrefix(name, "readme.")
 }
 
 func resolveTarget(ctx context.Context, target string, offline bool) (string, string, string, error) {

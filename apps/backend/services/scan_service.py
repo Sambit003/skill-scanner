@@ -7,6 +7,7 @@ from backend.domain.models.schemas import (
     ScanResponse,
 )
 from backend.repositories.scan_repository import ScanRepository
+from backend.domain.repository_identity import repository_key as normalize_repository_key
 from backend.services.score_visibility import redact_report_content, visible_risk_score
 from backend.workers.scan_worker import run_asset_scan_task
 
@@ -20,7 +21,10 @@ class ScanService:
         """Create a scan in QUEUED state and dispatch to Celery worker."""
         scan = await self.repo.create_scan(
             asset_target=request.target,
+            repository_key=normalize_repository_key(request.target),
             asset_type=request.asset_type,
+            scan_scope=request.scan_scope,
+            include_readme=request.include_readme,
         )
 
         # Dispatch async task to Celery
@@ -29,6 +33,8 @@ class ScanService:
                 scan_id=scan.id,
                 target=request.target,
                 asset_type=request.asset_type,
+                scan_scope=request.scan_scope,
+                include_readme=request.include_readme,
             )
         except Exception:
             # Fallback to local synchronous/background execution if Celery broker is offline in dev
@@ -39,13 +45,18 @@ class ScanService:
                     scan_id=scan.id,
                     target=request.target,
                     asset_type=request.asset_type,
+                    scan_scope=request.scan_scope,
+                    include_readme=request.include_readme,
                 )
             )
 
         return ScanResponse(
             id=scan.id,
             asset_target=scan.asset_target,
+            repository_key=scan.repository_key,
             asset_type=scan.asset_type,
+            scan_scope=scan.scan_scope,
+            include_readme=scan.include_readme,
             status=scan.status,
             current_stage=scan.current_stage,
             created_at=scan.created_at,
@@ -115,9 +126,12 @@ class ScanService:
             id=scan.id,
             scan_id=scan.id,
             asset_target=scan.asset_target,
+            repository_key=scan.repository_key,
             target=scan.asset_target,
             display_target=display_target,
             asset_type=scan.asset_type,
+            scan_scope=scan.scan_scope,
+            include_readme=scan.include_readme,
             status=scan.status,
             current_stage=scan.current_stage,
             created_at=scan.created_at,
@@ -151,9 +165,19 @@ class ScanService:
         limit: int = 50,
         offset: int = 0,
         target: Optional[str] = None,
+        repository_key: Optional[str] = None,
+        scan_scope: Optional[str] = None,
+        include_readme: Optional[bool] = None,
     ) -> List[ScanListItemResponse]:
         """List historical scans."""
-        scans = await self.repo.list_scans(limit=limit, offset=offset, target=target)
+        scans = await self.repo.list_scans(
+            limit=limit,
+            offset=offset,
+            target=target,
+            repository_key=repository_key,
+            scan_scope=scan_scope,
+            include_readme=include_readme,
+        )
         items = []
         for scan in scans:
             duration_seconds = None
@@ -174,7 +198,10 @@ class ScanService:
             items.append(ScanListItemResponse(
                 id=scan.id,
                 asset_target=scan.asset_target,
+                repository_key=scan.repository_key,
                 asset_type=scan.asset_type,
+                scan_scope=scan.scan_scope,
+                include_readme=scan.include_readme,
                 status=scan.status,
                 current_stage=scan.current_stage,
                 created_at=scan.created_at,

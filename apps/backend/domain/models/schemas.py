@@ -1,7 +1,9 @@
 import re
 from datetime import datetime
-from typing import Any, Dict, List, Optional
-from pydantic import BaseModel, ConfigDict, Field
+from typing import Any, Dict, List, Literal, Optional
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+ScanScope = Literal["skill_files", "skill_folders", "repository"]
 
 class ScanCreateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -9,6 +11,14 @@ class ScanCreateRequest(BaseModel):
     target: str = Field(..., description="Target file path, git URL, or directory to scan")
     asset_type: str = Field(default="agent_skill", description="Type of asset (e.g. agent_skill, mcp_server)")
     tags: List[str] = Field(default_factory=list)
+    scan_scope: ScanScope = "skill_folders"
+    include_readme: bool = False
+
+    @model_validator(mode="after")
+    def validate_readme_scope(self) -> "ScanCreateRequest":
+        if self.scan_scope == "skill_files" and self.include_readme:
+            raise ValueError("include_readme is not applicable to skill_files scope")
+        return self
 
 class FindingLocation(BaseModel):
     file: str
@@ -102,6 +112,7 @@ class ScanResponse(BaseModel):
     id: str
     scan_id: Optional[str] = None
     asset_target: str
+    repository_key: str
     target: Optional[str] = None
     asset_type: str = "agent_skill"
     status: str
@@ -112,6 +123,8 @@ class ScanResponse(BaseModel):
     error_message: Optional[str] = None
     error: Optional[str] = None
     mode: str = "deterministic"
+    scan_scope: ScanScope = "skill_folders"
+    include_readme: bool = False
 
     def model_post_init(self, __context: Any) -> None:
         if not self.scan_id:

@@ -121,6 +121,8 @@
       ],
       "properties": {
         "risk_score": { "type": "integer", "minimum": 0, "maximum": 100 },
+        "vulnerability_score": { "type": "integer", "minimum": 0, "maximum": 100 },
+        "exposure_score": { "type": "number", "minimum": 0, "maximum": 100 },
         "severity": { "type": "string" },
         "recommendation": { "type": "string" },
         "safe_to_install": { "type": "boolean" },

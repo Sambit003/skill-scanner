@@ -17,7 +17,7 @@ def make_executable(tmp_path: Path, body: str) -> str:
 
 def success_payload() -> dict[str, object]:
     return {
-        "protocol_version": "1",
+        "protocol_version": "2",
         "ok": True,
         "result": {
             "kind": "scan",
@@ -31,6 +31,8 @@ def success_payload() -> dict[str, object]:
                 "findings_by_category": {"Security": 1},
                 "scanner_version": "test",
                 "scan_mode": "deterministic",
+                "scan_scope": "skill_folders",
+                "include_readme": False,
             },
             "findings": [{"id": "TEST-1"}],
             "reports": {
@@ -45,7 +47,11 @@ async def test_high_risk_result_is_not_treated_as_process_failure(tmp_path: Path
     payload = json.dumps(success_payload())
     executable = make_executable(
         tmp_path,
-        f"import sys\nsys.stdin.read()\nprint({payload!r})\n",
+        f"import json, sys\nrequest = json.loads(sys.stdin.read())\n"
+        "assert request['protocol_version'] == '2'\n"
+        "assert request['scan_scope'] == 'skill_folders'\n"
+        "assert request['include_readme'] is False\n"
+        f"print({payload!r})\n",
     )
 
     result = await ScannerClient(executable=executable, timeout_seconds=5).scan(
@@ -84,7 +90,7 @@ async def test_scanner_summary_accepts_evidence_gated_scores(tmp_path: Path) -> 
 async def test_nonzero_machine_error_is_reported(tmp_path: Path) -> None:
     payload = json.dumps(
         {
-            "protocol_version": "1",
+            "protocol_version": "2",
             "ok": False,
             "error": {"code": "SCAN_FAILED", "message": "fixture failure"},
         }
@@ -111,7 +117,7 @@ async def test_malformed_success_response_is_rejected(tmp_path: Path) -> None:
         "import sys\nsys.stdin.read()\nprint('{\"ok\": true}')\n",
     )
 
-    with pytest.raises(ScannerClientError, match="violated protocol v1"):
+    with pytest.raises(ScannerClientError, match="violated protocol v2"):
         await ScannerClient(executable=executable, timeout_seconds=5).scan(
             target="fixture",
             asset_type="agent_skill",
@@ -138,7 +144,7 @@ async def test_process_timeout_is_enforced(tmp_path: Path) -> None:
 async def test_rule_registry_uses_the_same_process_boundary(tmp_path: Path) -> None:
     payload = json.dumps(
         {
-            "protocol_version": "1",
+            "protocol_version": "2",
             "ok": True,
             "result": {
                 "kind": "rules",

@@ -12,6 +12,8 @@ async def _execute_scan_pipeline(
     scan_id: str,
     target: str,
     asset_type: str,
+    scan_scope: str,
+    include_readme: bool,
 ) -> None:
     """Async execution of the deterministic scan state machine."""
     async with WorkerAsyncSessionLocal() as session:
@@ -28,6 +30,8 @@ async def _execute_scan_pipeline(
             scan_result = await ScannerClient().scan(
                 target=target,
                 asset_type=asset_type,
+                scan_scope=scan_scope,
+                include_readme=include_readme,
                 output_formats=["json", "sarif", "markdown", "terminal"],
             )
 
@@ -69,6 +73,8 @@ def run_asset_scan_task(
     scan_id: str,
     target: str,
     asset_type: str = "agent_skill",
+    scan_scope: str = "skill_folders",
+    include_readme: bool = False,
 ) -> None:
     """Celery task entrypoint."""
     _run_coroutine_sync(
@@ -76,5 +82,7 @@ def run_asset_scan_task(
             scan_id=scan_id,
             target=target,
             asset_type=asset_type,
+            scan_scope=scan_scope,
+            include_readme=include_readme,
         )
     )

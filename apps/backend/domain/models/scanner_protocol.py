@@ -19,6 +19,8 @@ class ScannerSummary(BaseModel):
     findings_by_category: Dict[str, int]
     scanner_version: str
     scan_mode: str
+    scan_scope: Literal["skill_files", "skill_folders", "repository"]
+    include_readme: bool
 
 
 class ScannerReport(BaseModel):
@@ -72,6 +74,6 @@ ScannerProtocolResult = Annotated[
 class ScannerSuccessEnvelope(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    protocol_version: Literal["1"]
+    protocol_version: Literal["2"]
     ok: Literal[True]
     result: ScannerProtocolResult

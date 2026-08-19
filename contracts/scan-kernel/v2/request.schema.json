@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://superalign.ai/contracts/scan-kernel/v2/request.schema.json",
+  "title": "ScanKernel engine request v2",
+  "oneOf": [
+    { "$ref": "#/$defs/scan" },
+    { "$ref": "#/$defs/listRules" },
+    { "$ref": "#/$defs/getRule" }
+  ],
+  "$defs": {
+    "scan": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["operation", "protocol_version", "target", "asset_type", "output_formats", "timeout_seconds", "scan_scope", "include_readme"],
+      "properties": {
+        "operation": { "const": "scan" },
+        "protocol_version": { "const": "2" },
+        "target": { "type": "string", "minLength": 1 },
+        "asset_type": { "type": "string", "minLength": 1 },
+        "output_formats": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "enum": ["json", "markdown", "sarif", "terminal"] }
+        },
+        "timeout_seconds": { "type": "number", "exclusiveMinimum": 0, "maximum": 3600 },
+        "scan_scope": { "enum": ["skill_files", "skill_folders", "repository"] },
+        "include_readme": { "type": "boolean" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "scan_scope": { "const": "skill_files" } } },
+          "then": { "properties": { "include_readme": { "const": false } } }
+        }
+      ]
+    },
+    "listRules": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["operation", "protocol_version"],
+      "properties": { "operation": { "const": "list_rules" }, "protocol_version": { "const": "2" } }
+    },
+    "getRule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["operation", "protocol_version", "rule_id"],
+      "properties": {
+        "operation": { "const": "get_rule" },
+        "protocol_version": { "const": "2" },
+        "rule_id": { "type": "string", "minLength": 1 }
+      }
+    }
+  }
+}

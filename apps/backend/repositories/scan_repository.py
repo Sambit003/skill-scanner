@@ -10,11 +10,21 @@ class ScanRepository:
     def __init__(self, session: AsyncSession):
         self.session = session
 
-    async def create_scan(self, asset_target: str, asset_type: str) -> ScanModel:
+    async def create_scan(
+        self,
+        asset_target: str,
+        repository_key: str,
+        asset_type: str,
+        scan_scope: str,
+        include_readme: bool,
+    ) -> ScanModel:
         """Create a new scan record in QUEUED state."""
         scan = ScanModel(
             asset_target=asset_target,
+            repository_key=repository_key,
             asset_type=asset_type,
+            scan_scope=scan_scope,
+            include_readme=include_readme,
             status="QUEUED",
             current_stage="QUEUED",
         )
@@ -112,11 +122,20 @@ class ScanRepository:
         limit: int = 50,
         offset: int = 0,
         target: Optional[str] = None,
+        repository_key: Optional[str] = None,
+        scan_scope: Optional[str] = None,
+        include_readme: Optional[bool] = None,
     ) -> List[ScanModel]:
         """Fetch historical scans sorted by created_at desc."""
         query = select(ScanModel)
         if target:
             query = query.where(ScanModel.asset_target == target)
+        if repository_key:
+            query = query.where(ScanModel.repository_key == repository_key)
+        if scan_scope:
+            query = query.where(ScanModel.scan_scope == scan_scope)
+        if include_readme is not None:
+            query = query.where(ScanModel.include_readme == include_readme)
         result = await self.session.execute(
             query.order_by(desc(ScanModel.created_at)).limit(limit).offset(offset)
         )

@@ -15,6 +15,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import {
   ApiError,
+  SCAN_SCOPE_LABELS,
   getRule,
   getScan,
   getScanFindings,
@@ -371,8 +372,8 @@ export default function ScanDashboardPage() {
             <div className="grid grid-cols-2 gap-3 lg:col-span-4">
               <MetaTile label="Target" value={scan.display_target ?? scan.target} mono truncate />
               <MetaTile
-                label="Mode"
-                value={scan.scan_mode ?? scan.mode}
+                label="Scope"
+                value={`${SCAN_SCOPE_LABELS[scan.scan_scope]} · ${scan.include_readme ? "w/ README" : "w/o README"}`}
                 mono
               />
               <MetaTile

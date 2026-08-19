@@ -193,7 +193,7 @@ func renderReports(formats []string, summary model.Summary, findings []model.Fin
 		case "terminal":
 			content, contentType = renderTerminal(summary, findings), "text/plain; charset=utf-8"
 		case "sarif":
-			content, err = renderSARIF(findings)
+			content, err = renderSARIF(summary, findings)
 			contentType = "application/sarif+json"
 		default:
 			return nil, fmt.Errorf("unsupported output format %q", format)
@@ -213,7 +213,7 @@ func renderJSON(summary model.Summary, findings []model.Finding) string {
 
 func renderMarkdown(summary model.Summary, findings []model.Finding) string {
 	var output strings.Builder
-	fmt.Fprintf(&output, "# ScanKernel report\n\n**Risk:** %d/100 (%s)  \n**Recommendation:** %s  \n**Findings:** %d\n", summary.RiskScore, summary.Severity, summary.Recommendation, len(findings))
+	fmt.Fprintf(&output, "# ScanKernel report\n\n**Risk:** %d/100 (%s)  \n**Recommendation:** %s  \n**Scope:** %s  \n**README files:** %s  \n**Findings:** %d\n", summary.RiskScore, summary.Severity, summary.Recommendation, summary.ScanScope, readmeStatus(summary.IncludeReadme), len(findings))
 	for _, finding := range findings {
 		fmt.Fprintf(&output, "\n## %s — %s\n\n- Severity: %s\n- Location: `%s:%d`\n- Category: %s\n\n%s\n\nRemediation: %s\n", ruleID(finding), cleanText(finding.Pattern), finding.Severity, finding.Location.File, finding.Location.StartLine, finding.Category, cleanText(finding.Explanation), cleanText(finding.Remediation))
 	}
@@ -222,14 +222,14 @@ func renderMarkdown(summary model.Summary, findings []model.Finding) string {
 
 func renderTerminal(summary model.Summary, findings []model.Finding) string {
 	var output strings.Builder
-	fmt.Fprintf(&output, "ScanKernel: risk %d/100 %s — %s\n", summary.RiskScore, summary.Severity, summary.Recommendation)
+	fmt.Fprintf(&output, "ScanKernel: risk %d/100 %s — %s [%s, README %s]\n", summary.RiskScore, summary.Severity, summary.Recommendation, summary.ScanScope, readmeStatus(summary.IncludeReadme))
 	for _, finding := range findings {
 		fmt.Fprintf(&output, "%s %-8s %s:%d %s\n", ruleID(finding), finding.Severity, finding.Location.File, finding.Location.StartLine, cleanText(finding.Pattern))
 	}
 	return output.String()
 }
 
-func renderSARIF(findings []model.Finding) (string, error) {
+func renderSARIF(summary model.Summary, findings []model.Finding) (string, error) {
 	rules := map[string]map[string]any{}
 	results := make([]map[string]any, 0, len(findings))
 	for _, finding := range findings {
@@ -254,9 +254,24 @@ func renderSARIF(findings []model.Finding) (string, error) {
 	}
 	sort.Slice(ruleList, func(i, j int) bool { return fmt.Sprint(ruleList[i]["id"]) < fmt.Sprint(ruleList[j]["id"]) })
 	document := map[string]any{"version": "2.1.0", "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
-		"runs": []any{map[string]any{"tool": map[string]any{"driver": map[string]any{"name": "ScanKernel", "version": buildinfo.Version, "rules": ruleList}}, "results": results}}}
+		"runs": []any{map[string]any{
+			"tool":       map[string]any{"driver": map[string]any{"name": "ScanKernel", "version": buildinfo.Version, "rules": ruleList}},
+			"properties": map[string]any{"scan_scope": summary.ScanScope, "include_readme": readmeIncluded(summary.IncludeReadme)},
+			"results":    results,
+		}}}
 	raw, err := json.MarshalIndent(document, "", "  ")
 	return string(raw), err
+}
+
+func readmeStatus(include *bool) string {
+	if readmeIncluded(include) {
+		return "included"
+	}
+	return "excluded"
+}
+
+func readmeIncluded(include *bool) bool {
+	return include != nil && *include
 }
 
 func cleanText(value string) string {

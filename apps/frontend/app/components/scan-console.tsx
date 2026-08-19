@@ -3,7 +3,12 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { createScan, getScan, type ScanStatusResponse } from "@/app/lib/api";
+import {
+  createScan,
+  getScan,
+  type ScanScope,
+  type ScanStatusResponse,
+} from "@/app/lib/api";
 import { SHOW_RISK_SCORES } from "@/app/lib/score-visibility";
 import { RECOMMENDATION_STYLES, SEVERITY_STYLES, formatRecommendation } from "@/app/lib/severity";
 import { ReportDownloadMenu } from "@/app/components/report-download-menu";
@@ -17,6 +22,12 @@ import {
 type Phase = "idle" | "loading" | "done";
 
 const MAX_POLL_ATTEMPTS = 60;
+
+const SCAN_SCOPES: { value: ScanScope; label: string; description: string }[] = [
+  { value: "skill_files", label: "SKILL.md only", description: "Instructions only" },
+  { value: "skill_folders", label: "Skill folders", description: "Installed skill files" },
+  { value: "repository", label: "Whole repository", description: "All eligible files" },
+];
 
 function isLikelyValidTarget(value: string): boolean {
   try {
@@ -33,6 +44,8 @@ export function ScanConsole() {
   const [apiError, setApiError] = useState<string | null>(null);
   const [phase, setPhase] = useState<Phase>("idle");
   const [scanStatus, setScanStatus] = useState<ScanStatusResponse | null>(null);
+  const [scanScope, setScanScope] = useState<ScanScope>("skill_folders");
+  const [includeReadme, setIncludeReadme] = useState(false);
 
   const pollHandle = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pollAttempts = useRef(0);
@@ -94,7 +107,7 @@ export function ScanConsole() {
     setScanStatus(null);
     setPhase("loading");
     try {
-      const created = await createScan(target.trim());
+      const created = await createScan(target.trim(), scanScope, includeReadme);
       pollScan(created.scan_id);
     } catch (err) {
       setApiError(err instanceof Error ? err.message : "Couldn't start the scan.");
@@ -150,10 +163,63 @@ export function ScanConsole() {
           </p>
         )}
 
+        <fieldset className="mt-5">
+          <legend className="text-sm font-medium text-foreground">Scan scope</legend>
+          <div className="mt-2 grid gap-2 sm:grid-cols-3">
+            {SCAN_SCOPES.map((option) => {
+              const selected = scanScope === option.value;
+              return (
+                <label
+                  key={option.value}
+                  className={`cursor-pointer rounded-xl border px-3 py-3 transition-colors duration-150 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-accent/40 has-[:focus-visible]:ring-offset-2 ${
+                    selected
+                      ? "border-accent bg-accent/5 text-foreground"
+                      : "border-border text-muted-foreground hover:border-border-strong"
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="scan-scope"
+                    value={option.value}
+                    checked={selected}
+                    onChange={() => {
+                      setScanScope(option.value);
+                      if (option.value === "skill_files") setIncludeReadme(false);
+                    }}
+                    className="sr-only"
+                  />
+                  <span className="block text-sm font-medium">{option.label}</span>
+                  <span className="mt-1 block text-xs leading-4">{option.description}</span>
+                </label>
+              );
+            })}
+          </div>
+        </fieldset>
+
+        <label
+          className={`mt-4 flex items-start gap-3 rounded-xl border border-border px-4 py-3 ${
+            scanScope === "skill_files" ? "cursor-not-allowed opacity-55" : "cursor-pointer"
+          }`}
+        >
+          <input
+            type="checkbox"
+            checked={includeReadme}
+            disabled={scanScope === "skill_files"}
+            onChange={(event) => setIncludeReadme(event.target.checked)}
+            className="mt-0.5 h-4 w-4 accent-accent"
+          />
+          <span>
+            <span className="block text-sm font-medium text-foreground">Include README files</span>
+            <span className="mt-0.5 block text-xs leading-5 text-muted-foreground">
+              Off by default. Includes every README or README.* file inside the selected scope.
+            </span>
+          </span>
+        </label>
+
         <button
           type="submit"
           disabled={isLoading}
-          className="mt-6 flex w-full items-center justify-center gap-2 rounded-full bg-accent px-5 py-3 text-[15px] font-medium text-accent-foreground transition-colors duration-150 hover:bg-accent-hover focus:outline-none focus:ring-2 focus:ring-accent/40 focus:ring-offset-2 focus:ring-offset-card disabled:cursor-not-allowed disabled:opacity-70"
+          className="mt-5 flex w-full items-center justify-center gap-2 rounded-full bg-accent px-5 py-3 text-[15px] font-medium text-accent-foreground transition-colors duration-150 hover:bg-accent-hover focus:outline-none focus:ring-2 focus:ring-accent/40 focus:ring-offset-2 focus:ring-offset-card disabled:cursor-not-allowed disabled:opacity-70"
         >
           {isLoading ? (
             <>

@@ -17,7 +17,7 @@ code being scanned and does not send scan content to an LLM service.
 | `apps/frontend/` | Next.js scan dashboard |
 | `apps/backend/` | FastAPI API and Celery orchestration worker |
 | `packages/scan_kernel/` | Go 1.26.1 scanning engine and plugin build profiles |
-| `contracts/scan-kernel/v1/` | Language-neutral scanner process contract |
+| `contracts/scan-kernel/v1/`, `v2/` | Language-neutral scanner process contracts |
 | `docker-compose.yml` | Local PostgreSQL, Redis, API, worker, and frontend stack |
 
 [Moon](https://moonrepo.dev/) manages the monorepo task graph. pnpm manages the
@@ -47,7 +47,9 @@ curl -X POST http://localhost:8000/v1/scans \
   -H 'Content-Type: application/json' \
   -d '{
     "target": "https://github.com/mattpocock/skills",
-    "asset_type": "agent_skill"
+    "asset_type": "agent_skill",
+    "scan_scope": "skill_folders",
+    "include_readme": false
   }'
 ```
 
@@ -162,9 +164,14 @@ Examples:
 ./packages/scan_kernel/dist/dev/scan-kernel-engine \
   scan --type skill --format json --offline ./path/to/skill.zip
 
-# Scan a Git repository. Do not use --offline for remote targets.
+# Scan discovered skill folders in a Git repository. README files are excluded by default.
 ./packages/scan_kernel/dist/dev/scan-kernel-engine \
   scan --type skill --format json https://github.com/example/skills.git
+
+# Scan every eligible repository file and explicitly include README files.
+./packages/scan_kernel/dist/dev/scan-kernel-engine \
+  scan --type skill --scope repository --include-readme --format json \
+  https://github.com/example/skills.git
 
 # Use additional YARA rules with a native-YARA build.
 ./scan-kernel-engine \
@@ -325,14 +332,16 @@ JSON nulls, finding ordering, scanner version, and category/severity totals.
 ## Scanner process contract
 
 The API and worker never import scanner implementation modules. They communicate
-with `scan-kernel-engine` through protocol v1:
+with `scan-kernel-engine` through protocol v2:
 
 1. The worker starts the executable.
 2. It writes one JSON request to standard input.
 3. It reads one JSON response from standard output.
 4. Diagnostic logs are written to standard error.
 
-Protocol v1 supports `scan`, `list_rules`, and `get_rule`. Findings, including
+Protocol v2 adds explicit `scan_scope` and `include_readme` fields. Protocol v1
+remains available with its legacy whole-repository, README-included behavior.
+Both versions support `scan`, `list_rules`, and `get_rule`. Findings, including
 critical findings, are successful results. Invalid requests exit with status
 `2`; scanner execution failures exit with status `3`.
 

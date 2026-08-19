@@ -22,7 +22,11 @@ func (Plugin) Descriptor() model.PluginDescriptor {
 func (Plugin) Rules() []model.RuleDocument { return ruleDocuments() }
 
 func (Plugin) Scan(ctx context.Context, request model.ScanRequest) (model.ScanResult, error) {
-	prepared, err := prepare(ctx, request.Target, request.Offline)
+	scanScope := request.ScanScope
+	if scanScope == "" {
+		scanScope = model.ScanScopeSkillFolders
+	}
+	prepared, err := prepare(ctx, request.Target, request.Offline, scanScope, request.IncludeReadme)
 	if err != nil {
 		return model.ScanResult{}, err
 	}
@@ -30,7 +34,7 @@ func (Plugin) Scan(ctx context.Context, request model.ScanRequest) (model.ScanRe
 	if err := ctx.Err(); err != nil {
 		return model.ScanResult{}, err
 	}
-	findings, err := analyzeSourceAndManifest(ctx, prepared.Components, prepared.Manifest)
+	findings, err := analyzeSourceAndManifest(ctx, prepared.Components, map[string]any{})
 	if err != nil {
 		return model.ScanResult{}, err
 	}
@@ -38,7 +42,13 @@ func (Plugin) Scan(ctx context.Context, request model.ScanRequest) (model.ScanRe
 	if err := ctx.Err(); err != nil {
 		return model.ScanResult{}, err
 	}
-	findings = append(findings, analyzeTriggers(prepared.Manifest)...)
+	for _, skill := range prepared.Skills {
+		manifestFindings := analyzeMCPRugPull(nil, skill.Manifest)
+		manifestFindings = append(manifestFindings, analyzeMCPLeastPrivilege(skill.Components, skill.Manifest)...)
+		manifestFindings = append(manifestFindings, analyzeMCPToolPoisoning(skill.Manifest)...)
+		manifestFindings = append(manifestFindings, analyzeTriggers(skill.Manifest)...)
+		findings = append(findings, rebaseSkillFindings(manifestFindings, skill.Root)...)
+	}
 	yaraFindings, err := scanYARA(ctx, prepared.Components, request.YARARulesDir)
 	if err != nil {
 		return model.ScanResult{}, fmt.Errorf("YARA scan: %w", err)
@@ -57,9 +67,22 @@ func (Plugin) Scan(ctx context.Context, request model.ScanRequest) (model.ScanRe
 		formats[index] = strings.ToLower(formats[index])
 	}
 	summary := summarize(kept, prepared.Components)
+	summary.ScanScope = scanScope
+	includeReadme := request.IncludeReadme
+	summary.IncludeReadme = &includeReadme
 	reports, err := renderReports(formats, summary, kept)
 	if err != nil {
 		return model.ScanResult{}, err
 	}
 	return model.ScanResult{Kind: "scan", Summary: summary, Findings: kept, Reports: reports}, nil
+}
+
+func rebaseSkillFindings(findings []model.Finding, root string) []model.Finding {
+	if root == "." {
+		return findings
+	}
+	for index := range findings {
+		findings[index].Location.File = strings.TrimPrefix(root+"/"+findings[index].Location.File, "./")
+	}
+	return findings
 }

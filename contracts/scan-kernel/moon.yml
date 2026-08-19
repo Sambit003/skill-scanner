@@ -6,7 +6,7 @@ tasks:
     command: "uv run pytest -q tests"
     toolchains: "system"
     inputs:
-      - "v1/**/*.json"
+      - "v*/**/*.json"
       - "tests/**/*.py"
       - "/pyproject.toml"
       - "/uv.lock"

@@ -38,33 +38,37 @@ class ScannerClient:
         target: str,
         asset_type: str,
         output_formats: list[str],
+        scan_scope: str = "skill_folders",
+        include_readme: bool = False,
     ) -> ScannerResult:
         request: dict[str, Any] = {
             "operation": "scan",
-            "protocol_version": "1",
+            "protocol_version": "2",
             "target": target,
             "asset_type": asset_type,
             "output_formats": output_formats,
             "timeout_seconds": self.timeout_seconds,
+            "scan_scope": scan_scope,
+            "include_readme": include_readme,
         }
 
         result = await self._execute(request)
         if not isinstance(result, ScannerResult):
-            raise ScannerClientError("Scanner response violated protocol v1: expected scan result")
+            raise ScannerClientError("Scanner response violated protocol v2: expected scan result")
         return result
 
     async def list_rules(self) -> list[ScannerRuleDoc]:
-        result = await self._execute({"operation": "list_rules", "protocol_version": "1"})
+        result = await self._execute({"operation": "list_rules", "protocol_version": "2"})
         if not isinstance(result, ScannerRulesResult):
-            raise ScannerClientError("Scanner response violated protocol v1: expected rules result")
+            raise ScannerClientError("Scanner response violated protocol v2: expected rules result")
         return result.items
 
     async def get_rule(self, rule_id: str) -> ScannerRuleDoc:
         result = await self._execute(
-            {"operation": "get_rule", "protocol_version": "1", "rule_id": rule_id}
+            {"operation": "get_rule", "protocol_version": "2", "rule_id": rule_id}
         )
         if not isinstance(result, ScannerRuleResult):
-            raise ScannerClientError("Scanner response violated protocol v1: expected rule result")
+            raise ScannerClientError("Scanner response violated protocol v2: expected rule result")
         return result.rule
 
     async def _execute(self, request: dict[str, Any]) -> ScannerProtocolResult:
@@ -100,7 +104,7 @@ class ScannerClient:
             raise ScannerClientError(f"Scanner returned malformed JSON{detail}") from exc
 
         if not isinstance(payload, dict):
-            raise ScannerClientError("Scanner response violated protocol v1: expected a JSON object")
+            raise ScannerClientError("Scanner response violated protocol v2: expected a JSON object")
 
         if process.returncode != 0 or payload.get("ok") is not True:
             error = payload.get("error")
@@ -112,4 +116,4 @@ class ScannerClient:
         try:
             return ScannerSuccessEnvelope.model_validate(payload).result
         except ValidationError as exc:
-            raise ScannerClientError(f"Scanner response violated protocol v1: {exc}") from exc
+            raise ScannerClientError(f"Scanner response violated protocol v2: {exc}") from exc

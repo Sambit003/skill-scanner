@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import List, Literal, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from backend.api.dependencies.database import get_scan_service
 from backend.domain.models.schemas import (
@@ -34,10 +34,20 @@ async def list_scans(
     limit: int = Query(default=50, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
     target: Optional[str] = Query(default=None, description="Exact skill target to retrieve history for"),
+    repository_key: Optional[str] = Query(default=None, description="Normalized repository identity to retrieve history for"),
+    scan_scope: Optional[Literal["skill_files", "skill_folders", "repository"]] = Query(default=None),
+    include_readme: Optional[bool] = Query(default=None),
     service: ScanService = Depends(get_scan_service),
 ):
     """List historical asset scans."""
-    return await service.list_scans(limit=limit, offset=offset, target=target)
+    return await service.list_scans(
+        limit=limit,
+        offset=offset,
+        target=target,
+        repository_key=repository_key,
+        scan_scope=scan_scope,
+        include_readme=include_readme,
+    )
 
 @router.get("/{scan_id}", response_model=ScanDetailResponse)
 async def get_scan_by_id(
@@ -103,7 +113,12 @@ async def get_scan_reports_manifest(
         {"format": fmt, "url": f"/v1/scans/{scan_id}/reports/{fmt}"}
         for fmt in (scan.available_reports or ["json", "sarif", "markdown", "terminal"])
     ]
-    return {"scan_id": scan_id, "reports": reports}
+    return {
+        "scan_id": scan_id,
+        "scan_scope": scan.scan_scope,
+        "include_readme": scan.include_readme,
+        "reports": reports,
+    }
 
 
 @router.get("/{scan_id}/events")
@@ -144,6 +159,8 @@ async def get_scan_share_summary(
         "severity": scan.severity,
         "recommendation": "Review high-confidence findings before execution.",
         "target": scan.target,
+        "scan_scope": scan.scan_scope,
+        "include_readme": scan.include_readme,
         "findings_preview": scan.findings[:5] if scan.findings else [],
     }
 

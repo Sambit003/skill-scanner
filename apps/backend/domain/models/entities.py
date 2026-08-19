@@ -25,7 +25,10 @@ class ScanModel(Base):
 
     id = Column(String(36), primary_key=True, default=generate_uuid, index=True)
     asset_target = Column(String(512), nullable=False)
+    repository_key = Column(String(512), nullable=False, index=True)
     asset_type = Column(String(64), nullable=False, default="agent_skill", index=True)
+    scan_scope = Column(String(32), nullable=False, default="skill_folders", server_default="skill_folders", index=True)
+    include_readme = Column(Boolean, nullable=False, default=False, server_default="false")
     status = Column(String(32), nullable=False, default="QUEUED", index=True)
     
     # State tracking: QUEUED -> FETCHING -> DETER_SCAN -> COMPLETED / FAILED
