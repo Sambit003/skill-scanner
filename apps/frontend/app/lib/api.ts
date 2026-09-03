@@ -184,6 +184,14 @@ export async function getScan(scanId: string): Promise<ScanStatusResponse> {
   return requestJson<ScanStatusResponse>(`/v1/scans/${scanId}`);
 }
 
+export interface FrameworkRefs {
+  mapping_version: string;
+  owasp_agentic: string[];
+  owasp_llm: string[];
+  nist_gai_risks: string[];
+  nist_rmf: string[];
+}
+
 export interface FindingLocation {
   file: string;
   start_line: number;
@@ -208,6 +216,7 @@ export interface FindingResponse {
   intent: string | null;
   documentation_url: string | null;
   tags: string[];
+  frameworks?: FrameworkRefs | null;
 }
 
 export interface ScanFindingsResponse {
@@ -295,6 +304,7 @@ export interface RuleDocResponse {
   description: string;
   remediation: string;
   documentation_url: string;
+  frameworks?: FrameworkRefs | null;
 }
 
 export interface RuleListResponse {

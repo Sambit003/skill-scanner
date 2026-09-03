@@ -63,7 +63,7 @@
     "ruleDoc": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["rule_id", "rule_family", "title", "category", "description", "remediation", "documentation_url"],
+      "required": ["rule_id", "rule_family", "title", "category", "description", "remediation", "documentation_url", "frameworks"],
       "properties": {
         "rule_id": { "type": "string", "minLength": 1 },
         "rule_family": { "type": "string", "minLength": 1 },
@@ -71,7 +71,20 @@
         "category": { "type": "string", "minLength": 1 },
         "description": { "type": "string", "minLength": 1 },
         "remediation": { "type": "string", "minLength": 1 },
-        "documentation_url": { "type": "string", "minLength": 1 }
+        "documentation_url": { "type": "string", "minLength": 1 },
+        "frameworks": { "$ref": "#/$defs/frameworks" }
+      }
+    },
+    "frameworks": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mapping_version", "owasp_agentic", "owasp_llm", "nist_gai_risks", "nist_rmf"],
+      "properties": {
+        "mapping_version": { "type": "string", "minLength": 1 },
+        "owasp_agentic": { "type": "array", "items": { "type": "string", "pattern": "^AST(0[1-9]|10)$" } },
+        "owasp_llm": { "type": "array", "items": { "type": "string", "pattern": "^LLM(0[1-9]|10):2026$" } },
+        "nist_gai_risks": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "nist_rmf": { "type": "array", "items": { "type": "string", "pattern": "^(GOVERN|MAP|MEASURE|MANAGE) \\d+\\.\\d+$" } }
       }
     },
     "summary": {
@@ -112,7 +125,8 @@
             "start_line": { "type": "integer", "minimum": 1 },
             "end_line": { "type": ["integer", "null"], "minimum": 1 }
           }
-        }
+        },
+        "frameworks": { "$ref": "#/$defs/frameworks" }
       },
       "additionalProperties": true
     },

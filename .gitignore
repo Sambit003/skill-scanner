@@ -63,3 +63,4 @@ Desktop.ini
 *.swp
 *.swo
 *~
+/.moon/hooks/pre-commit

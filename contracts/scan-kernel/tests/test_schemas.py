@@ -72,15 +72,34 @@ def test_canonical_v2_scan_response_is_valid() -> None:
                     "severity": "LOW",
                     "recommendation": "SAFE",
                     "safe_to_install": True,
-                    "findings_count": 0,
-                    "findings_by_severity": {},
-                    "findings_by_category": {},
+                    "findings_count": 1,
+                    "findings_by_severity": {"MEDIUM": 1},
+                    "findings_by_category": {"Resource Management": 1},
                     "scanner_version": "test",
                     "scan_mode": "deterministic",
                     "scan_scope": "skill_folders",
                     "include_readme": False,
                 },
-                "findings": [],
+                "findings": [
+                    {
+                        "id": "EA4",
+                        "category": "Resource Management",
+                        "severity": "MEDIUM",
+                        "confidence": 0.8,
+                        "location": {
+                            "file": "SKILL.md",
+                            "start_line": 1,
+                            "end_line": None,
+                        },
+                        "frameworks": {
+                            "mapping_version": "2026.09-1",
+                            "owasp_agentic": ["AST03"],
+                            "owasp_llm": ["LLM03:2026", "LLM06:2026"],
+                            "nist_gai_risks": ["Information Security"],
+                            "nist_rmf": ["MEASURE 2.7"],
+                        },
+                    }
+                ],
                 "reports": {
                     "json": {"content": "{}", "content_type": "application/json"}
                 },
@@ -88,3 +107,35 @@ def test_canonical_v2_scan_response_is_valid() -> None:
         },
         _schema("response.schema.json", "v2"),
     )
+
+
+def test_canonical_v2_rules_response_is_valid() -> None:
+    jsonschema.validate(
+        {
+            "protocol_version": "2",
+            "ok": True,
+            "result": {
+                "kind": "rules",
+                "items": [
+                    {
+                        "rule_id": "EA4",
+                        "rule_family": "EA",
+                        "title": "Unbounded Resource Use",
+                        "category": "Resource Management",
+                        "description": "Unbounded loops without rate limits.",
+                        "remediation": "Add limits.",
+                        "documentation_url": "/v1/rules/EA4",
+                        "frameworks": {
+                            "mapping_version": "2026.09-1",
+                            "owasp_agentic": ["AST03"],
+                            "owasp_llm": ["LLM03:2026", "LLM06:2026"],
+                            "nist_gai_risks": ["Information Security"],
+                            "nist_rmf": ["MEASURE 2.7"],
+                        },
+                    }
+                ],
+            },
+        },
+        _schema("response.schema.json", "v2"),
+    )
+

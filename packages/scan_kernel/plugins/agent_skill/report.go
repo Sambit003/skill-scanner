@@ -211,11 +211,113 @@ func renderJSON(summary model.Summary, findings []model.Finding) string {
 	return string(raw)
 }
 
+var astTaxaNames = map[string]string{
+	"AST01": "Malicious Skills",
+	"AST02": "Supply Chain Compromise",
+	"AST03": "Over-Privileged Skills",
+	"AST04": "Insecure Metadata",
+	"AST05": "Untrusted External Instructions",
+	"AST06": "Weak Isolation",
+	"AST07": "Update Drift",
+	"AST08": "Poor Scanning",
+	"AST09": "No Governance",
+	"AST10": "Cross-Platform Reuse",
+}
+
+var llmTaxaNames = map[string]string{
+	"LLM01:2026": "Prompt Injection",
+	"LLM02:2026": "Sensitive Information Disclosure",
+	"LLM03:2026": "Excessive Agency",
+	"LLM04:2026": "Supply Chain",
+	"LLM05:2026": "Data & Model Poisoning",
+	"LLM06:2026": "Unbounded Consumption",
+	"LLM07:2026": "Misinformation",
+	"LLM08:2026": "Hidden Context Exposure",
+	"LLM09:2026": "Vector & Embedding Weaknesses",
+	"LLM10:2026": "Improper Output Handling",
+}
+
+var rmfTaxaNames = map[string]string{
+	"GOVERN 6.1":   "Third-Party Software & Data Risk Policies",
+	"MANAGE 3.1":   "Third-Party AI Risk Management",
+	"MAP 4.1":      "AI Harms & Impact Identification",
+	"MEASURE 2.7":  "AI Security & Resilience Evaluation",
+	"MEASURE 2.10": "AI Privacy Risk Evaluation",
+}
+
 func renderMarkdown(summary model.Summary, findings []model.Finding) string {
 	var output strings.Builder
 	fmt.Fprintf(&output, "# ScanKernel report\n\n**Risk:** %d/100 (%s)  \n**Recommendation:** %s  \n**Scope:** %s  \n**README files:** %s  \n**Findings:** %d\n", summary.RiskScore, summary.Severity, summary.Recommendation, summary.ScanScope, readmeStatus(summary.IncludeReadme), len(findings))
+
+	output.WriteString("\n## Compliance summary\n\n")
+	fmt.Fprintf(&output, "- **Mapping version:** %s\n", mappingVersion)
+	output.WriteString("- **Framework alignment:** Provides evidence toward OWASP Agentic Skills Top 10 (v1.0 2026 Edition), OWASP GenAI LLM Top 10 (2026), NIST AI 600-1, and NIST AI RMF 1.0.\n")
+	output.WriteString("- **Audit boundary:** Classification provides mechanism-level evidence toward security controls and does not constitute formal compliance or certification.\n\n")
+
+	output.WriteString("### OWASP LLM Top 10 (2026) category breakdown\n\n")
+	output.WriteString("| Category | CRITICAL | HIGH | MEDIUM | LOW | Total |\n")
+	output.WriteString("|---|---|---|---|---|---|\n")
+
+	llmCategories := []struct {
+		id    string
+		title string
+	}{
+		{"LLM01:2026", "Prompt Injection"},
+		{"LLM02:2026", "Sensitive Information Disclosure"},
+		{"LLM03:2026", "Excessive Agency"},
+		{"LLM04:2026", "Supply Chain"},
+		{"LLM05:2026", "Data & Model Poisoning"},
+		{"LLM06:2026", "Unbounded Consumption"},
+		{"LLM07:2026", "Misinformation"},
+		{"LLM08:2026", "Hidden Context Exposure"},
+		{"LLM09:2026", "Vector & Embedding Weaknesses"},
+		{"LLM10:2026", "Improper Output Handling"},
+	}
+
+	crossTab := map[string]map[string]int{}
+	for _, cat := range llmCategories {
+		crossTab[cat.id] = map[string]int{"CRITICAL": 0, "HIGH": 0, "MEDIUM": 0, "LOW": 0}
+	}
+
 	for _, finding := range findings {
-		fmt.Fprintf(&output, "\n## %s — %s\n\n- Severity: %s\n- Location: `%s:%d`\n- Category: %s\n\n%s\n\nRemediation: %s\n", ruleID(finding), cleanText(finding.Pattern), finding.Severity, finding.Location.File, finding.Location.StartLine, finding.Category, cleanText(finding.Explanation), cleanText(finding.Remediation))
+		sev := strings.ToUpper(finding.Severity)
+		for _, cat := range finding.Frameworks.OwaspLLM {
+			if counts, ok := crossTab[cat]; ok {
+				counts[sev]++
+			}
+		}
+	}
+
+	for _, cat := range llmCategories {
+		counts := crossTab[cat.id]
+		total := counts["CRITICAL"] + counts["HIGH"] + counts["MEDIUM"] + counts["LOW"]
+		fmt.Fprintf(&output, "| %s %s | %d | %d | %d | %d | %d |\n",
+			cat.id, cat.title, counts["CRITICAL"], counts["HIGH"], counts["MEDIUM"], counts["LOW"], total)
+	}
+
+	output.WriteString("\n### Static coverage status\n\n")
+	output.WriteString("- **Detections present (6/10):** LLM01, LLM02, LLM03, LLM04, LLM08, LLM10\n")
+	output.WriteString("- **Partial coverage (2/10):** LLM05 (persistent memory-store poisoning only; model training/fine-tuning out of static scope), LLM06 (static loop/resource markers only; runtime rate/cost testing out of static scope)\n")
+	output.WriteString("- **Not covered (2/10):** LLM07 (content quality/misinformation is runtime-only), LLM09 (vector/embedding weaknesses require vector database analysis)\n")
+
+	for _, finding := range findings {
+		fmt.Fprintf(&output, "\n## %s — %s\n\n- Severity: %s\n- Location: `%s:%d`\n- Category: %s\n",
+			ruleID(finding), cleanText(finding.Pattern), finding.Severity, finding.Location.File, finding.Location.StartLine, finding.Category)
+
+		if len(finding.Frameworks.OwaspAgentic) > 0 {
+			fmt.Fprintf(&output, "- OWASP Agentic Skills: %s\n", strings.Join(finding.Frameworks.OwaspAgentic, ", "))
+		}
+		if len(finding.Frameworks.OwaspLLM) > 0 {
+			fmt.Fprintf(&output, "- OWASP GenAI LLM (2026): %s\n", strings.Join(finding.Frameworks.OwaspLLM, ", "))
+		}
+		if len(finding.Frameworks.NistGaiRisks) > 0 {
+			fmt.Fprintf(&output, "- NIST AI 600-1 Risks: %s\n", strings.Join(finding.Frameworks.NistGaiRisks, ", "))
+		}
+		if len(finding.Frameworks.NistRmf) > 0 {
+			fmt.Fprintf(&output, "- NIST AI RMF Controls: %s\n", strings.Join(finding.Frameworks.NistRmf, ", "))
+		}
+
+		fmt.Fprintf(&output, "\n%s\n\nRemediation: %s\n", cleanText(finding.Explanation), cleanText(finding.Remediation))
 	}
 	return output.String()
 }
@@ -232,9 +334,82 @@ func renderTerminal(summary model.Summary, findings []model.Finding) string {
 func renderSARIF(summary model.Summary, findings []model.Finding) (string, error) {
 	rules := map[string]map[string]any{}
 	results := make([]map[string]any, 0, len(findings))
+
+	astTaxaUsed := map[string]bool{}
+	llmTaxaUsed := map[string]bool{}
+	rmfTaxaUsed := map[string]bool{}
+	gaiTaxaUsed := map[string]bool{}
+
 	for _, finding := range findings {
 		id := ruleID(finding)
-		rules[id] = map[string]any{"id": id, "name": finding.Pattern, "shortDescription": map[string]string{"text": finding.Explanation}}
+		fw := finding.Frameworks
+		fw.Normalize()
+
+		var relationships []map[string]any
+		tagSet := map[string]bool{}
+
+		for _, ast := range fw.OwaspAgentic {
+			astTaxaUsed[ast] = true
+			tagSet[ast] = true
+			relationships = append(relationships, map[string]any{
+				"target": map[string]any{
+					"id":            ast,
+					"toolComponent": map[string]any{"name": "OWASP Agentic Skills Top 10"},
+				},
+				"kinds": []string{"relevant"},
+			})
+		}
+		for _, llm := range fw.OwaspLLM {
+			llmTaxaUsed[llm] = true
+			tagSet[llm] = true
+			relationships = append(relationships, map[string]any{
+				"target": map[string]any{
+					"id":            llm,
+					"toolComponent": map[string]any{"name": "OWASP GenAI LLM Top 10"},
+				},
+				"kinds": []string{"relevant"},
+			})
+		}
+		for _, rmf := range fw.NistRmf {
+			rmfTaxaUsed[rmf] = true
+			tagSet[rmf] = true
+			relationships = append(relationships, map[string]any{
+				"target": map[string]any{
+					"id":            rmf,
+					"toolComponent": map[string]any{"name": "NIST AI RMF"},
+				},
+				"kinds": []string{"relevant"},
+			})
+		}
+		for _, gai := range fw.NistGaiRisks {
+			gaiTaxaUsed[gai] = true
+			tagSet[gai] = true
+			relationships = append(relationships, map[string]any{
+				"target": map[string]any{
+					"id":            gai,
+					"toolComponent": map[string]any{"name": "NIST AI 600-1"},
+				},
+				"kinds": []string{"relevant"},
+			})
+		}
+
+		var tags []string
+		for t := range tagSet {
+			tags = append(tags, t)
+		}
+		sort.Strings(tags)
+
+		ruleEntry := map[string]any{
+			"id":               id,
+			"name":             finding.Pattern,
+			"shortDescription": map[string]string{"text": finding.Explanation},
+			"properties":       map[string]any{"tags": tags},
+		}
+		if len(relationships) > 0 {
+			ruleEntry["relationships"] = relationships
+		}
+		rules[id] = ruleEntry
+
 		level := "note"
 		if finding.Severity == "HIGH" || finding.Severity == "CRITICAL" {
 			level = "error"
@@ -245,20 +420,86 @@ func renderSARIF(summary model.Summary, findings []model.Finding) (string, error
 		if finding.Location.EndLine != nil {
 			region["endLine"] = *finding.Location.EndLine
 		}
-		results = append(results, map[string]any{"ruleId": id, "level": level, "message": map[string]string{"text": cleanText(finding.Explanation)},
-			"locations": []any{map[string]any{"physicalLocation": map[string]any{"artifactLocation": map[string]string{"uri": finding.Location.File}, "region": region}}}})
+		results = append(results, map[string]any{
+			"ruleId": id, "level": level,
+			"message": map[string]string{"text": cleanText(finding.Explanation)},
+			"locations": []any{map[string]any{
+				"physicalLocation": map[string]any{
+					"artifactLocation": map[string]string{"uri": finding.Location.File},
+					"region":           region,
+				},
+			}},
+		})
 	}
+
 	ruleList := make([]map[string]any, 0, len(rules))
 	for _, rule := range rules {
 		ruleList = append(ruleList, rule)
 	}
 	sort.Slice(ruleList, func(i, j int) bool { return fmt.Sprint(ruleList[i]["id"]) < fmt.Sprint(ruleList[j]["id"]) })
-	document := map[string]any{"version": "2.1.0", "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
+
+	buildTaxa := func(used map[string]bool, nameMap map[string]string) []map[string]any {
+		var ids []string
+		for id := range used {
+			ids = append(ids, id)
+		}
+		sort.Strings(ids)
+		out := make([]map[string]any, 0, len(ids))
+		for _, id := range ids {
+			name := id
+			if nameMap != nil && nameMap[id] != "" {
+				name = nameMap[id]
+			}
+			out = append(out, map[string]any{"id": id, "name": name})
+		}
+		return out
+	}
+
+	taxonomies := []map[string]any{
+		{
+			"name":       "OWASP Agentic Skills Top 10",
+			"version":    "1.0 (2026 Edition)",
+			"properties": map[string]any{"snapshot_date": "2026-08-03"},
+			"taxa":       buildTaxa(astTaxaUsed, astTaxaNames),
+		},
+		{
+			"name":    "OWASP GenAI LLM Top 10",
+			"version": "2026",
+			"taxa":    buildTaxa(llmTaxaUsed, llmTaxaNames),
+		},
+		{
+			"name":    "NIST AI RMF",
+			"version": "1.0",
+			"taxa":    buildTaxa(rmfTaxaUsed, rmfTaxaNames),
+		},
+		{
+			"name":    "NIST AI 600-1",
+			"version": "1.0",
+			"taxa":    buildTaxa(gaiTaxaUsed, nil),
+		},
+	}
+
+	document := map[string]any{
+		"version": "2.1.0",
+		"$schema": "https://json.schemastore.org/sarif-2.1.0.json",
 		"runs": []any{map[string]any{
-			"tool":       map[string]any{"driver": map[string]any{"name": "ScanKernel", "version": buildinfo.Version, "rules": ruleList}},
-			"properties": map[string]any{"scan_scope": summary.ScanScope, "include_readme": readmeIncluded(summary.IncludeReadme)},
-			"results":    results,
-		}}}
+			"tool": map[string]any{
+				"driver": map[string]any{
+					"name":    "ScanKernel",
+					"version": buildinfo.Version,
+					"rules":   ruleList,
+				},
+			},
+			"taxonomies": taxonomies,
+			"properties": map[string]any{
+				"scan_scope":          summary.ScanScope,
+				"include_readme":      readmeIncluded(summary.IncludeReadme),
+				"mapping_version":     mappingVersion,
+				"framework_hierarchy": "Primary: OWASP Agentic Skills Top 10 (v1.0 2026 Edition); Mechanism: OWASP GenAI LLM Top 10 (2026); Alignment: NIST AI 600-1 & NIST AI RMF 1.0",
+			},
+			"results": results,
+		}},
+	}
 	raw, err := json.MarshalIndent(document, "", "  ")
 	return string(raw), err
 }

@@ -33,3 +33,36 @@ async def test_scanner_failure_is_reported_as_bad_gateway() -> None:
 
     assert exc_info.value.status_code == 502
     assert exc_info.value.detail == "Scanner engine could not provide rule metadata"
+
+
+class SuccessfulRuleClient:
+    async def get_rule(self, rule_id: str):
+        from backend.domain.models.scanner_protocol import ScannerFrameworkRefs, ScannerRuleDoc
+
+        return ScannerRuleDoc(
+            rule_id="EA4",
+            rule_family="EA",
+            title="Unbounded Resource Access",
+            category="Resource Management",
+            description="Unbounded loops.",
+            remediation="Add rate limits.",
+            documentation_url="/v1/rules/EA4",
+            frameworks=ScannerFrameworkRefs(
+                mapping_version="2026.09-1",
+                owasp_agentic=["AST03"],
+                owasp_llm=["LLM03:2026", "LLM06:2026"],
+                nist_gai_risks=["Information Security"],
+                nist_rmf=["MEASURE 2.7"],
+            ),
+        )
+
+
+@pytest.mark.asyncio
+async def test_get_rule_returns_frameworks() -> None:
+    doc = await get_rule("EA4", client=SuccessfulRuleClient())
+    assert doc.rule_id == "EA4"
+    assert doc.frameworks is not None
+    assert doc.frameworks.mapping_version == "2026.09-1"
+    assert doc.frameworks.owasp_llm == ["LLM03:2026", "LLM06:2026"]
+    assert doc.frameworks.nist_rmf == ["MEASURE 2.7"]
+

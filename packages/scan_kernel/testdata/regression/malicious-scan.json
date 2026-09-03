@@ -47,7 +47,23 @@
       "intent": null,
       "tags": [
         "Prompt Injection"
-      ]
+      ],
+      "frameworks": {
+        "mapping_version": "2026.09-1",
+        "owasp_agentic": [
+          "AST01",
+          "AST04"
+        ],
+        "owasp_llm": [
+          "LLM01:2026"
+        ],
+        "nist_gai_risks": [
+          "Information Security"
+        ],
+        "nist_rmf": [
+          "MEASURE 2.7"
+        ]
+      }
     },
     {
       "id": "P1",
@@ -67,7 +83,23 @@
       "intent": null,
       "tags": [
         "Prompt Injection"
-      ]
+      ],
+      "frameworks": {
+        "mapping_version": "2026.09-1",
+        "owasp_agentic": [
+          "AST01",
+          "AST04"
+        ],
+        "owasp_llm": [
+          "LLM01:2026"
+        ],
+        "nist_gai_risks": [
+          "Information Security"
+        ],
+        "nist_rmf": [
+          "MEASURE 2.7"
+        ]
+      }
     },
     {
       "id": "E1",
@@ -87,7 +119,25 @@
       "intent": null,
       "tags": [
         "Data Exfiltration"
-      ]
+      ],
+      "frameworks": {
+        "mapping_version": "2026.09-1",
+        "owasp_agentic": [
+          "AST01",
+          "AST03"
+        ],
+        "owasp_llm": [
+          "LLM02:2026"
+        ],
+        "nist_gai_risks": [
+          "Data Privacy",
+          "Information Security"
+        ],
+        "nist_rmf": [
+          "MEASURE 2.10",
+          "MEASURE 2.7"
+        ]
+      }
     },
     {
       "id": "E1",
@@ -107,7 +157,25 @@
       "intent": null,
       "tags": [
         "Data Exfiltration"
-      ]
+      ],
+      "frameworks": {
+        "mapping_version": "2026.09-1",
+        "owasp_agentic": [
+          "AST01",
+          "AST03"
+        ],
+        "owasp_llm": [
+          "LLM02:2026"
+        ],
+        "nist_gai_risks": [
+          "Data Privacy",
+          "Information Security"
+        ],
+        "nist_rmf": [
+          "MEASURE 2.10",
+          "MEASURE 2.7"
+        ]
+      }
     },
     {
       "id": "E2",
@@ -127,7 +195,25 @@
       "intent": null,
       "tags": [
         "Data Exfiltration"
-      ]
+      ],
+      "frameworks": {
+        "mapping_version": "2026.09-1",
+        "owasp_agentic": [
+          "AST01",
+          "AST03"
+        ],
+        "owasp_llm": [
+          "LLM02:2026"
+        ],
+        "nist_gai_risks": [
+          "Data Privacy",
+          "Information Security"
+        ],
+        "nist_rmf": [
+          "MEASURE 2.10",
+          "MEASURE 2.7"
+        ]
+      }
     },
     {
       "id": "EA2",
@@ -147,7 +233,20 @@
       "intent": null,
       "tags": [
         "Excessive Agency"
-      ]
+      ],
+      "frameworks": {
+        "mapping_version": "2026.09-1",
+        "owasp_agentic": [
+          "AST03"
+        ],
+        "owasp_llm": [
+          "LLM03:2026"
+        ],
+        "nist_gai_risks": [
+          "Information Security"
+        ],
+        "nist_rmf": []
+      }
     },
     {
       "id": "TM1",
@@ -167,7 +266,22 @@
       "intent": null,
       "tags": [
         "Tool Misuse"
-      ]
+      ],
+      "frameworks": {
+        "mapping_version": "2026.09-1",
+        "owasp_agentic": [
+          "AST03",
+          "AST04",
+          "AST06"
+        ],
+        "owasp_llm": [
+          "LLM03:2026"
+        ],
+        "nist_gai_risks": [
+          "Information Security"
+        ],
+        "nist_rmf": []
+      }
     },
     {
       "id": "RA1",
@@ -187,7 +301,20 @@
       "intent": null,
       "tags": [
         "Rogue Agent"
-      ]
+      ],
+      "frameworks": {
+        "mapping_version": "2026.09-1",
+        "owasp_agentic": [
+          "AST01"
+        ],
+        "owasp_llm": [
+          "LLM03:2026"
+        ],
+        "nist_gai_risks": [
+          "Information Security"
+        ],
+        "nist_rmf": []
+      }
     },
     {
       "id": "YR4",
@@ -207,7 +334,29 @@
       "intent": null,
       "tags": [
         "YARA Match"
-      ]
+      ],
+      "frameworks": {
+        "mapping_version": "2026.09-1",
+        "owasp_agentic": [
+          "AST01",
+          "AST02",
+          "AST04",
+          "AST08"
+        ],
+        "owasp_llm": [
+          "LLM04:2026"
+        ],
+        "nist_gai_risks": [
+          "Information Security",
+          "Value Chain and Component Integration"
+        ],
+        "nist_rmf": [
+          "GOVERN 6.1",
+          "MANAGE 3.1",
+          "MAP 4.1",
+          "MEASURE 2.7"
+        ]
+      }
     },
     {
       "id": "YR4",
@@ -227,7 +376,29 @@
       "intent": null,
       "tags": [
         "YARA Match"
-      ]
+      ],
+      "frameworks": {
+        "mapping_version": "2026.09-1",
+        "owasp_agentic": [
+          "AST01",
+          "AST02",
+          "AST04",
+          "AST08"
+        ],
+        "owasp_llm": [
+          "LLM04:2026"
+        ],
+        "nist_gai_risks": [
+          "Information Security",
+          "Value Chain and Component Integration"
+        ],
+        "nist_rmf": [
+          "GOVERN 6.1",
+          "MANAGE 3.1",
+          "MAP 4.1",
+          "MEASURE 2.7"
+        ]
+      }
     },
     {
       "id": "AST2",
@@ -247,7 +418,21 @@
       "intent": null,
       "tags": [
         "Dangerous Code Execution"
-      ]
+      ],
+      "frameworks": {
+        "mapping_version": "2026.09-1",
+        "owasp_agentic": [
+          "AST01",
+          "AST08"
+        ],
+        "owasp_llm": [
+          "LLM10:2026"
+        ],
+        "nist_gai_risks": [
+          "Information Security"
+        ],
+        "nist_rmf": []
+      }
     },
     {
       "id": "AST4",
@@ -267,12 +452,26 @@
       "intent": null,
       "tags": [
         "Dangerous Code Execution"
-      ]
+      ],
+      "frameworks": {
+        "mapping_version": "2026.09-1",
+        "owasp_agentic": [
+          "AST01",
+          "AST08"
+        ],
+        "owasp_llm": [
+          "LLM10:2026"
+        ],
+        "nist_gai_risks": [
+          "Information Security"
+        ],
+        "nist_rmf": []
+      }
     },
     {
       "id": "TT3",
       "category": "Data Flow",
-      "pattern": "Tainted flow: 'secret' from os.environ.get (line 8, credential/environment) → requests.post (network output)",
+      "pattern": "Tainted flow: 'secret' from os.environ.get (line 8, credential/environment) \u2192 requests.post (network output)",
       "severity": "CRITICAL",
       "confidence": 0.9,
       "location": {
@@ -287,7 +486,26 @@
       "intent": null,
       "tags": [
         "Data Flow"
-      ]
+      ],
+      "frameworks": {
+        "mapping_version": "2026.09-1",
+        "owasp_agentic": [
+          "AST01",
+          "AST03",
+          "AST08"
+        ],
+        "owasp_llm": [
+          "LLM02:2026"
+        ],
+        "nist_gai_risks": [
+          "Data Privacy",
+          "Information Security"
+        ],
+        "nist_rmf": [
+          "MEASURE 2.10",
+          "MEASURE 2.7"
+        ]
+      }
     },
     {
       "id": "LP3",
@@ -307,7 +525,22 @@
       "intent": null,
       "tags": [
         "ASI02"
-      ]
+      ],
+      "frameworks": {
+        "mapping_version": "2026.09-1",
+        "owasp_agentic": [
+          "AST03",
+          "AST04",
+          "AST10"
+        ],
+        "owasp_llm": [
+          "LLM03:2026"
+        ],
+        "nist_gai_risks": [
+          "Information Security"
+        ],
+        "nist_rmf": []
+      }
     }
   ]
 }
