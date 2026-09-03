@@ -1,6 +1,7 @@
 # Distribution / packaging
 dist/
 build/*
+!build/linux-static.Dockerfile
 !build/profiles/
 build/profiles/*
 !build/profiles/*.env

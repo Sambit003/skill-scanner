@@ -1,9 +1,16 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from typing import List
+from typing import List, Optional
 from pydantic import BaseModel
 from backend.services.scanner_client import ScannerClient, ScannerClientError
 
 router = APIRouter(prefix="/rules", tags=["Rules"])
+
+class FrameworkRefsResponse(BaseModel):
+    mapping_version: str
+    owasp_agentic: List[str]
+    owasp_llm: List[str]
+    nist_gai_risks: List[str]
+    nist_rmf: List[str]
 
 class RuleDocResponse(BaseModel):
     rule_id: str
@@ -13,6 +20,8 @@ class RuleDocResponse(BaseModel):
     description: str
     remediation: str
     documentation_url: str
+    frameworks: Optional[FrameworkRefsResponse] = None
+
 
 class RuleListResponse(BaseModel):
     items: List[RuleDocResponse]

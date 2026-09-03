@@ -20,6 +20,13 @@ class ScanCreateRequest(BaseModel):
             raise ValueError("include_readme is not applicable to skill_files scope")
         return self
 
+class FrameworkRefs(BaseModel):
+    mapping_version: str
+    owasp_agentic: List[str] = Field(default_factory=list)
+    owasp_llm: List[str] = Field(default_factory=list)
+    nist_gai_risks: List[str] = Field(default_factory=list)
+    nist_rmf: List[str] = Field(default_factory=list)
+
 class FindingLocation(BaseModel):
     file: str
     start_line: int
@@ -50,6 +57,7 @@ class FindingResponse(BaseModel):
     intent: Optional[str] = None
     documentation_url: Optional[str] = None
     tags: List[str] = Field(default_factory=list)
+    frameworks: Optional[FrameworkRefs] = None
     extra_metadata: Optional[Dict[str, Any]] = None
 
     def model_post_init(self, __context: Any) -> None:
@@ -81,6 +89,13 @@ class FindingResponse(BaseModel):
                 self.code_snippet = self.extra_metadata.get("code_snippet")
             if not self.finding and self.extra_metadata.get("finding"):
                 self.finding = self.extra_metadata.get("finding")
+            if not self.frameworks and self.extra_metadata.get("frameworks"):
+                metadata_frameworks = self.extra_metadata.get("frameworks")
+                if isinstance(metadata_frameworks, dict):
+                    try:
+                        self.frameworks = FrameworkRefs(**metadata_frameworks)
+                    except Exception:
+                        self.frameworks = None
         if not self.rule_family:
             match = re.match(r"[A-Za-z]+", self.rule_id or "")
             self.rule_family = match.group(0).upper() if match else None

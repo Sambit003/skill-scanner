@@ -34,20 +34,44 @@ type Location struct {
 	EndLine   *int   `json:"end_line"`
 }
 
+type FrameworkMappings struct {
+	MappingVersion string   `json:"mapping_version"`
+	OwaspAgentic   []string `json:"owasp_agentic"`
+	OwaspLLM       []string `json:"owasp_llm"`
+	NistGaiRisks   []string `json:"nist_gai_risks"`
+	NistRmf        []string `json:"nist_rmf"`
+}
+
+func (fm *FrameworkMappings) Normalize() {
+	if fm.OwaspAgentic == nil {
+		fm.OwaspAgentic = []string{}
+	}
+	if fm.OwaspLLM == nil {
+		fm.OwaspLLM = []string{}
+	}
+	if fm.NistGaiRisks == nil {
+		fm.NistGaiRisks = []string{}
+	}
+	if fm.NistRmf == nil {
+		fm.NistRmf = []string{}
+	}
+}
+
 type Finding struct {
-	ID          string   `json:"id"`
-	Category    string   `json:"category"`
-	Pattern     string   `json:"pattern,omitempty"`
-	Severity    string   `json:"severity"`
-	Confidence  float64  `json:"confidence"`
-	Location    Location `json:"location"`
-	Finding     string   `json:"finding,omitempty"`
-	MatchedText string   `json:"-"`
-	Explanation string   `json:"explanation,omitempty"`
-	Remediation string   `json:"remediation,omitempty"`
-	CodeSnippet string   `json:"code_snippet,omitempty"`
-	Intent      string   `json:"intent,omitempty"`
-	Tags        []string `json:"tags,omitempty"`
+	ID          string            `json:"id"`
+	Category    string            `json:"category"`
+	Pattern     string            `json:"pattern,omitempty"`
+	Severity    string            `json:"severity"`
+	Confidence  float64           `json:"confidence"`
+	Location    Location          `json:"location"`
+	Finding     string            `json:"finding,omitempty"`
+	MatchedText string            `json:"-"`
+	Explanation string            `json:"explanation,omitempty"`
+	Remediation string            `json:"remediation,omitempty"`
+	CodeSnippet string            `json:"code_snippet,omitempty"`
+	Intent      string            `json:"intent,omitempty"`
+	Tags        []string          `json:"tags,omitempty"`
+	Frameworks  FrameworkMappings `json:"frameworks"`
 }
 
 // MarshalJSON preserves the scanner's stable finding wire shape. Empty
@@ -59,25 +83,29 @@ func (finding Finding) MarshalJSON() ([]byte, error) {
 	if tags == nil {
 		tags = []string{}
 	}
+	frameworks := finding.Frameworks
+	frameworks.Normalize()
 	type findingJSON struct {
-		ID          string   `json:"id"`
-		Category    string   `json:"category"`
-		Pattern     *string  `json:"pattern"`
-		Severity    string   `json:"severity"`
-		Confidence  float64  `json:"confidence"`
-		Location    Location `json:"location"`
-		Finding     *string  `json:"finding"`
-		Explanation *string  `json:"explanation"`
-		Remediation *string  `json:"remediation"`
-		CodeSnippet *string  `json:"code_snippet"`
-		Intent      *string  `json:"intent"`
-		Tags        []string `json:"tags"`
+		ID          string            `json:"id"`
+		Category    string            `json:"category"`
+		Pattern     *string           `json:"pattern"`
+		Severity    string            `json:"severity"`
+		Confidence  float64           `json:"confidence"`
+		Location    Location          `json:"location"`
+		Finding     *string           `json:"finding"`
+		Explanation *string           `json:"explanation"`
+		Remediation *string           `json:"remediation"`
+		CodeSnippet *string           `json:"code_snippet"`
+		Intent      *string           `json:"intent"`
+		Tags        []string          `json:"tags"`
+		Frameworks  FrameworkMappings `json:"frameworks"`
 	}
 	return json.Marshal(findingJSON{
 		ID: finding.ID, Category: finding.Category, Pattern: optionalString(finding.Pattern), Severity: finding.Severity,
 		Confidence: finding.Confidence, Location: finding.Location, Finding: optionalString(finding.Finding),
 		Explanation: optionalString(finding.Explanation), Remediation: optionalString(finding.Remediation),
 		CodeSnippet: optionalString(finding.CodeSnippet), Intent: optionalString(finding.Intent), Tags: tags,
+		Frameworks: frameworks,
 	})
 }
 
@@ -117,13 +145,14 @@ type ScanResult struct {
 }
 
 type RuleDocument struct {
-	RuleID           string `json:"rule_id"`
-	RuleFamily       string `json:"rule_family"`
-	Title            string `json:"title"`
-	Category         string `json:"category"`
-	Description      string `json:"description"`
-	Remediation      string `json:"remediation"`
-	DocumentationURL string `json:"documentation_url"`
+	RuleID           string            `json:"rule_id"`
+	RuleFamily       string            `json:"rule_family"`
+	Title            string            `json:"title"`
+	Category         string            `json:"category"`
+	Description      string            `json:"description"`
+	Remediation      string            `json:"remediation"`
+	DocumentationURL string            `json:"documentation_url"`
+	Frameworks       FrameworkMappings `json:"frameworks"`
 }
 
 type PluginDescriptor struct {

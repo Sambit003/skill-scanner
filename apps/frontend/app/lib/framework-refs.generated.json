@@ -1,0 +1,482 @@
+{
+  "mapping_version": "2026.09-1",
+  "families": {
+    "AR": {
+      "owasp_agentic": [
+        "AST01"
+      ],
+      "owasp_llm": [
+        "LLM01:2026"
+      ],
+      "nist_gai_risks": [
+        "Information Security"
+      ],
+      "nist_rmf": [
+        "MEASURE 2.7"
+      ]
+    },
+    "AS": {
+      "owasp_agentic": [
+        "AST01",
+        "AST03"
+      ],
+      "owasp_llm": [
+        "LLM02:2026"
+      ],
+      "nist_gai_risks": [
+        "Data Privacy",
+        "Information Security"
+      ],
+      "nist_rmf": [
+        "MEASURE 2.10",
+        "MEASURE 2.7"
+      ]
+    },
+    "AST": {
+      "owasp_agentic": [
+        "AST01",
+        "AST08"
+      ],
+      "owasp_llm": [
+        "LLM10:2026"
+      ],
+      "nist_gai_risks": [
+        "Information Security"
+      ],
+      "nist_rmf": []
+    },
+    "E": {
+      "owasp_agentic": [
+        "AST01",
+        "AST03"
+      ],
+      "owasp_llm": [
+        "LLM02:2026"
+      ],
+      "nist_gai_risks": [
+        "Data Privacy",
+        "Information Security"
+      ],
+      "nist_rmf": [
+        "MEASURE 2.10",
+        "MEASURE 2.7"
+      ]
+    },
+    "EA": {
+      "owasp_agentic": [
+        "AST03"
+      ],
+      "owasp_llm": [
+        "LLM03:2026"
+      ],
+      "nist_gai_risks": [
+        "Information Security"
+      ],
+      "nist_rmf": []
+    },
+    "LP": {
+      "owasp_agentic": [
+        "AST03",
+        "AST04",
+        "AST10"
+      ],
+      "owasp_llm": [
+        "LLM03:2026"
+      ],
+      "nist_gai_risks": [
+        "Information Security"
+      ],
+      "nist_rmf": []
+    },
+    "MP": {
+      "owasp_agentic": [
+        "AST01",
+        "AST03"
+      ],
+      "owasp_llm": [
+        "LLM01:2026"
+      ],
+      "nist_gai_risks": [
+        "Information Security"
+      ],
+      "nist_rmf": [
+        "MEASURE 2.7"
+      ]
+    },
+    "OH": {
+      "owasp_agentic": [
+        "AST01",
+        "AST08"
+      ],
+      "owasp_llm": [
+        "LLM10:2026"
+      ],
+      "nist_gai_risks": [
+        "Information Security"
+      ],
+      "nist_rmf": []
+    },
+    "P": {
+      "owasp_agentic": [
+        "AST01",
+        "AST04"
+      ],
+      "owasp_llm": [
+        "LLM01:2026"
+      ],
+      "nist_gai_risks": [
+        "Information Security"
+      ],
+      "nist_rmf": [
+        "MEASURE 2.7"
+      ]
+    },
+    "PE": {
+      "owasp_agentic": [
+        "AST03",
+        "AST06"
+      ],
+      "owasp_llm": [
+        "LLM03:2026"
+      ],
+      "nist_gai_risks": [
+        "Information Security"
+      ],
+      "nist_rmf": []
+    },
+    "RA": {
+      "owasp_agentic": [
+        "AST01"
+      ],
+      "owasp_llm": [
+        "LLM03:2026"
+      ],
+      "nist_gai_risks": [
+        "Information Security"
+      ],
+      "nist_rmf": []
+    },
+    "RP": {
+      "owasp_agentic": [
+        "AST02",
+        "AST05",
+        "AST07",
+        "AST09",
+        "AST10"
+      ],
+      "owasp_llm": [
+        "LLM04:2026"
+      ],
+      "nist_gai_risks": [
+        "Information Security",
+        "Value Chain and Component Integration"
+      ],
+      "nist_rmf": [
+        "GOVERN 6.1",
+        "MANAGE 3.1",
+        "MAP 4.1",
+        "MEASURE 2.7"
+      ]
+    },
+    "SC": {
+      "owasp_agentic": [
+        "AST02",
+        "AST04",
+        "AST07"
+      ],
+      "owasp_llm": [
+        "LLM04:2026"
+      ],
+      "nist_gai_risks": [
+        "Information Security",
+        "Value Chain and Component Integration"
+      ],
+      "nist_rmf": [
+        "GOVERN 6.1",
+        "MANAGE 3.1",
+        "MAP 4.1",
+        "MEASURE 2.7"
+      ]
+    },
+    "SSRF": {
+      "owasp_agentic": [
+        "AST05"
+      ],
+      "owasp_llm": [
+        "LLM10:2026"
+      ],
+      "nist_gai_risks": [
+        "Information Security"
+      ],
+      "nist_rmf": []
+    },
+    "TM": {
+      "owasp_agentic": [
+        "AST03",
+        "AST04",
+        "AST06"
+      ],
+      "owasp_llm": [
+        "LLM03:2026"
+      ],
+      "nist_gai_risks": [
+        "Information Security"
+      ],
+      "nist_rmf": []
+    },
+    "TP": {
+      "owasp_agentic": [
+        "AST04",
+        "AST10"
+      ],
+      "owasp_llm": [
+        "LLM01:2026"
+      ],
+      "nist_gai_risks": [
+        "Information Security"
+      ],
+      "nist_rmf": [
+        "MEASURE 2.7"
+      ]
+    },
+    "TR": {
+      "owasp_agentic": [
+        "AST02"
+      ],
+      "owasp_llm": [
+        "LLM04:2026"
+      ],
+      "nist_gai_risks": [
+        "Information Security",
+        "Value Chain and Component Integration"
+      ],
+      "nist_rmf": [
+        "GOVERN 6.1",
+        "MANAGE 3.1",
+        "MAP 4.1",
+        "MEASURE 2.7"
+      ]
+    },
+    "TT": {
+      "owasp_agentic": [
+        "AST01",
+        "AST03",
+        "AST08"
+      ],
+      "owasp_llm": [
+        "LLM02:2026"
+      ],
+      "nist_gai_risks": [
+        "Data Privacy",
+        "Information Security"
+      ],
+      "nist_rmf": [
+        "MEASURE 2.10",
+        "MEASURE 2.7"
+      ]
+    },
+    "YR": {
+      "owasp_agentic": [
+        "AST01",
+        "AST02",
+        "AST04",
+        "AST08"
+      ],
+      "owasp_llm": [
+        "LLM04:2026"
+      ],
+      "nist_gai_risks": [
+        "Information Security",
+        "Value Chain and Component Integration"
+      ],
+      "nist_rmf": [
+        "GOVERN 6.1",
+        "MANAGE 3.1",
+        "MAP 4.1",
+        "MEASURE 2.7"
+      ]
+    }
+  },
+  "overrides": {
+    "AS1": {
+      "owasp_agentic": [
+        "AST01",
+        "AST03"
+      ],
+      "owasp_llm": [
+        "LLM02:2026",
+        "LLM08:2026"
+      ],
+      "nist_gai_risks": [
+        "Data Privacy",
+        "Information Security"
+      ],
+      "nist_rmf": [
+        "MEASURE 2.10",
+        "MEASURE 2.7"
+      ]
+    },
+    "EA4": {
+      "owasp_agentic": [
+        "AST03"
+      ],
+      "owasp_llm": [
+        "LLM03:2026",
+        "LLM06:2026"
+      ],
+      "nist_gai_risks": [
+        "Information Security"
+      ],
+      "nist_rmf": [
+        "MEASURE 2.7"
+      ]
+    },
+    "MP2": {
+      "owasp_agentic": [
+        "AST01",
+        "AST03"
+      ],
+      "owasp_llm": [
+        "LLM01:2026",
+        "LLM06:2026"
+      ],
+      "nist_gai_risks": [
+        "Information Security"
+      ],
+      "nist_rmf": [
+        "MEASURE 2.7"
+      ]
+    },
+    "MP3": {
+      "owasp_agentic": [
+        "AST01",
+        "AST03"
+      ],
+      "owasp_llm": [
+        "LLM01:2026",
+        "LLM05:2026"
+      ],
+      "nist_gai_risks": [
+        "Information Integrity",
+        "Information Security",
+        "Value Chain and Component Integration"
+      ],
+      "nist_rmf": [
+        "MEASURE 2.7"
+      ]
+    },
+    "OH3": {
+      "owasp_agentic": [
+        "AST01",
+        "AST08"
+      ],
+      "owasp_llm": [
+        "LLM06:2026",
+        "LLM10:2026"
+      ],
+      "nist_gai_risks": [
+        "Information Security"
+      ],
+      "nist_rmf": [
+        "MEASURE 2.7"
+      ]
+    },
+    "P6": {
+      "owasp_agentic": [
+        "AST01",
+        "AST04"
+      ],
+      "owasp_llm": [
+        "LLM08:2026"
+      ],
+      "nist_gai_risks": [
+        "Information Security"
+      ],
+      "nist_rmf": [
+        "MEASURE 2.7"
+      ]
+    },
+    "P7": {
+      "owasp_agentic": [
+        "AST01",
+        "AST04"
+      ],
+      "owasp_llm": [
+        "LLM08:2026"
+      ],
+      "nist_gai_risks": [
+        "Information Security"
+      ],
+      "nist_rmf": [
+        "MEASURE 2.7"
+      ]
+    },
+    "P8": {
+      "owasp_agentic": [
+        "AST01",
+        "AST04"
+      ],
+      "owasp_llm": [
+        "LLM08:2026"
+      ],
+      "nist_gai_risks": [
+        "Information Security"
+      ],
+      "nist_rmf": [
+        "MEASURE 2.7"
+      ]
+    },
+    "TT1": {
+      "owasp_agentic": [
+        "AST01",
+        "AST03",
+        "AST08"
+      ],
+      "owasp_llm": [
+        "LLM02:2026",
+        "LLM10:2026"
+      ],
+      "nist_gai_risks": [
+        "Data Privacy",
+        "Information Security"
+      ],
+      "nist_rmf": [
+        "MEASURE 2.10",
+        "MEASURE 2.7"
+      ]
+    },
+    "TT2": {
+      "owasp_agentic": [
+        "AST01",
+        "AST03",
+        "AST08"
+      ],
+      "owasp_llm": [
+        "LLM02:2026",
+        "LLM10:2026"
+      ],
+      "nist_gai_risks": [
+        "Data Privacy",
+        "Information Security"
+      ],
+      "nist_rmf": [
+        "MEASURE 2.10",
+        "MEASURE 2.7"
+      ]
+    },
+    "TT5": {
+      "owasp_agentic": [
+        "AST01",
+        "AST03",
+        "AST08"
+      ],
+      "owasp_llm": [
+        "LLM10:2026"
+      ],
+      "nist_gai_risks": [
+        "Information Security"
+      ],
+      "nist_rmf": []
+    }
+  }
+}

@@ -324,15 +324,61 @@ func TestTriggerRulesOnlyAnalyzeManifestTriggers(t *testing.T) {
 func TestRuleDocumentsUseCanonicalRuleIdentity(t *testing.T) {
 	documents := New().Rules()
 	want := map[string]struct {
-		family   string
-		title    string
-		category string
+		family     string
+		title      string
+		category   string
+		frameworks model.FrameworkMappings
 	}{
-		"AS1":  {family: "AS", title: "Agent Config Directory Access", category: "Agent Snooping"},
-		"AST1": {family: "AST", title: "AST1", category: "Security"},
-		"RA2":  {family: "RA", title: "Session Persistence", category: "Rogue Agent"},
-		"RP1":  {family: "RP", title: "Unpinned External Reference", category: "MCP Rug Pull"},
-		"RP2":  {family: "RP", title: "Manifest Expansion Risk", category: "MCP Rug Pull"},
+		"AS1": {
+			family: "AS", title: "Agent Config Directory Access", category: "Agent Snooping",
+			frameworks: model.FrameworkMappings{
+				MappingVersion: "2026.09-1",
+				OwaspAgentic:   []string{"AST01", "AST03"},
+				OwaspLLM:       []string{"LLM02:2026", "LLM08:2026"},
+				NistGaiRisks:   []string{"Data Privacy", "Information Security"},
+				NistRmf:        []string{"MEASURE 2.10", "MEASURE 2.7"},
+			},
+		},
+		"AST1": {
+			family: "AST", title: "AST1", category: "Security",
+			frameworks: model.FrameworkMappings{
+				MappingVersion: "2026.09-1",
+				OwaspAgentic:   []string{"AST01", "AST08"},
+				OwaspLLM:       []string{"LLM10:2026"},
+				NistGaiRisks:   []string{"Information Security"},
+				NistRmf:        []string{},
+			},
+		},
+		"RA2": {
+			family: "RA", title: "Session Persistence", category: "Rogue Agent",
+			frameworks: model.FrameworkMappings{
+				MappingVersion: "2026.09-1",
+				OwaspAgentic:   []string{"AST01"},
+				OwaspLLM:       []string{"LLM03:2026"},
+				NistGaiRisks:   []string{"Information Security"},
+				NistRmf:        []string{},
+			},
+		},
+		"RP1": {
+			family: "RP", title: "Unpinned External Reference", category: "MCP Rug Pull",
+			frameworks: model.FrameworkMappings{
+				MappingVersion: "2026.09-1",
+				OwaspAgentic:   []string{"AST02", "AST05", "AST07", "AST09", "AST10"},
+				OwaspLLM:       []string{"LLM04:2026"},
+				NistGaiRisks:   []string{"Information Security", "Value Chain and Component Integration"},
+				NistRmf:        []string{"GOVERN 6.1", "MANAGE 3.1", "MAP 4.1", "MEASURE 2.7"},
+			},
+		},
+		"RP2": {
+			family: "RP", title: "Manifest Expansion Risk", category: "MCP Rug Pull",
+			frameworks: model.FrameworkMappings{
+				MappingVersion: "2026.09-1",
+				OwaspAgentic:   []string{"AST02", "AST05", "AST07", "AST09", "AST10"},
+				OwaspLLM:       []string{"LLM04:2026"},
+				NistGaiRisks:   []string{"Information Security", "Value Chain and Component Integration"},
+				NistRmf:        []string{"GOVERN 6.1", "MANAGE 3.1", "MAP 4.1", "MEASURE 2.7"},
+			},
+		},
 	}
 	for _, document := range documents {
 		expected, ok := want[document.RuleID]
@@ -344,6 +390,9 @@ func TestRuleDocumentsUseCanonicalRuleIdentity(t *testing.T) {
 		}
 		if document.DocumentationURL != "/v1/rules/"+document.RuleID {
 			t.Errorf("%s documentation URL=%q", document.RuleID, document.DocumentationURL)
+		}
+		if !reflect.DeepEqual(document.Frameworks, expected.frameworks) {
+			t.Errorf("%s frameworks=%#v, want %#v", document.RuleID, document.Frameworks, expected.frameworks)
 		}
 		delete(want, document.RuleID)
 	}

@@ -39,6 +39,16 @@ class ScannerResult(BaseModel):
     reports: Dict[str, ScannerReport]
 
 
+class ScannerFrameworkRefs(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    mapping_version: str
+    owasp_agentic: List[str]
+    owasp_llm: List[str]
+    nist_gai_risks: List[str]
+    nist_rmf: List[str]
+
+
 class ScannerRuleDoc(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -49,6 +59,8 @@ class ScannerRuleDoc(BaseModel):
     description: str
     remediation: str
     documentation_url: str
+    frameworks: ScannerFrameworkRefs | None = None
+
 
 
 class ScannerRulesResult(BaseModel):

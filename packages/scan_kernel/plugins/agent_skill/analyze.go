@@ -184,16 +184,22 @@ func ruleDocuments() []model.RuleDocument {
 			category = "Security"
 		}
 		explanation, remediation := ruleText(spec.ID)
-		docs = append(docs, model.RuleDocument{RuleID: spec.ID, RuleFamily: ruleFamily(spec.ID), Title: title,
+		docs = append(docs, model.RuleDocument{
+			RuleID: spec.ID, RuleFamily: ruleFamily(spec.ID), Title: title,
 			Category: category, Description: explanation, Remediation: remediation,
-			DocumentationURL: "/v1/rules/" + spec.ID})
+			DocumentationURL: "/v1/rules/" + spec.ID,
+			Frameworks:       frameworksForRule(spec.ID),
+		})
 	}
 	for index, title := range []string{"Malware Signature", "Webshell Detected", "Crypto Miner Detected", "Hack Tool / Exploit Detected"} {
 		id := fmt.Sprintf("YR%d", index+1)
 		explanation, remediation := yaraRuleText(id)
-		docs = append(docs, model.RuleDocument{RuleID: id, RuleFamily: "YR", Title: title, Category: "YARA Match",
+		docs = append(docs, model.RuleDocument{
+			RuleID: id, RuleFamily: "YR", Title: title, Category: "YARA Match",
 			Description: explanation, Remediation: remediation,
-			DocumentationURL: "/v1/rules/" + id})
+			DocumentationURL: "/v1/rules/" + id,
+			Frameworks:       frameworksForRule(id),
+		})
 	}
 	sort.Slice(docs, func(i, j int) bool { return docs[i].RuleID < docs[j].RuleID })
 	return docs

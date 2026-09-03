@@ -34,6 +34,11 @@ import {
 import {
   AST_CATEGORIES,
   astCategoriesForFamily,
+  getAstCategoryDoc,
+  getFrameworksForFinding,
+  getLlmCategoryDoc,
+  getNistGaiRiskDoc,
+  getNistRmfDoc,
   getRuleFamilyDoc,
 } from "@/app/lib/framework";
 import { SiteHeader } from "@/app/components/site-header";
@@ -406,7 +411,7 @@ export default function ScanDashboardPage() {
                   {findings?.length ?? scan.findings_count ?? 0} findings
                 </span>
                 <span className="rounded-full bg-muted px-2.5 py-1 font-mono text-[11px] text-muted-foreground">
-                  {owaspAreasWithFindings}/10 OWASP areas
+                  {owaspAreasWithFindings}/8 mapped LLM areas
                 </span>
                 <div className="relative w-full sm:w-64">
                   <SearchIcon className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
@@ -1036,18 +1041,33 @@ function FindingDetailsPanel({
 }
 
 function FindingReferences({ finding, rule }: { finding: FindingResponse; rule: RuleDocResponse | null }) {
-  const astDocs = astCategoriesForFamily(finding.rule_family);
+  const fwResult = getFrameworksForFinding(finding);
+  const fw = fwResult.frameworks;
   const familyDoc = getRuleFamilyDoc(finding.rule_family);
   const documentationUrl = ruleReferenceHref(finding.rule_id);
   const description = rule?.description ?? finding.explanation;
   const remediation = rule?.remediation ?? finding.remediation;
 
+  const astDocs = fw.owasp_agentic
+    .map((id) => getAstCategoryDoc(id))
+    .filter((c): c is (typeof AST_CATEGORIES)[0] => Boolean(c));
+
+  const llmDocs = fw.owasp_llm
+    .map((id) => getLlmCategoryDoc(id))
+    .filter((c): c is NonNullable<ReturnType<typeof getLlmCategoryDoc>> => Boolean(c));
+
   return (
     <div>
       <span className="mb-2 block text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-        References
+        References &amp; Framework Alignment
       </span>
       <div className="space-y-3 rounded-xl border border-border bg-background/40 px-3 py-3">
+        {fwResult.isRetrospective && (
+          <div className="rounded-lg border border-warning/20 bg-warning-bg px-3 py-2 text-xs text-warning">
+            Retrospective mapping (matrix v{fw.mapping_version}) — not part of original scan assessment
+          </div>
+        )}
+
         <div>
           <div className="flex items-center justify-between gap-3">
             <span className="text-sm font-medium text-foreground">{rule?.title ?? finding.title ?? finding.rule_id}</span>
@@ -1075,10 +1095,11 @@ function FindingReferences({ finding, rule }: { finding: FindingResponse; rule: 
           ) : null}
         </div>
 
-        {astDocs.length > 0 ? (
+        {/* Tier 1: OWASP Agentic Skills */}
+        {astDocs.length > 0 && (
           <div className="border-t border-border pt-3">
-            <span className="block text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-              OWASP mapping
+            <span className="block text-[11px] font-semibold uppercase tracking-wide text-accent">
+              1. Primary: OWASP Agentic Skills
             </span>
             <div className="mt-2 space-y-2">
               {astDocs.map((category) => (
@@ -1094,7 +1115,52 @@ function FindingReferences({ finding, rule }: { finding: FindingResponse; rule: 
               ))}
             </div>
           </div>
-        ) : null}
+        )}
+
+        {/* Tier 2: OWASP GenAI LLM (2026) */}
+        {llmDocs.length > 0 && (
+          <div className="border-t border-border pt-3">
+            <span className="block text-[11px] font-semibold uppercase tracking-wide text-accent">
+              2. Applied Mechanism: OWASP GenAI LLM (2026)
+            </span>
+            <div className="mt-2 space-y-2">
+              {llmDocs.map((category) => (
+                <div key={category.id}>
+                  <div className="flex items-center gap-2">
+                    <span className="rounded-full border border-accent/30 bg-accent/10 px-2 py-0.5 font-mono text-[10px] text-accent">
+                      {category.id}
+                    </span>
+                    <span className="text-xs font-medium text-foreground">{category.title}</span>
+                  </div>
+                  <p className="mt-1 text-xs leading-5 text-muted-foreground">{category.summary}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Tier 3: NIST AI Framework Alignment */}
+        {(fw.nist_gai_risks.length > 0 || fw.nist_rmf.length > 0) && (
+          <div className="border-t border-border pt-3">
+            <span className="block text-[11px] font-semibold uppercase tracking-wide text-accent">
+              3. Alignment: NIST AI Frameworks
+            </span>
+            <div className="mt-2 space-y-1 text-xs">
+              {fw.nist_gai_risks.length > 0 && (
+                <div>
+                  <span className="font-medium text-foreground">NIST AI 600-1 Risks:</span>{" "}
+                  <span className="text-muted-foreground">{fw.nist_gai_risks.join(", ")}</span>
+                </div>
+              )}
+              {fw.nist_rmf.length > 0 && (
+                <div>
+                  <span className="font-medium text-foreground">NIST AI RMF 1.0:</span>{" "}
+                  <span className="font-mono text-accent">{fw.nist_rmf.join(", ")}</span>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -1103,49 +1169,71 @@ function FindingReferences({ finding, rule }: { finding: FindingResponse; rule: 
 function countOwaspAreas(findings: FindingResponse[]): number {
   const ids = new Set<string>();
   for (const finding of findings) {
-    for (const category of astCategoriesForFamily(finding.rule_family)) {
-      ids.add(category.id);
+    const fwResult = getFrameworksForFinding(finding);
+    for (const llm of fwResult.frameworks.owasp_llm) {
+      ids.add(llm);
     }
   }
-  return AST_CATEGORIES.filter((category) => ids.has(category.id)).length;
+  return ids.size;
 }
 
 function OwaspReferenceBadges({ finding }: { finding: FindingResponse }) {
-  const categories = astCategoriesForFamily(finding.rule_family);
+  const fwResult = getFrameworksForFinding(finding);
+  const astIds = fwResult.frameworks.owasp_agentic;
+  const llmIds = fwResult.frameworks.owasp_llm;
 
-  if (categories.length === 0) {
+  if (astIds.length === 0 && llmIds.length === 0) {
     return <span className="text-xs text-muted-foreground">—</span>;
   }
 
   return (
     <div className="flex flex-wrap gap-1.5">
-      {categories.slice(0, 3).map((category) => (
-        <ReferencePopover
-          key={category.id}
-          title={`${category.id} ${category.title}`}
-          meta={`OWASP · ${category.severity}`}
-          sections={[
-            { label: "Risk area", body: category.summary },
-            { label: "Scanner evidence", body: category.scannerEvidence },
-            { label: "Reviewer focus", body: category.reviewFocus },
-          ]}
-          align="center"
-          href="/framework"
-          hrefLabel="Open framework"
-        >
-          <span className="rounded-full border border-border px-2 py-0.5 font-mono text-[10px] text-muted-foreground transition-colors duration-150 hover:border-border-strong hover:text-foreground">
-            {category.id}
-          </span>
-        </ReferencePopover>
-      ))}
-      {categories.length > 3 && (
-        <span
-          title={categories.slice(3).map((category) => `${category.id} ${category.title}`).join(", ")}
-          className="rounded-full border border-border px-2 py-0.5 font-mono text-[10px] text-muted-foreground"
-        >
-          +{categories.length - 3}
-        </span>
-      )}
+      {astIds.slice(0, 2).map((astId) => {
+        const category = getAstCategoryDoc(astId);
+        if (!category) return null;
+        return (
+          <ReferencePopover
+            key={category.id}
+            title={`${category.id} ${category.title}`}
+            meta={`OWASP AST · ${category.severity}`}
+            sections={[
+              { label: "Risk area", body: category.summary },
+              { label: "Scanner evidence", body: category.scannerEvidence },
+              { label: "Reviewer focus", body: category.reviewFocus },
+            ]}
+            align="center"
+            href="/framework"
+            hrefLabel="Open framework"
+          >
+            <span className="rounded-full border border-border px-2 py-0.5 font-mono text-[10px] text-muted-foreground transition-colors duration-150 hover:border-border-strong hover:text-foreground">
+              {category.id}
+            </span>
+          </ReferencePopover>
+        );
+      })}
+      {llmIds.slice(0, 2).map((llmId) => {
+        const cat = getLlmCategoryDoc(llmId);
+        if (!cat) return null;
+        return (
+          <ReferencePopover
+            key={cat.id}
+            title={`${cat.id} ${cat.title}`}
+            meta="OWASP GenAI LLM (2026)"
+            sections={[
+              { label: "Category summary", body: cat.summary },
+              { label: "Scanner evidence", body: cat.scannerEvidence },
+              { label: "Mitigations", body: cat.mitigations.join("; ") },
+            ]}
+            align="center"
+            href="/framework"
+            hrefLabel="Open framework"
+          >
+            <span className="rounded-full border border-accent/30 bg-accent/10 px-2 py-0.5 font-mono text-[10px] text-accent transition-colors duration-150 hover:border-accent hover:bg-accent/20">
+              {cat.id.replace(":2026", "")}
+            </span>
+          </ReferencePopover>
+        );
+      })}
     </div>
   );
 }
