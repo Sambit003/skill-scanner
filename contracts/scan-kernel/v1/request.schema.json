@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://superalign.ai/contracts/scan-kernel/v1/request.schema.json",
+  "$id": "https://github.com/Sambit003/skill-scanner/contracts/scan-kernel/v1/request.schema.json",
   "title": "ScanKernel engine request v1",
   "oneOf": [
     { "$ref": "#/$defs/scan" },

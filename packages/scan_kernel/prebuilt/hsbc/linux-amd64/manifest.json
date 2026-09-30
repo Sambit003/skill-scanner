@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "profile": "hsbc",
+  "description": "Standalone ScanKernel bundle for Agent Skills without dependency advisory checks",
+  "version": "1.0.0",
+  "commit": "18ff78cf5096",
+  "build_time": "2026-09-30T06:17:35Z",
+  "go_version": "go1.26.1",
+  "target": "linux/amd64",
+  "plugins": ["agent_skill"],
+  "protocol_version": "2",
+  "yara_mode": "native-static",
+  "yara_version": "4.5.4",
+  "binary": "scan-kernel-engine"
+}

@@ -48,8 +48,6 @@ services:
     build:
       context: .
       dockerfile: apps/backend/Dockerfile
-      args:
-        SCAN_KERNEL_BUILD_TAGS: "netgo,osusergo,custom_plugins,plugin_agent_skill,yara_native,no_dependency_advisories"
     container_name: riskdb-backend-api
     restart: unless-stopped
     command: ["uvicorn", "backend.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
@@ -86,8 +84,6 @@ services:
     build:
       context: .
       dockerfile: apps/backend/Dockerfile
-      args:
-        SCAN_KERNEL_BUILD_TAGS: "netgo,osusergo,custom_plugins,plugin_agent_skill,yara_native,no_dependency_advisories"
     container_name: riskdb-backend-worker
     restart: unless-stopped
     command: ["celery", "-A", "backend.core.celery_app.celery_app", "worker", "--loglevel=info", "--concurrency=4"]

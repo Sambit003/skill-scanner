@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	agentskill "gitlab.com/superalign/labs/asset-scan-demo/packages/scan_kernel/plugins/agent_skill"
+	agentskill "github.com/Sambit003/skill-scanner/packages/scan_kernel/plugins/agent_skill"
 )
 
 type FamilyRefs struct {

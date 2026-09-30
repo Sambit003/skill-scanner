@@ -8,4 +8,4 @@
 *.jpeg binary
 *.svg text eol=lf
 *.ico binary
-
+packages/scan_kernel/prebuilt/**/scan-kernel-engine binary

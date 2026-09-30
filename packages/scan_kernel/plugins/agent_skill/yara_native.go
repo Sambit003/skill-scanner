@@ -18,7 +18,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/hillu/go-yara/v4"
-	"gitlab.com/superalign/labs/asset-scan-demo/packages/scan_kernel/internal/model"
+	"github.com/Sambit003/skill-scanner/packages/scan_kernel/internal/model"
 )
 
 //go:embed yara_rules/*

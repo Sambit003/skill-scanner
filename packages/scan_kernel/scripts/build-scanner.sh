@@ -109,7 +109,7 @@ EOF
 			cd "$module_dir"
 			CGO_ENABLED=0 GOOS="$target_os" GOARCH="$target_arch" go build \
 				-trimpath -tags "$BUILD_TAGS" \
-				-ldflags "-s -w -X gitlab.com/superalign/labs/asset-scan-demo/packages/scan_kernel/internal/buildinfo.Version=$version -X gitlab.com/superalign/labs/asset-scan-demo/packages/scan_kernel/internal/buildinfo.Commit=$commit -X gitlab.com/superalign/labs/asset-scan-demo/packages/scan_kernel/internal/buildinfo.BuildTime=$build_time" \
+				-ldflags "-s -w -X github.com/Sambit003/skill-scanner/packages/scan_kernel/internal/buildinfo.Version=$version -X github.com/Sambit003/skill-scanner/packages/scan_kernel/internal/buildinfo.Commit=$commit -X github.com/Sambit003/skill-scanner/packages/scan_kernel/internal/buildinfo.BuildTime=$build_time" \
 				-o "$stage/$binary" ./cmd/scankernel
 		)
 	fi

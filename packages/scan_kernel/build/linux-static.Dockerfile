@@ -40,10 +40,11 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
     go build -trimpath \
       -tags "${SCAN_KERNEL_BUILD_TAGS}" \
       -ldflags "-s -w -linkmode external -extldflags=-static \
-        -X gitlab.com/superalign/labs/asset-scan-demo/packages/scan_kernel/internal/buildinfo.Version=${SCAN_KERNEL_VERSION} \
-        -X gitlab.com/superalign/labs/asset-scan-demo/packages/scan_kernel/internal/buildinfo.Commit=${SCAN_KERNEL_COMMIT} \
-        -X gitlab.com/superalign/labs/asset-scan-demo/packages/scan_kernel/internal/buildinfo.BuildTime=${SCAN_KERNEL_BUILD_TIME}" \
+        -X github.com/Sambit003/skill-scanner/packages/scan_kernel/internal/buildinfo.Version=${SCAN_KERNEL_VERSION} \
+        -X github.com/Sambit003/skill-scanner/packages/scan_kernel/internal/buildinfo.Commit=${SCAN_KERNEL_COMMIT} \
+        -X github.com/Sambit003/skill-scanner/packages/scan_kernel/internal/buildinfo.BuildTime=${SCAN_KERNEL_BUILD_TIME}" \
       -o /out/scan-kernel-engine ./cmd/scankernel
 
 FROM scratch AS export
 COPY --from=scanner-builder /out/scan-kernel-engine /scan-kernel-engine
+COPY --from=scanner-builder /tmp/yara-4.5.4/COPYING /YARA-LICENSE

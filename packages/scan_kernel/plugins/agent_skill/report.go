@@ -8,8 +8,8 @@ import (
 	"strings"
 	"unicode"
 
-	"gitlab.com/superalign/labs/asset-scan-demo/packages/scan_kernel/internal/buildinfo"
-	"gitlab.com/superalign/labs/asset-scan-demo/packages/scan_kernel/internal/model"
+	"github.com/Sambit003/skill-scanner/packages/scan_kernel/internal/buildinfo"
+	"github.com/Sambit003/skill-scanner/packages/scan_kernel/internal/model"
 )
 
 var severityPoints = map[string]float64{"CRITICAL": 50, "HIGH": 25, "MEDIUM": 10, "LOW": 5}

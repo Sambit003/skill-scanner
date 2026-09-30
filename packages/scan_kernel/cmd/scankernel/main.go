@@ -13,10 +13,10 @@ import (
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-	"gitlab.com/superalign/labs/asset-scan-demo/packages/scan_kernel/internal/buildinfo"
-	"gitlab.com/superalign/labs/asset-scan-demo/packages/scan_kernel/internal/bundle"
-	"gitlab.com/superalign/labs/asset-scan-demo/packages/scan_kernel/internal/model"
-	"gitlab.com/superalign/labs/asset-scan-demo/packages/scan_kernel/internal/protocol"
+	"github.com/Sambit003/skill-scanner/packages/scan_kernel/internal/buildinfo"
+	"github.com/Sambit003/skill-scanner/packages/scan_kernel/internal/bundle"
+	"github.com/Sambit003/skill-scanner/packages/scan_kernel/internal/model"
+	"github.com/Sambit003/skill-scanner/packages/scan_kernel/internal/protocol"
 	"gopkg.in/yaml.v3"
 )
 

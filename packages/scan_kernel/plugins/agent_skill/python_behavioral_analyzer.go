@@ -10,7 +10,7 @@ import (
 
 	pyparser "github.com/tamnd/gopapy/parser"
 
-	"gitlab.com/superalign/labs/asset-scan-demo/packages/scan_kernel/internal/model"
+	"github.com/Sambit003/skill-scanner/packages/scan_kernel/internal/model"
 )
 
 // gopapy recycles its parser arena as soon as ParseFile returns. Keep parsing

@@ -11,9 +11,9 @@ import (
 	"strings"
 	"testing"
 
-	"gitlab.com/superalign/labs/asset-scan-demo/packages/scan_kernel/internal/bundle"
-	"gitlab.com/superalign/labs/asset-scan-demo/packages/scan_kernel/internal/model"
-	"gitlab.com/superalign/labs/asset-scan-demo/packages/scan_kernel/internal/protocol"
+	"github.com/Sambit003/skill-scanner/packages/scan_kernel/internal/bundle"
+	"github.com/Sambit003/skill-scanner/packages/scan_kernel/internal/model"
+	"github.com/Sambit003/skill-scanner/packages/scan_kernel/internal/protocol"
 )
 
 func fixture(t *testing.T, name string) string {

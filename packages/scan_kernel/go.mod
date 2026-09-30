@@ -1,4 +1,4 @@
-module gitlab.com/superalign/labs/asset-scan-demo/packages/scan_kernel
+module github.com/Sambit003/skill-scanner/packages/scan_kernel
 
 go 1.26.0
 

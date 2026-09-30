@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"gitlab.com/superalign/labs/asset-scan-demo/packages/scan_kernel/internal/engine"
-	"gitlab.com/superalign/labs/asset-scan-demo/packages/scan_kernel/internal/model"
+	"github.com/Sambit003/skill-scanner/packages/scan_kernel/internal/engine"
+	"github.com/Sambit003/skill-scanner/packages/scan_kernel/internal/model"
 )
 
 type rawRequest struct {

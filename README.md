@@ -73,6 +73,53 @@ PostgreSQL and Redis data are retained in named volumes. To remove those local
 development volumes as well, use `docker compose down --volumes` only when the
 stored scan history is no longer needed.
 
+## Build individual Docker images
+
+Run these commands from the repository root to build only the service you
+need. The API and worker both consume the checked-in HSBC scanner executable,
+so these builds do not require Go:
+
+```bash
+docker compose build backend-api
+docker compose build backend-worker
+docker compose build frontend
+```
+
+To build without Docker Compose, tag each image directly:
+
+```bash
+docker build \
+  --file apps/backend/Dockerfile \
+  --tag skill-scanner-backend-api:latest \
+  .
+
+docker build \
+  --file apps/backend/Dockerfile \
+  --tag skill-scanner-backend-worker:latest \
+  .
+
+docker build \
+  --file apps/frontend/Dockerfile \
+  --tag skill-scanner-frontend:latest \
+  .
+```
+
+The API and worker intentionally use the same backend Dockerfile and image
+contents. Their runtime commands differ in `docker-compose.yml`: the API starts
+Uvicorn, while the worker starts Celery.
+
+Docker automatically selects the checked-in scanner binary matching the build
+platform. To build explicitly for a typical x86-64 Linux server, add
+`--platform linux/amd64`:
+
+```bash
+docker build \
+  --platform linux/amd64 \
+  --file apps/backend/Dockerfile \
+  --tag skill-scanner-backend-api:latest \
+  .
+```
+
 ## Developer setup with Moon
 
 On macOS, install [proto](https://moonrepo.dev/proto) with Homebrew before
@@ -345,10 +392,35 @@ Both versions support `scan`, `list_rules`, and `get_rule`. Findings, including
 critical findings, are successful results. Invalid requests exit with status
 `2`; scanner execution failures exit with status `3`.
 
-The Compose backend image installs the statically linked scanner at:
+The repository includes the certified HSBC scanner binaries for both supported
+Linux architectures under `packages/scan_kernel/prebuilt/hsbc/`. The shared
+backend Dockerfile selects `linux-amd64` or `linux-arm64` from Docker's target
+architecture and installs it at:
 
 ```text
 /usr/local/bin/scan-kernel-engine
+```
+
+Because the image consumes the checked-in executable, building the API and
+worker images does not require Go, a Go base image, or network access to Go
+modules and YARA sources. To refresh the checked-in executables, build the HSBC
+bundle on a release workstation and replace the matching prebuilt directories,
+including their manifests, notices, licenses, and checksums:
+
+```bash
+./packages/scan_kernel/scripts/build-scanner.sh \
+  --profile hsbc \
+  --version 1.0.0 \
+  --targets linux/amd64,linux/arm64
+```
+
+Verify each directory before committing it:
+
+```bash
+cd packages/scan_kernel/prebuilt/hsbc/linux-amd64
+shasum -a 256 -c SHA256SUMS
+cd ../linux-arm64
+shasum -a 256 -c SHA256SUMS
 ```
 
 Verify the scanner inside the running API container:
