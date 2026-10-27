@@ -8,7 +8,6 @@ EA3	LOW	Excessive Agency	LICENSE	16	Scope Creep	0.7
 MP2	MEDIUM	Memory Poisoning	skills/engineering/ask-matt/PHASE-BOUNDARIES.md	9	Context Window Stuffing	0.8
 MP2	MEDIUM	Memory Poisoning	skills/misc/migrate-to-shoehorn/SKILL.md	99	Context Window Stuffing	0.8
 MP3	HIGH	Memory Poisoning	docs/engineering/implement.md	41	Memory Manipulation	0.24
-P6	HIGH	System Prompt Leakage	skills/engineering/diagnosing-bugs/scripts/hitl-loop.template.sh	10	Direct Prompt Extraction	0.85
 RA2	MEDIUM	Rogue Agent	AGENTS.md	17	Session Persistence	0.6
 RA2	MEDIUM	Rogue Agent	CLAUDE.md	17	Session Persistence	0.6
 RP1	MEDIUM	MCP Rug Pull	.agents/adr/0002-ship-as-a-claude-code-plugin.md	3		0.7

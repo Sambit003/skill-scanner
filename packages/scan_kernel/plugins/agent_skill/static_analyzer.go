@@ -276,7 +276,7 @@ var staticPatterns = []staticPattern{
 	newStaticPattern("MP3", "Memory Manipulation", "Memory Poisoning", "HIGH", .7, `(?:pretend|act\s+as\s+if|believe)\s+(?:that\s+)?(?:your\s+)?(?:previous|past)\s+(?:conversation|context|interaction)\s+(?:was|included|contained)`),
 
 	// System prompt leakage (P6-P8).
-	newStaticPattern("P6", "Direct Prompt Extraction", "System Prompt Leakage", "HIGH", .85, `(?:print|output|show|display|reveal|expose|return|echo)\s+(?:your\s+)?(?:full\s+)?(?:system\s+)?(?:prompt|instructions?|rules?|guidelines?|directives?)`),
+	newStaticPattern("P6", "Direct Prompt Extraction", "System Prompt Leakage", "HIGH", .85, `(?:print|output|show|display|reveal|expose|return|echo)\s+(?:your\s+(?:full\s+)?(?:system\s+)?(?:prompt|instructions?|rules?|guidelines?|directives?)|(?:the\s+)?(?:full\s+)?system\s+(?:prompt|instructions?))`),
 	newStaticPattern("P6", "Direct Prompt Extraction", "System Prompt Leakage", "HIGH", .8, `(?:what\s+(?:are|is)\s+your|tell\s+me\s+your)\s+(?:system\s+)?(?:prompt|instructions?|rules?|guidelines?|directives?)`),
 	newStaticPattern("P6", "Direct Prompt Extraction", "System Prompt Leakage", "HIGH", .8, `(?:output|print|display)\s+(?:the\s+)?(?:text|content|message)\s+(?:above|before)\s+(?:this|the\s+user)`),
 	newStaticPattern("P6", "Direct Prompt Extraction", "System Prompt Leakage", "HIGH", .85, `(?:share|disclose|leak|give\s+me)\s+(?:your\s+)?(?:internal|hidden|system|secret)\s+(?:prompt|instructions?|rules?|config)`),
@@ -560,6 +560,11 @@ func findingFromStaticMatchWithContext(item component, pattern staticPattern, ma
 	if pattern.ID == "SC3" && item.Type != "python" && item.Type != "javascript" && item.Type != "shell" && item.Type != "other" {
 		return model.Finding{}, false
 	}
+	// In program source, prompt-extraction phrases are detector signatures,
+	// test strings or statements such as "return prompt", not instructions.
+	if pattern.ID == "P6" && isSourceCodeType(item.Type) {
+		return model.Finding{}, false
+	}
 
 	matched := item.Content[match[0]:match[1]]
 	severity := pattern.Severity
@@ -741,6 +746,15 @@ func isDocumentationMarkdown(path string) bool {
 func isStaticNonExecutableType(fileType string) bool {
 	switch fileType {
 	case "markdown", "text", "json", "yaml", "toml":
+		return true
+	default:
+		return false
+	}
+}
+
+func isSourceCodeType(fileType string) bool {
+	switch fileType {
+	case "python", "shell", "javascript", "typescript", "ruby", "go", "rust":
 		return true
 	default:
 		return false
