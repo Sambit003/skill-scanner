@@ -363,7 +363,6 @@ var allStaticPatterns = func() []staticPattern {
 
 var (
 	codeExampleIndicators = []string{"```", "example:", "for example", "e.g.", "such as", "documentation", "# warning:", "# note:", "**warning**", "**note**", "// ✅", "// ❌", "// good:", "// bad:", "// correct:", "// incorrect:", "// wrong:"}
-	executionSignal       = regexp.MustCompile(`(?i)(?:\b\w+\s*=|\bos\.(?:environ|getenv|system)\b|\bshutil\.rmtree\b|\b(?:subprocess|eval|exec)\b|[|>]|\b(?:open|read_text|write_text)\s*\()`)
 	supplyChainURLToken   = regexp.MustCompile(`(?i)https?://[^\s|;&)]+|(?:[a-z0-9-]+\.)+[a-z]{2,}(?:/[^\s|;&)]*)?`)
 	safeInstallPattern    = regexp.MustCompile(`(?i)(?:pip|npm)\s+install`)
 	plainHTTPArtifact     = regexp.MustCompile(`(?i)\bhttp://[^\s'"]+?\.(?:tar\.gz|tgz|zip|whl|gem)\b`)
@@ -863,22 +862,22 @@ func isEnvironmentFileDocumentationReference(item component, context string) boo
 	return false
 }
 
+// isDocumentationContext drops PE3, RA1, TM1 and AR2 on comment lines outside
+// documents. In documents only fenced code counts as documentation, and
+// exampleTreatmentAt has already dropped it; prose outside a fence is an
+// instruction even when the line shows no execution signal.
 func isDocumentationContext(ruleID string, item component, line int) bool {
 	if ruleID != "PE3" && ruleID != "RA1" && ruleID != "TM1" && ruleID != "AR2" {
 		return false
 	}
-	if strings.HasSuffix(strings.ToLower(strings.ReplaceAll(item.Path, "\\", "/")), "skill.md") {
+	if isSkillManifestPath(item.Path) || item.Type == "markdown" || item.Type == "text" {
 		return false
 	}
 	lines := pythonSplitLines(item.Content)
 	if line < 1 || line > len(lines) {
 		return false
 	}
-	matchedLine := lines[line-1]
-	if item.Type == "markdown" || item.Type == "text" {
-		return !executionSignal.MatchString(matchedLine)
-	}
-	trimmed := strings.TrimSpace(matchedLine)
+	trimmed := strings.TrimSpace(lines[line-1])
 	return strings.HasPrefix(trimmed, "#") || strings.HasPrefix(trimmed, "//")
 }
 
