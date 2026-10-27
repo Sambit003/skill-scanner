@@ -107,3 +107,23 @@ func TestP6RequiresSystemPromptOrSecondPersonTarget(t *testing.T) {
 		}
 	}
 }
+
+func TestPE2ChmodMatchesOnlySetuidAndSetgid(t *testing.T) {
+	for _, item := range []component{
+		// engineering/skills/pr-review-expert/SKILL.md
+		{Path: "SKILL.md", Type: "markdown", Content: "> `chmod 600 ~/.netrc`) and call `curl -s --netrc …` — no secret material in\n"},
+		// engineering/skills/skill-security-auditor/scripts/skill_security_auditor.py
+		{Path: "skill_security_auditor.py", Type: "python", Executable: true, Content: "                            fix=\"Remove SUID/SGID bits: chmod u-s,g-s <file>\",\n"},
+		{Path: "setup.sh", Type: "shell", Executable: true, Content: "chmod 755 bin/tool\nchmod 0644 config.yaml\nchmod 1777 /tmp/cache\nchmod u+rwx,go+rx bin/tool\n"},
+	} {
+		if got := countRule(scanComponents(t, item), "PE2"); got != 0 {
+			t.Errorf("%s: PE2 count=%d for an ordinary file mode, want 0", item.Path, got)
+		}
+	}
+	for _, command := range []string{"chmod 4755 /usr/local/bin/helper", "chmod -R 2775 /srv/share", "chmod 06755 ./tool", "chmod u+s /bin/bash", "chmod g+s shared/", "chmod +s ./tool", "chmod u-s,g+s ./tool"} {
+		item := component{Path: "setup.sh", Type: "shell", Executable: true, Content: command + "\n"}
+		if got := countRule(scanComponents(t, item), "PE2"); got == 0 {
+			t.Errorf("PE2 missed setuid/setgid command %q", command)
+		}
+	}
+}
