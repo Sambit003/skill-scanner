@@ -26,6 +26,7 @@ func TestFrameworkOverridesMatchSpecification(t *testing.T) {
 		"TT2": {"LLM02:2026", "LLM10:2026"},
 		"TT5": {"LLM10:2026"},
 		"AS1": {"LLM02:2026", "LLM08:2026"},
+		"YR5": {"LLM01:2026"},
 	}
 
 	if len(ruleFrameworkOverrides) != len(expectedOverrides) {

@@ -354,7 +354,7 @@ const rawFamilies = [
   { id: "TR", title: "Trigger abuse", summary: "Over-broad, shadowing, or generic activation triggers." },
   { id: "AST", title: "Python AST execution", summary: "exec, eval, subprocess, dynamic imports, compile, reflection, and execution chains." },
   { id: "TT", title: "Taint tracking", summary: "Source-to-sink flows involving credentials, files, external input, network, or execution." },
-  { id: "YR", title: "YARA signatures", summary: "Malware, webshell, cryptominer, and offensive-tool indicators." },
+  { id: "YR", title: "YARA signatures", summary: "Malware, webshell, cryptominer, offensive-tool, and prompt-injection indicators." },
   { id: "LP", title: "Least privilege", summary: "Capability declarations, wildcard permissions, undeclared operations, and overdeclaration." },
   { id: "TP", title: "Tool metadata poisoning", summary: "Hidden metadata, Unicode deception, and parameter injection." },
   { id: "AS", title: "Agent snooping", summary: "Agent config, MCP config, and peer skill enumeration." },

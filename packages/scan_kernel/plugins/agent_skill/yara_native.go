@@ -308,6 +308,8 @@ func yaraCategory(category string) (string, string) {
 		return "YR3", "HIGH"
 	case "hack_tool", "exploit":
 		return "YR4", "HIGH"
+	case "prompt_injection":
+		return "YR5", "HIGH"
 	default:
 		return "YR4", "MEDIUM"
 	}

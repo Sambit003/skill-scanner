@@ -190,7 +190,7 @@ func ruleDocuments() []model.RuleDocument {
 			Frameworks:       frameworksForRule(spec.ID),
 		})
 	}
-	for index, title := range []string{"Malware Signature", "Webshell Detected", "Crypto Miner Detected", "Hack Tool / Exploit Detected"} {
+	for index, title := range []string{"Malware Signature", "Webshell Detected", "Crypto Miner Detected", "Hack Tool / Exploit Detected", "Prompt Injection Signature"} {
 		id := fmt.Sprintf("YR%d", index+1)
 		explanation, remediation := yaraRuleText(id)
 		docs = append(docs, model.RuleDocument{

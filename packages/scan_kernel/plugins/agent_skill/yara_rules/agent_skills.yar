@@ -61,7 +61,7 @@ rule agent_skill_prompt_injection_hidden_instructions
 {
     meta:
         description = "Prompt injection or hidden instructions embedded in AI agent skill text"
-        category = "hack_tool"
+        category = "prompt_injection"
         severity = "HIGH"
         confidence = "0.80"
         reference = "https://owasp.org/www-project-top-10-for-large-language-model-applications/"

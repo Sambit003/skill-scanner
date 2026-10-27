@@ -55,12 +55,13 @@ The AST01–AST10 taxonomy is an exact match (IDs, titles, order, severity tiers
 | **TT1** | LLM02:2026, LLM10:2026 | Data Privacy, Information Security | MEASURE 2.10, MEASURE 2.7 | Taint tracking with code execution and network exfiltration sinks (LLM02 + LLM10). |
 | **TT2** | LLM02:2026, LLM10:2026 | Data Privacy, Information Security | MEASURE 2.10, MEASURE 2.7 | Variable-mediated taint flow reaching exec and network sinks (LLM02 + LLM10). |
 | **TT5** | LLM10:2026 | Information Security | *(none)* | External input directly reaching execution sink without exfiltration (LLM10). |
+| **YR5** | LLM01:2026 | Information Security | MEASURE 2.7 | YARA prompt-injection signature; the YR family default (LLM04 supply chain) does not apply (LLM01). |
 
 ## 4. Static Coverage & Audit Boundaries
 
 | 2026 Category | Static Coverage Status | Rules / Mechanisms | Evidence & Audit Boundaries |
 |---|---|---|---|---|
-| LLM01 Prompt Injection | Detections present | P1–5, TP1–3, AR1–3, MP1–3 | Embedded instruction and metadata injection; no runtime adversarial evaluation. |
+| LLM01 Prompt Injection | Detections present | P1–5, TP1–3, AR1–3, MP1–3, YR5 | Embedded instruction and metadata injection; no runtime adversarial evaluation. |
 | LLM02 Sensitive Information Disclosure | Detections present | E1–5, TT1–4, AS1–3 | Environment, secret file, config access and data flow detection. |
 | LLM03 Excessive Agency | Detections present | EA1–4, LP1–4, PE1–5, TM1–4, RA1–2 | Over-permissioning, autonomous high-impact actions, container escapes. |
 | LLM04 Supply Chain | Detections present | SC1–7, RP1–3, YR1–4, TR1–3 | Unpinned dependencies, malware signatures, trigger-namespace squatting. SC4 excluded in HSBC build. |

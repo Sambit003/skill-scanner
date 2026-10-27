@@ -70,6 +70,7 @@ var ruleFrameworkOverrides = map[string][]string{
 	"TT2": {"LLM02:2026", "LLM10:2026"},
 	"TT5": {"LLM10:2026"},
 	"AS1": {"LLM02:2026", "LLM08:2026"},
+	"YR5": {"LLM01:2026"},
 }
 
 // nistPrimaryRisksByLLM defines the primary (●) NIST AI 600-1 risks per OWASP LLM category
@@ -261,5 +262,3 @@ func FamilyFrameworks(family string) model.FrameworkMappings {
 	mappings.Normalize()
 	return mappings
 }
-
-

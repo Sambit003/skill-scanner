@@ -6,6 +6,8 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+
+	"gitlab.com/superalign/labs/asset-scan-demo/packages/scan_kernel/internal/model"
 )
 
 // bundledYARAString compiles one regular-expression string from a bundled rule
@@ -107,5 +109,36 @@ func TestBundledYARAStringsRejectAuditFalsePositives(t *testing.T) {
 				t.Errorf("%s: missed attack %q", test.name, content)
 			}
 		}
+	}
+}
+
+func TestPromptInjectionYARARuleHasItsOwnCategory(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join("yara_rules", "agent_skills.yar"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	rule := string(raw)[strings.Index(string(raw), "rule agent_skill_prompt_injection_hidden_instructions\n"):]
+	rule = rule[:strings.Index(rule, "\n}")]
+	if !strings.Contains(rule, `category = "prompt_injection"`) {
+		t.Fatalf("prompt-injection YARA rule is not in the prompt_injection category:\n%s", rule)
+	}
+	var document *model.RuleDocument
+	for _, candidate := range ruleDocuments() {
+		if candidate.RuleID == "YR5" {
+			document = &candidate
+			break
+		}
+	}
+	if document == nil {
+		t.Fatal("rule documents do not list YR5")
+	}
+	if document.Title != "Prompt Injection Signature" || document.Category != "YARA Match" {
+		t.Errorf("YR5 document=%q/%q, want Prompt Injection Signature/YARA Match", document.Title, document.Category)
+	}
+	if got := document.Frameworks.OwaspLLM; len(got) != 1 || got[0] != "LLM01:2026" {
+		t.Errorf("YR5 owasp_llm=%v, want [LLM01:2026] rather than the YR family's supply-chain default", got)
+	}
+	if policy := classifyRule("YR5"); policy.Class != ruleEvidence || policy.Context != contextInstructions {
+		t.Errorf("YR5 policy=%+v, want evidence in instruction files like P1", policy)
 	}
 }
