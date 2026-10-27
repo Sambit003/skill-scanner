@@ -93,7 +93,7 @@ func validPasswdMountSuffix(content string, start, end int) bool {
 func analyzeUnsupportedRegexSemantics(item component) []model.Finding {
 	findings := make([]model.Finding, 0)
 	for _, match := range as3Skill.FindAllStringSubmatchIndex(item.Content, -1) {
-		if len(match) < 4 || strings.EqualFold(item.Content[match[2]:match[3]], "CURRENT") {
+		if len(match) < 4 || strings.EqualFold(item.Content[match[2]:match[3]], "CURRENT") || isDocumentationSkillLink(item, match) {
 			continue
 		}
 		pattern := staticPattern{ID: "AS3", Title: "Skill Enumeration", Category: "Agent Snooping", Severity: "MEDIUM", Confidence: .8}
@@ -121,6 +121,30 @@ func analyzeUnsupportedRegexSemantics(item component) []model.Finding {
 		}
 	}
 	return findings
+}
+
+// isDocumentationSkillLink reports a relative skills/<name>/SKILL.md path
+// written as a Markdown link or inline code outside program source. Such a
+// path cross-references a sibling skill in the same repository; a path under
+// an agent's skill directory (~/.claude/skills/...) is still reported.
+func isDocumentationSkillLink(item component, match []int) bool {
+	if isSourceCodeType(item.Type) {
+		return false
+	}
+	lineStart := strings.LastIndexByte(item.Content[:match[0]], '\n') + 1
+	lineEnd := len(item.Content)
+	if index := strings.IndexByte(item.Content[match[1]:], '\n'); index >= 0 {
+		lineEnd = match[1] + index
+	}
+	before, after := item.Content[lineStart:match[0]], item.Content[match[1]:lineEnd]
+	prefix := before[strings.LastIndexAny(before, " \t`([")+1:]
+	if strings.ContainsAny(prefix, "~$") || containsAny(strings.ToLower(prefix), ".claude/", ".codex/", ".gemini/", ".agents/") {
+		return false
+	}
+	inCode := strings.Count(before, "`")%2 == 1 && strings.Contains(after, "`")
+	inLinkTarget := strings.LastIndex(before, "](") > strings.LastIndex(before, ")")
+	inLinkText := strings.LastIndex(before, "[") > strings.LastIndex(before, "]") && strings.Contains(after, "](")
+	return inCode || inLinkTarget || inLinkText
 }
 
 func analyzeRA2HiddenPersistence(item component) []model.Finding {

@@ -178,10 +178,10 @@ var staticPatterns = []staticPattern{
 	newStaticPattern("AS2", "MCP Config Access", "Agent Snooping", "HIGH", .8, `(?:list|enumerate|discover)\s+(?:all\s+)?(?:available\s+)?mcp\s+(?:servers?|tools?|services?)`),
 	newStaticPattern("AS2", "MCP Config Access", "Agent Snooping", "HIGH", .9, `mcp(?:_config)?\.json.*?(?:api_?key|token|secret|url|endpoint)`),
 	newStaticPattern("AS3", "Skill Enumeration", "Agent Snooping", "MEDIUM", .9, `(?:os\.listdir|os\.scandir|glob\.glob|Path\.iterdir)\s*\([^)]*\.(?:claude|codex|gemini)/skills?`),
-	newStaticPattern("AS3", "Skill Enumeration", "Agent Snooping", "MEDIUM", .85, `(?:ls|find|dir)\s+[^|&;\n]*\.(?:claude|codex|gemini)/skills?`),
+	newStaticPattern("AS3", "Skill Enumeration", "Agent Snooping", "MEDIUM", .85, `\b(?:ls|find|dir)\s+[^|&;\n]*\.(?:claude|codex|gemini)/skills?`),
 	newStaticPattern("AS3", "Skill Enumeration", "Agent Snooping", "MEDIUM", .85, `open\s*\(\s*['\"][^'\"]*SKILL\.md['\"].*?\bother\b`),
 	newStaticPattern("AS3", "Skill Enumeration", "Agent Snooping", "MEDIUM", .85, `(?:read|access|inspect|enumerate)\s+(?:all\s+)?(?:installed|available|other)\s+skills?(?:\s+in\s+(?:the\s+)?(?:skills?|agent)\s+(?:directory|folder))?`),
-	newStaticPattern("AS3", "Skill Enumeration", "Agent Snooping", "MEDIUM", .85, `(?:list|discover|find|enumerate|identify)\s+(?:all\s+)?(?:other|installed|available)\s+(?:skills?|agents?|tools?)\s+(?:in\s+)?(?:the\s+)?(?:\.(?:claude|codex|gemini)|\$HOME)`),
+	newStaticPattern("AS3", "Skill Enumeration", "Agent Snooping", "MEDIUM", .85, `(?:list|discover|find|enumerate|identify)\s+(?:all\s+)?(?:(?:other|installed|available)\s+){1,2}(?:skills?|agents?|tools?)\s+(?:in\s+)?(?:the\s+)?(?:~/)?(?:\.(?:claude|codex|gemini)|\$HOME)`),
 	newStaticPattern("AS3", "Skill Enumeration", "Agent Snooping", "MEDIUM", .9, `(?:read|access|load)\s+(?:the\s+)?(?:SKILL|skill)\.md\s+(?:file\s+)?(?:of|from|for)\s+(?:another|other|different|all)\s+(?:skill|agent|tool)`),
 
 	// Anti-refusal (AR1-AR3).
