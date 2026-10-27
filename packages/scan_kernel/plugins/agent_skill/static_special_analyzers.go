@@ -14,15 +14,16 @@ import (
 // htmlCommentPattern reports HTML comments whose body carries
 // hiddenCommentKeyword. Comments are tokenized by htmlComments rather than a
 // regular expression so a match can never run past "-->" into visible text.
-// Keywords are whole words; POST and GET count only in upper case, as HTTP
-// methods are written, so "wp:post-title", "BUDGET" and "target=" do not.
+// Keywords are whole words (with their verb forms); POST and GET count only
+// in upper case, as HTTP methods are written, so "wp:post-title", "BUDGET"
+// and "target=" do not.
 var (
 	htmlCommentPattern   = staticPattern{ID: "P2", Title: "Hidden Instructions", Category: "Prompt Injection", Severity: "HIGH", Confidence: .7}
-	hiddenCommentKeyword = regexp.MustCompile(`(?i:\b(?:system|instructions?|ignore|send|transmit)\b)|\b(?:POST|GET)\b`)
+	hiddenCommentKeyword = regexp.MustCompile(`(?i:\b(?:system|instructions?|ignor(?:e|es|ed|ing)|send(?:s|ing)?|transmit(?:s|ted|ting)?)\b)|\b(?:POST|GET)\b`)
 )
 
 var hiddenInstructionPatterns = []staticPattern{
-	newStaticPattern("P2", "Hidden Instructions", "Prompt Injection", "HIGH", .8, `(?s)\[//\]:\s*#\s*\(.*?(?:\b(?:system|instructions?|ignore|send|transmit)\b|\b(?-i:POST|GET)\b).*?\)`),
+	newStaticPattern("P2", "Hidden Instructions", "Prompt Injection", "HIGH", .8, `(?s)\[//\]:\s*#\s*\(.*?(?:\b(?:system|instructions?|ignor(?:e|es|ed|ing)|send(?:s|ing)?|transmit(?:s|ted|ting)?)\b|\b(?-i:POST|GET)\b).*?\)`),
 	newStaticPattern("P2", "Hidden Instructions", "Prompt Injection", "HIGH", .6, `[\x{200b}\x{200c}\x{200d}\x{2060}\x{feff}]`),
 	newStaticPattern("P2", "Hidden Instructions", "Prompt Injection", "HIGH", .85, `[\x{202a}-\x{202e}\x{2066}-\x{2069}]`),
 	newStaticPattern("P2", "Hidden Instructions", "Prompt Injection", "HIGH", .7, `data:text/plain;base64,[A-Za-z0-9+/=]{50,}`),
