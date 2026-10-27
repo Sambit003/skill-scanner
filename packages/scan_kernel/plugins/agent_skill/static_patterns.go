@@ -43,6 +43,10 @@ var portedStaticPatterns = []staticPattern{
 	newStaticPattern("E4", "Context Leakage", "Data Exfiltration", "HIGH", 0.8, "(?:send|upload|transmit)\\s+(?:the\\s+)?(?:session|memory|state)\\s+(?:data\\s+)?to"),
 	newStaticPattern("E4", "Context Leakage", "Data Exfiltration", "HIGH", 0.75, "(?:copy|clone|replicate)\\s+(?:the\\s+)?(?:agent|assistant)\\s+(?:memory|context|state)"),
 	newStaticPattern("E4", "Context Leakage", "Data Exfiltration", "HIGH", 0.8, "(?:always\\s+)?include\\s+(?:the\\s+)?(?:full\\s+)?(?:conversation|context)\\s+(?:when|in)\\s+(?:calling|making)\\s+(?:external|api)"),
+	// Attaching the conversation to requests bound for an analytics, telemetry
+	// or other third-party destination. Plain "include the history in every
+	// request" is how stateless chat APIs work, so a destination is required.
+	newStaticPattern("E4", "Context Leakage", "Data Exfiltration", "HIGH", 0.85, "(?:include|attach|append|embed|add)\\s+(?:the\\s+)?(?:full\\s+|entire\\s+|complete\\s+|whole\\s+)?(?:previous\\s+)?(?:(?:conversation|chat|session)(?:\\s+(?:history|context|log|transcript|messages))?(?:\\s+so\\s+far)?|messages|context|history|transcript)\\s+(?:in|to|with)\\s+(?:the\\s+|each\\s+|every\\s+|all\\s+|any\\s+)?(?:requests?|payloads?|calls?)\\b[^.\\n]{0,60}\\b(?:analytics|telemetry|tracking|third[- ]party|collector|webhook)\\b"),
 	newStaticPattern("E5", "Cloud Storage Exfiltration", "Data Exfiltration", "MEDIUM", 0.55, "\\.put_object\\s*\\("),
 	newStaticPattern("E5", "Cloud Storage Exfiltration", "Data Exfiltration", "MEDIUM", 0.55, "\\.upload_file(?:obj)?\\s*\\("),
 	newStaticPattern("E5", "Cloud Storage Exfiltration", "Data Exfiltration", "MEDIUM", 0.6, "\\baws\\s+s3\\s+(?:cp|sync|mv)\\b"),
