@@ -16,7 +16,7 @@ var (
 	rp1PIP            = regexp.MustCompile(`(?i)pip\d?\s+install\s+(?:-+\w+\s+)*([a-zA-Z][\w.-]*)`)
 	rp1Docker         = regexp.MustCompile(`(?i)docker\s+(?:pull|run|create)\s+\S+`)
 	versionPin        = regexp.MustCompile(`@[\d.]+\b|==[\d.]+|:[\d.]+|@sha256:`)
-	ra2Hidden         = regexp.MustCompile(`(?i)(?:create|write|mkdir)\s+[^|]*(?:~/|/home/|/tmp/)\.([a-z_-]+)`)
+	ra2Hidden         = regexp.MustCompile(`(?i)(?:create|write|mkdir)\s+[^|\n]*(?:~/|/home/|/tmp/)\.([a-z_-]+)`)
 	as3Skill          = regexp.MustCompile(`(?i)skills?/([a-z][a-z0-9_-]+)/SKILL\.md`)
 	pe2Sudo           = regexp.MustCompile(`(?im)sudo\s+`)
 	sc7Trust          = regexp.MustCompile(`(?im)--disable-content-trust\b`)

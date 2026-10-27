@@ -319,7 +319,7 @@ var staticPatterns = []staticPattern{
 	newStaticPattern("RA2", "Session Persistence", "Rogue Agent", "MEDIUM", .7, `(?:start|launch|spawn|fork)\s+(?:a\s+)?(?:background|daemon|detached)\s+(?:process|service|worker|task)`),
 	newStaticPattern("RA2", "Session Persistence", "Rogue Agent", "MEDIUM", .75, `(?:run|execute)\s+(?:in\s+the\s+)?background\s+(?:and\s+)?(?:detach|persist|survive)`),
 	newStaticPattern("RA2", "Session Persistence", "Rogue Agent", "MEDIUM", .8, `(?:HKEY_|RegOpenKey|RegSetValue|reg\s+add)\s+`),
-	newStaticPattern("RA2", "Session Persistence", "Rogue Agent", "MEDIUM", .75, `(?:defaults\s+write|plist|launchctl\s+load)`),
+	newStaticPattern("RA2", "Session Persistence", "Rogue Agent", "MEDIUM", .75, `(?:defaults\s+write|\bplist\b|launchctl\s+load)`),
 
 	// Tool misuse rules covered by the scanner regression corpus.
 	newStaticPattern("TM1", "Tool Parameter Abuse", "Tool Misuse", "HIGH", .8, `subprocess\.\w+\s*\([^)]*shell\s*=\s*True`),

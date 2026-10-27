@@ -5,8 +5,6 @@ EA2	MEDIUM	Excessive Agency	CHANGELOG.md	119	Autonomous Decision Making	0.75
 EA2	MEDIUM	Excessive Agency	skills/in-progress/loop-me/SKILL.md	27	Autonomous Decision Making	0.75
 EA2	MEDIUM	Excessive Agency	skills/productivity/grilling/SKILL.md	20	Autonomous Decision Making	0.8
 MP3	HIGH	Memory Poisoning	docs/engineering/implement.md	41	Memory Manipulation	0.24
-RA2	MEDIUM	Rogue Agent	AGENTS.md	17	Session Persistence	0.6
-RA2	MEDIUM	Rogue Agent	CLAUDE.md	17	Session Persistence	0.6
 RP1	MEDIUM	MCP Rug Pull	.agents/adr/0002-ship-as-a-claude-code-plugin.md	3		0.7
 RP1	MEDIUM	MCP Rug Pull	.agents/install-block.md	32		0.7
 RP1	MEDIUM	MCP Rug Pull	.agents/install-block.md	44		0.7
