@@ -1,6 +1,7 @@
 package agentskill
 
 import (
+	"math"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -29,9 +30,11 @@ func maskFindingSecrets(findings []model.Finding) []model.Finding {
 }
 
 // maskSecrets masks private key blocks, known token formats, passwords in
-// URLs, credentials after Bearer/Basic, and literal values assigned to keys
-// whose names mark them as secrets. code says the text comes from program
-// source, where an unquoted bare name is a variable rather than a value.
+// URLs, credentials in command-line and .netrc forms and after an
+// Authorization scheme, literal values assigned to keys whose names mark them
+// as secrets, and, as a backstop, high-entropy tokens on lines that mention a
+// credential. code says the text comes from program source, where an unquoted
+// bare name is a variable rather than a value.
 func maskSecrets(text string, code bool) string {
 	if text == "" {
 		return text
@@ -52,13 +55,55 @@ func maskSecrets(text string, code bool) string {
 		}
 		return secretMask
 	})
+	for _, pattern := range credentialContexts {
+		text = replaceSubmatch(pattern, text, 1, maskCredentialValue)
+	}
 	text = replaceSubmatch(authorizationCredential, text, 2, func(value string) string {
 		if !hasLetterAndDigit(value) || isPlaceholderSecret(value, true, false) {
 			return value
 		}
 		return secretMask
 	})
-	return maskSecretAssignments(text, code)
+	return maskHighEntropyTokens(maskSecretAssignments(text, code))
+}
+
+var (
+	credentialLineWord = regexp.MustCompile(`(?i)secret|passw|token|api[-_ ]?key|credential|auth`)
+	longToken          = regexp.MustCompile(`[A-Za-z0-9+/_=-]{32,}`)
+)
+
+// maskHighEntropyTokens is a backstop for credential-looking lines: a token of
+// 32 or more characters mixing upper case, lower case and digits with high
+// entropy is masked when the line mentions a secret, password, token, API
+// key, credential or auth.
+func maskHighEntropyTokens(text string) string {
+	lines := strings.Split(text, "\n")
+	for index, line := range lines {
+		if !credentialLineWord.MatchString(line) {
+			continue
+		}
+		lines[index] = longToken.ReplaceAllStringFunc(line, func(token string) string {
+			if strings.IndexFunc(token, unicode.IsUpper) < 0 || strings.IndexFunc(token, unicode.IsLower) < 0 ||
+				strings.IndexFunc(token, unicode.IsDigit) < 0 || shannonEntropy(token) < 4 {
+				return token
+			}
+			return secretMask
+		})
+	}
+	return strings.Join(lines, "\n")
+}
+
+func shannonEntropy(value string) float64 {
+	counts := map[rune]float64{}
+	for _, char := range value {
+		counts[char]++
+	}
+	entropy, total := 0.0, float64(len(value))
+	for _, count := range counts {
+		probability := count / total
+		entropy -= probability * math.Log2(probability)
+	}
+	return entropy
 }
 
 var secretTokenFormats = []struct {
@@ -79,6 +124,45 @@ var secretTokenFormats = []struct {
 	{regexp.MustCompile(`\bnpm_[A-Za-z0-9]{36}\b`), "npm_***", false},
 	{regexp.MustCompile(`\bAIza[0-9A-Za-z_-]{35}`), "AIza***", false},
 	{regexp.MustCompile(`\beyJ[A-Za-z0-9_-]{8,}\.eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}`), "eyJ***", false},
+	{regexp.MustCompile(`\bhf_[A-Za-z0-9]{30,}`), "hf_***", false},
+	{regexp.MustCompile(`\bSG\.[A-Za-z0-9_-]{16,}\.[A-Za-z0-9_-]{16,}`), "SG.***", false},
+	{regexp.MustCompile(`(hooks\.slack\.com/services/T[A-Za-z0-9]+/B[A-Za-z0-9]+/)[A-Za-z0-9]{8,}`), "${1}***", false},
+	{regexp.MustCompile(`(discord(?:app)?\.com/api/webhooks/\d+/)[A-Za-z0-9_-]{20,}`), "${1}***", false},
+	{regexp.MustCompile(`\b((?:bot)?\d{6,12}):[A-Za-z0-9_-]{35}\b`), "${1}:***", false},
+	{regexp.MustCompile(`(https?://)[0-9a-f]{32}(@[A-Za-z0-9.-]*sentry\.io)`), "${1}***${2}", false},
+}
+
+// credentialContexts are command-line and file forms in which a credential
+// follows a fixed marker. Group 1 is the value; maskCredentialValue keeps
+// quotes around it and leaves references and placeholders alone.
+var credentialContexts = []*regexp.Regexp{
+	// curl -u user:pass, --user=user:pass ("$USER:$PASS" never matches).
+	regexp.MustCompile(`(?:^|\s)(?:-u|--user)(?:[ \t]+|=)["']?[^\s:"'$]+:([^\s"'\x60]+)`),
+	// mysql -pSECRET: the password is glued to -p; a bare -p prompts, and -P
+	// is the port.
+	regexp.MustCompile(`\b(?:mysql|mysqladmin|mysqldump|mysqlimport|mysqlshow|mysqlcheck|mysqlpump|mariadb|mariadb-dump)\b[^\n|;&]*?[ \t]-p("[^"\n]*"|'[^'\n]*'|[^\s"'\x60]+)`),
+	// --password VALUE, --token=VALUE and similar credential flags.
+	regexp.MustCompile(`(?i)(?:^|\s)--(?:password|passwd|token|api-key|apikey|secret|client-secret|auth-token|access-token|api-token|secret-key)(?:=|[ \t]+)("[^"\n]*"|'[^'\n]*'|[^\s"'\x60]+)`),
+	// sshpass -p VALUE
+	regexp.MustCompile(`\bsshpass\b[^\n|;&]*?[ \t]-p[ \t]*("[^"\n]*"|'[^'\n]*'|[^\s"'\x60]+)`),
+	// .netrc: login NAME password VALUE, on one line or the next.
+	regexp.MustCompile(`\blogin[ \t]+\S+(?:[ \t]+|[ \t]*\n[ \t]*)password[ \t]+([^\s"'\x60,;]+)`),
+	// Authorization: <scheme> VALUE, for token and apikey schemes as well as
+	// Bearer and Basic.
+	regexp.MustCompile(`(?i)\b(?:proxy-)?authorization["']?[ \t]*[:=][ \t]*["']?(?:bearer|basic|token|apikey|api-key|digest)[ \t]+([^\s"',;\x60]+)`),
+}
+
+func maskCredentialValue(value string) string {
+	inner, quote := value, ""
+	if len(value) >= 2 && (value[0] == '"' || value[0] == '\'') && value[len(value)-1] == value[0] {
+		inner, quote = value[1:len(value)-1], value[:1]
+	}
+	// Another flag, or a BuildKit secret mount spec (--secret id=npmrc,src=...),
+	// is not a credential value.
+	if strings.HasPrefix(inner, "-") || strings.HasPrefix(inner, "id=") || isPlaceholderSecret(inner, true, false) {
+		return value
+	}
+	return quote + secretMask + quote
 }
 
 var (

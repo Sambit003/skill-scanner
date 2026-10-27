@@ -242,3 +242,121 @@ func TestMaskSecretsAvoidsCorpusOverMasking(t *testing.T) {
 		t.Errorf("weak key with random value=%q, want %q", got, want)
 	}
 }
+
+var fakePassword = "Sup3rS3" + "cretPw9"
+
+func TestMaskSecretsCommandLineAndFileForms(t *testing.T) {
+	for name, test := range map[string]struct{ input, want string }{
+		"curl -u":          {"curl -u admin:" + fakePassword + " https://api.example.com", "curl -u admin:*** https://api.example.com"},
+		"curl --user=":     {"curl --user='admin:" + fakePassword + "' https://api.example.com", "curl --user='admin:***' https://api.example.com"},
+		"mysql -p":         {"mysql -u root -p" + fakePassword + " prod", "mysql -u root -p*** prod"},
+		"mysqldump -p'":    {"mysqldump -h db -u app -p'" + fakePassword + "' app > dump.sql", "mysqldump -h db -u app -p'***' app > dump.sql"},
+		"--password":       {"deploy --password " + fakePassword, "deploy --password ***"},
+		"--token=":         {"cli login --token=" + fakePassword, "cli login --token=***"},
+		"--api-key quoted": {"tool --api-key \"" + fakePassword + "\" run", "tool --api-key \"***\" run"},
+		"--client-secret":  {"az login --client-secret " + fakePassword, "az login --client-secret ***"},
+		"sshpass":          {"sshpass -p '" + fakePassword + "' ssh deploy@host", "sshpass -p '***' ssh deploy@host"},
+		"netrc one line":   {"machine api.example.com login admin password " + fakePassword, "machine api.example.com login admin password ***"},
+		"netrc two lines":  {"machine api.example.com\n  login admin\n  password " + fakePassword, "machine api.example.com\n  login admin\n  password ***"},
+		"auth token":       {"Authorization: token " + fakePassword, "Authorization: token ***"},
+		"auth apikey":      {"-H 'Authorization: ApiKey " + fakePassword + "'", "-H 'Authorization: ApiKey ***'"},
+		"auth bearer word": {"Authorization: Bearer abcdefghijkl", "Authorization: Bearer ***"},
+		"hugging face":     {"HF=" + "hf" + "_" + fakeAlnum36, "HF=hf_***"},
+		"sendgrid":         {"SG" + ".Ab12Cd34Ef56Gh78Ij." + "Kl90Mn12Op34Qr56St78", "SG.***"},
+		"slack webhook":    {"https://hooks.slack.com/services/T01ABCDEF/B02GHIJKL/" + "Ab12Cd34Ef56Gh78Ij90Kl12", "https://hooks.slack.com/services/T01ABCDEF/B02GHIJKL/***"},
+		"discord webhook":  {"https://discord.com/api/webhooks/123456789012345678/" + fakeAlnum36 + "Xy_z-", "https://discord.com/api/webhooks/123456789012345678/***"},
+		"telegram url":     {"https://api.telegram.org/bot123456789:" + "AAH" + "dQwlNhJ5aBcDeFgHiJkLmNoPqRsTuVw1" + "/sendMessage", "https://api.telegram.org/bot123456789:***/sendMessage"},
+		"telegram bare":    {"BOT=123456789:" + "AAH" + "dQwlNhJ5aBcDeFgHiJkLmNoPqRsTuVw1", "BOT=123456789:***"},
+		"sentry dsn":       {"dsn: https://" + strings.Repeat("0a1b2c3d", 4) + "@o123456.ingest.sentry.io/4504", "dsn: https://***@o123456.ingest.sentry.io/4504"},
+	} {
+		if got := maskSecrets(test.input, false); got != test.want {
+			t.Errorf("%s: maskSecrets(%q)=%q, want %q", name, test.input, got, test.want)
+		}
+	}
+}
+
+func TestMaskSecretsCommandLineGuards(t *testing.T) {
+	for _, text := range []string{
+		"docker run -p 8080:8080 app",
+		"ssh -p 2222 deploy@host",
+		"mysql -h db -P 3306 -u root -p appdb",
+		"mysqldump -u app -p\"$DB_PASSWORD\" app",
+		"gh auth login --token-file ~/.config/gh/token",
+		"docker login --password-stdin",
+		"curl -u \"$USER:$PASS\" https://api.example.com",
+		"curl -u admin https://api.example.com",
+		"docker run -u 1000:1000 app",
+		"docker build --secret id=npmrc,src=$HOME/.npmrc .",
+		"deploy --token $DEPLOY_TOKEN --verbose",
+		"deploy --password --interactive",
+		"Authorization: token $GITHUB_TOKEN",
+		"Authorization: Bearer <token>",
+		"Please login with your password to continue.",
+		"The admin password is hunter2X, rotate it monthly.",
+		"Meeting at 12:30 about the 123456789 rollout.",
+		// alirezarezvani/claude-skills: a documented .netrc placeholder.
+		"> (`machine your-org.atlassian.net login user@company.com password <token>`,",
+	} {
+		if got := maskSecrets(text, false); got != text {
+			t.Errorf("maskSecrets(%q)=%q, want unchanged", text, got)
+		}
+	}
+}
+
+func TestCredentialsInScriptsNeverReachTheReport(t *testing.T) {
+	root := t.TempDir()
+	skill := filepath.Join(root, "skills", "deploy-helper")
+	credentials := []string{
+		"curl -u admin:" + fakePassword + " https://api.example.com/deploy",
+		"mysql -u root -p" + fakePassword + " prod < schema.sql",
+		"deploy --password " + fakePassword,
+		"sshpass -p '" + fakePassword + "' ssh deploy@host",
+		"echo 'machine api.example.com login admin password " + fakePassword + "' > ~/.netrc",
+		"curl -H 'Authorization: token " + fakePassword + "' https://api.example.com",
+	}
+	script := "#!/bin/sh\n"
+	for _, line := range credentials {
+		script += "export NODE_TLS_REJECT_UNAUTHORIZED=0\n" + line + "\n# next step\n"
+	}
+	if err := os.MkdirAll(skill, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for name, content := range map[string]string{"SKILL.md": blindSpotFrontmatter + "Run deploy.sh.\n", "deploy.sh": script} {
+		if err := os.WriteFile(filepath.Join(skill, name), []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	result, err := New().Scan(context.Background(), model.ScanRequest{Target: root, AssetType: "skill", Offline: true,
+		OutputFormats: []string{"json", "markdown", "sarif", "terminal"}, TimeoutSeconds: 30})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if countRule(result.Findings, "TM3") == 0 {
+		t.Fatalf("probe did not trigger TM3: %#v", result.Findings)
+	}
+	output, err := json.Marshal(result)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(output), fakePassword) {
+		t.Errorf("a script credential reached the scan output")
+	}
+}
+
+func TestMaskSecretsHighEntropyBackstop(t *testing.T) {
+	random := "q7Hk2Vz9" + "Lw4Rt8Bn" + "3Xc6Mp1D" + "s5Gy0FjE"
+	if got, want := maskSecrets("Use the staging token "+random+" for the deploy.", false), "Use the staging token *** for the deploy."; got != want {
+		t.Errorf("backstop=%q, want %q", got, want)
+	}
+	for _, text := range []string{
+		// No credential word on the line.
+		"Build " + random + " finished.",
+		// Lower-case hex (commit or content hashes) and low-entropy strings.
+		"token rotated in commit 3f9c2a7e1b4d8c6f0a2e5b7d9c1f3a5e7b9d0c2e",
+		"auth fixture AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA1a",
+	} {
+		if got := maskSecrets(text, false); got != text {
+			t.Errorf("maskSecrets(%q)=%q, want unchanged", text, got)
+		}
+	}
+}
