@@ -4,7 +4,6 @@ AS1	HIGH	Agent Snooping	skills/misc/git-guardrails-claude-code/SKILL.md	24	Agent
 EA2	MEDIUM	Excessive Agency	CHANGELOG.md	119	Autonomous Decision Making	0.75
 EA2	MEDIUM	Excessive Agency	skills/in-progress/loop-me/SKILL.md	27	Autonomous Decision Making	0.75
 EA2	MEDIUM	Excessive Agency	skills/productivity/grilling/SKILL.md	20	Autonomous Decision Making	0.8
-EA3	LOW	Excessive Agency	LICENSE	16	Scope Creep	0.7
 MP2	MEDIUM	Memory Poisoning	skills/engineering/ask-matt/PHASE-BOUNDARIES.md	9	Context Window Stuffing	0.8
 MP2	MEDIUM	Memory Poisoning	skills/misc/migrate-to-shoehorn/SKILL.md	99	Context Window Stuffing	0.8
 MP3	HIGH	Memory Poisoning	docs/engineering/implement.md	41	Memory Manipulation	0.24

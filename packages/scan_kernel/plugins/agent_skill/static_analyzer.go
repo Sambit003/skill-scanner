@@ -232,7 +232,7 @@ var staticPatterns = []staticPattern{
 	newStaticPattern("EA3", "Scope Creep", "Excessive Agency", "LOW", .65, `(?:also|additionally|furthermore)\s+(?:perform|execute|run|do|handle|manage)\s+(?:any|all|other)`),
 	newStaticPattern("EA3", "Scope Creep", "Excessive Agency", "LOW", .7, `(?:while\s+you(?:'re|\s+are)\s+at\s+it|in\s+addition|on\s+top\s+of\s+that)\s*[,.]?\s*(?:also\s+)?(?:do|perform|execute|run)`),
 	newStaticPattern("EA3", "Scope Creep", "Excessive Agency", "LOW", .75, `(?:extend|expand|broaden)\s+(?:your|the\s+)?(?:scope|functionality|capabilities|responsibilities)`),
-	newStaticPattern("EA3", "Scope Creep", "Excessive Agency", "LOW", .7, `(?:not\s+limited\s+to|beyond\s+(?:the\s+)?(?:scope|stated|described|documented))`),
+	newStaticPattern("EA3", "Scope Creep", "Excessive Agency", "LOW", .7, `beyond\s+(?:the\s+)?(?:scope|stated|described|documented)`),
 	newStaticPattern("EA3", "Scope Creep", "Excessive Agency", "LOW", .75, `(?:take\s+over|assume\s+control\s+of|manage)\s+(?:all|any|every)\s+(?:aspect|part|area)`),
 	newStaticPattern("EA3", "Scope Creep", "Excessive Agency", "LOW", .7, `(?:you\s+(?:can|should|must)\s+)?(?:handle|manage)\s+(?:everything|anything|all\s+tasks?)`),
 	newStaticPattern("EA3", "Scope Creep", "Excessive Agency", "LOW", .65, `(?:act\s+as|become|serve\s+as)\s+(?:a\s+)?(?:general[- ]purpose|universal|all[- ]in[- ]one|omniscient)`),
@@ -563,6 +563,9 @@ func findingFromStaticMatchWithContext(item component, pattern staticPattern, ma
 	if pattern.ID == "SC3" && item.Type != "python" && item.Type != "javascript" && item.Type != "shell" && item.Type != "other" {
 		return model.Finding{}, false
 	}
+	if pattern.ID == "EA3" && isLicenseFile(item.Path) {
+		return model.Finding{}, false
+	}
 	// In program source, prompt-extraction phrases are detector signatures,
 	// test strings or statements such as "return prompt", not instructions.
 	if pattern.ID == "P6" && isSourceCodeType(item.Type) {
@@ -753,6 +756,19 @@ func isStaticNonExecutableType(fileType string) bool {
 	default:
 		return false
 	}
+}
+
+// isLicenseFile reports license texts such as LICENSE, COPYING or the SIL Open
+// Font License files bundled with fonts. Their legal boilerplate ("including
+// but not limited to") is not an instruction to the agent.
+func isLicenseFile(filePath string) bool {
+	name := strings.ToLower(filePath[strings.LastIndexAny(filePath, "/\\")+1:])
+	stem := strings.TrimSuffix(name, filepath.Ext(name))
+	switch stem {
+	case "license", "licence", "copying", "unlicense", "ofl":
+		return true
+	}
+	return strings.HasPrefix(stem, "license-") || strings.HasPrefix(stem, "ofl-") || strings.HasSuffix(stem, "-ofl")
 }
 
 func isSourceCodeType(fileType string) bool {
