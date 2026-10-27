@@ -202,18 +202,22 @@ func pythonStringRepr(value string) string {
 
 func isDependencyFile(path string) bool { return dependencyManifestKind(path) != "" }
 
-// dependencyManifestKind classifies dependency manifests by exact file name:
-// requirements*.txt, package.json, pyproject.toml, setup.py and Pipfile.
-// Substring matching treated files such as tenant_setup.py and
-// compliance_requirements.md as manifests.
+// dependencyManifestKind classifies dependency manifests by file name:
+// package.json, pyproject.toml, setup.py, Pipfile, any .txt file whose name
+// contains "requirements" (requirements-dev.txt, dev-requirements.txt) and
+// any .txt file directly inside a requirements/ directory. Substring matching
+// on the whole path treated tenant_setup.py and compliance_requirements.md
+// as manifests.
 func dependencyManifestKind(filePath string) string {
-	name := strings.ToLower(path.Base(strings.ReplaceAll(filePath, "\\", "/")))
+	normalized := strings.ToLower(strings.ReplaceAll(filePath, "\\", "/"))
+	name := path.Base(normalized)
 	switch {
 	case name == "package.json":
 		return "npm"
 	case name == "pyproject.toml":
 		return "pyproject"
-	case name == "setup.py", name == "pipfile", strings.HasPrefix(name, "requirements") && strings.HasSuffix(name, ".txt"):
+	case name == "setup.py", name == "pipfile",
+		strings.HasSuffix(name, ".txt") && (strings.Contains(name, "requirements") || path.Base(path.Dir(normalized)) == "requirements"):
 		return "requirements"
 	default:
 		return ""

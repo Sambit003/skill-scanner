@@ -149,7 +149,7 @@ func TestSupplyChainRulesUseExactManifestNames(t *testing.T) {
 		t.Errorf("dependency analysis reported %s in %s:%d, want nothing", finding.ID, finding.Location.File, finding.Location.StartLine)
 	}
 
-	for _, name := range []string{"requirements.txt", "requirements-dev.txt", "app/requirements_test.txt", "package.json", "pyproject.toml", "setup.py", "Pipfile"} {
+	for _, name := range []string{"requirements.txt", "requirements-dev.txt", "dev-requirements.txt", "app/requirements_test.txt", "requirements/prod.txt", "app/requirements/base.txt", "package.json", "pyproject.toml", "setup.py", "Pipfile"} {
 		if !isDependencyFile(name) {
 			t.Errorf("isDependencyFile(%q)=false, want true", name)
 		}
@@ -162,6 +162,23 @@ func TestSupplyChainRulesUseExactManifestNames(t *testing.T) {
 	for _, id := range []string{"SC5", "SC6"} {
 		if !hasRule(dependencies, id) {
 			t.Errorf("%s missed in requirements.txt; got %#v", id, dependencies)
+		}
+	}
+	for _, name := range []string{"dev-requirements.txt", "requirements/prod.txt"} {
+		item := component{Path: name, Type: "text", Content: "flask\npycrypto==2.6.1\nreqeusts==2.31.0\n"}
+		if got := countRule(scanComponents(t, item), "SC1"); got == 0 {
+			t.Errorf("%s: SC1 missed an unpinned requirement", name)
+		}
+		dependencies := analyzeDependencies(context.Background(), []component{item}, true)
+		for _, id := range []string{"SC5", "SC6"} {
+			if !hasRule(dependencies, id) {
+				t.Errorf("%s: %s missed; got %#v", name, id, dependencies)
+			}
+		}
+	}
+	for _, name := range []string{"notes/requirements/legal.md", "requirements/nested/prod.txt"} {
+		if isDependencyFile(name) {
+			t.Errorf("isDependencyFile(%q)=true, want false", name)
 		}
 	}
 }
