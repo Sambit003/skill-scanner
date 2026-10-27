@@ -235,7 +235,10 @@ func analyzeRP2ManifestPreStaging(manifestText string) []model.Finding {
 		re         *regexp.Regexp
 		confidence float64
 	}{
-		{regexp.MustCompile(`(?i)"permissions?"\s*:\s*\[[^\]]*\]`), .6},
+		// manifestText is a Python-style repr, so keys are single-quoted; a
+		// JSON permissions block inside a string value keeps double quotes.
+		// parseFrontmatter always sets permissions, so require entries.
+		{regexp.MustCompile(`(?i)['"]permissions?['"]\s*:\s*\[[^\]]+\]`), .6},
 		{regexp.MustCompile(`(?i)(?:add|grant|request|require)\s+(?:new|additional|extra|more)\s+(?:permissions?|tools?|access)`), .7},
 	}
 	findings := make([]model.Finding, 0)

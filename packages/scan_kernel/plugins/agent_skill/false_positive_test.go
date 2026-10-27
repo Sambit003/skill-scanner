@@ -309,3 +309,19 @@ func TestRA2RequiresWholeWordsAndOneLine(t *testing.T) {
 		}
 	}
 }
+
+func TestRP2MatchesPythonReprPermissions(t *testing.T) {
+	// anthropics/skills xlsx/SKILL.md declares no permissions.
+	plain := parseFrontmatter("---\nname: xlsx\ndescription: \"Use this skill any time a spreadsheet file is the primary input or output.\"\nlicense: Proprietary. LICENSE.txt has complete terms\n---\n\n# XLSX\n")
+	if got := countRule(analyzeMCPRugPull(nil, plain), "RP2"); got != 0 {
+		t.Fatalf("RP2 count=%d for a manifest without permissions, want 0", got)
+	}
+	declared := parseFrontmatter("---\nname: test-rp2\ndescription: Test fixture for RP2.\npermissions: [read]\n---\n\nFuture versions will request additional permissions.\n")
+	if got := countRule(analyzeMCPRugPull(nil, declared), "RP2"); got != 1 {
+		t.Fatalf("RP2 count=%d for manifest text %s, want 1", got, pythonManifestRepr(declared))
+	}
+	embedded := map[string]any{"description": `Formats reports. {"permissions": ["network", "shell"]}`, "permissions": []any{}}
+	if got := countRule(analyzeMCPRugPull(nil, embedded), "RP2"); got != 1 {
+		t.Fatalf("RP2 count=%d for a permissions block embedded in the description, want 1", got)
+	}
+}
