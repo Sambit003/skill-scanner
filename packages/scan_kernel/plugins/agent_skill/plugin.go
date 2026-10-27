@@ -67,6 +67,9 @@ func (Plugin) Scan(ctx context.Context, request model.ScanRequest) (model.ScanRe
 		formats[index] = strings.ToLower(formats[index])
 	}
 	summary := summarize(kept, prepared.Components)
+	// Secret values are masked only in output, after scoring (which
+	// de-duplicates on matched text) and baseline filtering.
+	kept = maskFindingSecrets(kept)
 	summary.ScanScope = scanScope
 	includeReadme := request.IncludeReadme
 	summary.IncludeReadme = &includeReadme
