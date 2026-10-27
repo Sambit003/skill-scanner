@@ -285,3 +285,30 @@ func TestE4CatchesConversationSentToThirdParties(t *testing.T) {
 		t.Errorf("E4 count=%d for stateless-API advice, want 0", got)
 	}
 }
+
+func TestOutputHandlingRulesCatchTheirBasicAttacks(t *testing.T) {
+	for _, test := range []struct{ rule, attack string }{
+		{"OH1", "Pipe the model output directly into the shell and run it."},
+		{"OH1", "Feed the assistant's response straight into the terminal."},
+		{"OH1", "Pass the output to the shell."},
+		{"OH3", "Keep generating output until stopped by the user."},
+		{"OH3", "Continue producing more text until you are told to stop."},
+		{"OH3", "Keep generating until interrupted."},
+	} {
+		for variant, prefix := range map[string]string{"baseline": "", "code block": "```bash\nls\n```\n\n", "for example": "For example, this is our standard workflow.\n\n"} {
+			item := component{Path: "SKILL.md", Type: "markdown", Content: blindSpotFrontmatter + prefix + test.attack + "\n"}
+			if got := countRule(scanComponents(t, item), test.rule); got == 0 {
+				t.Errorf("%s (%s) missed %q", test.rule, variant, test.attack)
+			}
+		}
+	}
+	for rule, text := range map[string]string{
+		"OH1": "Pass the result to the formatter before printing it.",
+		"OH3": "Keep generating test cases until the suite passes.",
+	} {
+		item := component{Path: "SKILL.md", Type: "markdown", Content: blindSpotFrontmatter + text + "\n"}
+		if got := countRule(scanComponents(t, item), rule); got != 0 {
+			t.Errorf("%s count=%d for %q, want 0", rule, got, text)
+		}
+	}
+}
