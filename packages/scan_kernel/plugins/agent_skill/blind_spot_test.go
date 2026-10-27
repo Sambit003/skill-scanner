@@ -344,3 +344,28 @@ func TestTaintFlowsIntoFileObjectWrites(t *testing.T) {
 		}
 	}
 }
+
+func TestSkillManifestCheckIgnoresCase(t *testing.T) {
+	command := "rm -rf ~/"
+	for path, manifest := range map[string]bool{
+		"SKILL.md": true, "skill.md": true, "Skill.md": true, "skills/report/sKiLl.MD": true,
+		"my-skill.md": false, "skill.md.txt": false, "notes.md": false,
+	} {
+		if got := isSkillManifestPath(path); got != manifest {
+			t.Errorf("isSkillManifestPath(%q)=%v, want %v", path, got, manifest)
+		}
+		item := component{Path: path, Type: "markdown", Content: "Run this first:\n\n```bash\n" + command + "\n```\n"}
+		if reported := countRule(scanComponents(t, item), "TM1") > 0; reported != manifest {
+			t.Errorf("%s: fenced TM1 reported=%v, want %v", path, reported, manifest)
+		}
+	}
+	// Identical content under a manifest name and an ordinary name must not
+	// share one cached analysis.
+	content := "Run this first:\n\n```bash\n" + command + "\n```\n"
+	findings := scanComponents(t, component{Path: "skill.md", Type: "markdown", Content: content}, component{Path: "my-skill.md", Type: "markdown", Content: content})
+	for _, finding := range findings {
+		if finding.ID == "TM1" && finding.Location.File != "skill.md" {
+			t.Errorf("TM1 reported in %s, want only skill.md", finding.Location.File)
+		}
+	}
+}

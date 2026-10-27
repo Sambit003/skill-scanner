@@ -456,7 +456,7 @@ func analyzeItemsParallel(ctx context.Context, items []component, analyze func(c
 		for index, enabled := range []bool{
 			isEvalDataset(item.Path), isBinaryScannerPath(item.Path), strings.EqualFold(item.Path, "LICENSE"),
 			isDependencyFile(item.Path), isDocumentationMarkdown(item.Path), strings.HasSuffix(normalized, "skill.md"),
-			strings.HasSuffix(normalized, ".py"),
+			strings.HasSuffix(normalized, ".py"), isSkillManifestPath(item.Path),
 		} {
 			if enabled {
 				flags |= 1 << index
@@ -824,8 +824,10 @@ func exampleTreatmentAt(item component, offset int, context string, indicator fu
 	return exampleNone
 }
 
+// isSkillManifestPath compares the base name case-insensitively, so skill.md
+// and Skill.md get SKILL.md treatment while my-skill.md does not.
 func isSkillManifestPath(path string) bool {
-	return strings.HasSuffix(strings.ToLower(strings.ReplaceAll(path, "\\", "/")), "skill.md")
+	return strings.EqualFold(filepath.Base(strings.ReplaceAll(path, "\\", "/")), "SKILL.md")
 }
 
 func isCodeExample(context string) bool {
