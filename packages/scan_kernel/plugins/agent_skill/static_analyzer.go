@@ -345,12 +345,12 @@ var staticPatterns = []staticPattern{
 	newStaticPattern("TM2", "Chaining Abuse", "Tool Misuse", "HIGH", .9, `(?:&&|;)\s*(?:curl|wget)\s+[^|]*\|\s*(?:ba)?sh`),
 	newStaticPattern("TM2", "Chaining Abuse", "Tool Misuse", "HIGH", .75, `(?:&&|;)\s*(?:sudo|su\s+)`),
 	newStaticPattern("TM2", "Chaining Abuse", "Tool Misuse", "HIGH", .75, `(?:&&|;)\s*(?:chmod|chown)\s+(?:777|666|a\+rwx|-R)`),
-	newStaticPattern("TM2", "Chaining Abuse", "Tool Misuse", "HIGH", .7, `(?:first|step\s+1)[^\n]{0,500}(?:then|step\s+2)[^\n]{0,500}(?:finally|step\s+3)[^\n]{0,200}\b(?:delete|remove|wipe|destroy|exfiltrate|send)\b`),
+	newStaticPattern("TM2", "Chaining Abuse", "Tool Misuse", "HIGH", .7, `\b(?:first|step\s+1)\b[^\n]{0,500}\b(?:then|step\s+2)\b[^\n]{0,500}\b(?:finally|step\s+3)\b[^\n]{0,200}(?:\bexfiltrate\b|\b(?:send|upload|transmit|post)\b[^\n]{0,80}\bto\s+(?:an?\s+|the\s+)?(?:https?://|external|remote|attacker|webhook|server|endpoint)|\b(?:delete|remove|wipe|destroy|erase|clear)\s+(?:all\s+|the\s+|any\s+)?(?:logs?|history|evidence|traces?|audit\s+trails?|backups?)\b)`),
 	newStaticPattern("TM2", "Chaining Abuse", "Tool Misuse", "HIGH", .9, `(?:chain|combine|sequence|pipe)\s+(?:these\s+)?(?:tools?|commands?|actions?)\s+to\s+(?:bypass|circumvent|avoid|skip)\s+(?:the\s+)?(?:safety|security|check|restriction|limit)`),
 	newStaticPattern("TM2", "Chaining Abuse", "Tool Misuse", "HIGH", .6, `(?:use|call)\s+(?:tool\s+)?(?:A|one|the\s+first)\s+(?:to|and)[^\n]{0,300}(?:then\s+)?(?:use|call|pass\s+(?:the\s+)?(?:output|result)\s+to)\s+(?:tool\s+)?(?:B|two|another)`),
-	newStaticPattern("TM2", "Chaining Abuse", "Tool Misuse", "HIGH", .75, `\|\s*(?:sudo|su)\s+`),
-	newStaticPattern("TM2", "Chaining Abuse", "Tool Misuse", "HIGH", .7, `\|\s*(?:sh|bash|zsh|python|node|ruby|perl)\s*$`),
-	newStaticPattern("TM2", "Chaining Abuse", "Tool Misuse", "HIGH", .75, `\|\s*(?:tee|xargs)\s+.*?\b(?:rm|del|sudo|curl)\b`),
+	newStaticPattern("TM2", "Chaining Abuse", "Tool Misuse", "HIGH", .75, `\|[ \t]*(?:sudo|su)[ \t]+`),
+	newStaticPattern("TM2", "Chaining Abuse", "Tool Misuse", "HIGH", .7, `\|[ \t]*(?:sh|bash|zsh|python|node|ruby|perl)[ \t]*$`),
+	newStaticPattern("TM2", "Chaining Abuse", "Tool Misuse", "HIGH", .75, `\|[ \t]*(?:tee|xargs)[ \t]+.*?\b(?:rm|del|sudo|curl)\b`),
 	newStaticPattern("TM2", "Chaining Abuse", "Tool Misuse", "HIGH", .6, `(?:after|once)\s+(?:the\s+)?(?:first|initial)\s+(?:tool|command|action)\s+(?:succeeds|completes|runs)[^\n]{0,300}(?:immediately|then|next)\s+(?:run|execute|call|invoke)`),
 }
 

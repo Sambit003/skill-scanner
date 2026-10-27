@@ -25,4 +25,3 @@ SC1	LOW	Supply Chain	package.json	17	Unpinned Dependencies	0.4
 SC1	LOW	Supply Chain	package.json	18	Unpinned Dependencies	0.4
 TM1	HIGH	Tool Misuse	skills/misc/git-guardrails-claude-code/SKILL.md	13	Tool Parameter Abuse	0.65
 TM1	HIGH	Tool Misuse	skills/misc/git-guardrails-claude-code/scripts/block-dangerous-git.sh	8	Tool Parameter Abuse	0.75
-TM2	HIGH	Tool Misuse	skills/engineering/to-tickets/SKILL.md	40	Chaining Abuse	0.7
