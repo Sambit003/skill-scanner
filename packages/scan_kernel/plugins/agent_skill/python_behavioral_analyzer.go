@@ -58,7 +58,12 @@ var taintExecSinks = wordSet(
 	"exec", "eval", "compile", "os.system", "os.popen", "subprocess.run", "subprocess.call",
 	"subprocess.check_output", "subprocess.check_call", "subprocess.Popen",
 )
-var taintFileWriteSinks = wordSet("open", "pathlib.Path.write_text", "pathlib.Path.write_bytes", "shutil.copy", "shutil.copy2", "shutil.copyfile")
+
+// pythonFileObjectWrite is the sink name for write()/writelines() on a file
+// object opened for writing, such as open(path, "w").write(data).
+const pythonFileObjectWrite = "file.write"
+
+var taintFileWriteSinks = wordSet("open", pythonFileObjectWrite, "pathlib.Path.write_text", "pathlib.Path.write_bytes", "shutil.copy", "shutil.copy2", "shutil.copyfile")
 
 var taintRuleProperties = map[string]struct {
 	severity   string
@@ -180,6 +185,7 @@ func analyzePythonTaint(item component, module *pyparser.Module, aliases, types 
 	findings := make([]model.Finding, 0)
 	tainted := map[string]taintedVariable{}
 	seen := map[string]bool{}
+	writeHandles := pythonWriteHandles(module, aliases)
 	pythonWalk(module, func(raw any) {
 		if assignment, ok := raw.(*pyparser.Assign); ok {
 			source := findPythonSourceInExpression(assignment.Value, types, aliases)
@@ -211,6 +217,9 @@ func analyzePythonTaint(item component, module *pyparser.Module, aliases, types 
 		sink := resolvePythonCallNameTyped(call, types, aliases)
 		if sink == "" {
 			sink = resolvePythonDynamicImportCall(call, aliases)
+		}
+		if isPythonFileObjectWrite(call, writeHandles, aliases) {
+			sink = pythonFileObjectWrite
 		}
 		if !isTaintSink(sink) || (sink == "open" && !pythonOpenForWrite(call)) {
 			return
@@ -383,6 +392,51 @@ func isTaintSource(name string) bool {
 
 func isTaintSink(name string) bool {
 	return taintNetworkOutputSinks[name] || taintExecSinks[name] || taintFileWriteSinks[name]
+}
+
+// pythonWriteHandles returns the names bound to files opened for writing, by
+// assignment (f = open(path, "w")) or a with statement (with open(...) as f).
+func pythonWriteHandles(module *pyparser.Module, aliases map[string]string) map[string]bool {
+	handles := map[string]bool{}
+	record := func(target pyparser.Expr, value pyparser.Expr) {
+		name, isName := target.(*pyparser.Name)
+		call, isCall := value.(*pyparser.Call)
+		if isName && isCall && resolvePythonCallName(call, aliases) == "open" && pythonOpenForWrite(call) {
+			handles[name.Id] = true
+		}
+	}
+	pythonWalk(module, func(raw any) {
+		switch node := raw.(type) {
+		case *pyparser.Assign:
+			for _, target := range node.Targets {
+				record(target, node.Value)
+			}
+		case *pyparser.With:
+			for _, item := range node.Items {
+				if item.OptionalVars != nil {
+					record(item.OptionalVars, item.ContextExpr)
+				}
+			}
+		}
+	})
+	return handles
+}
+
+// isPythonFileObjectWrite reports write() or writelines() on a file opened for
+// writing, either inline (open(path, "w").write(data)) or through a handle
+// from pythonWriteHandles (f.write(data)).
+func isPythonFileObjectWrite(call *pyparser.Call, handles map[string]bool, aliases map[string]string) bool {
+	attribute, ok := call.Func.(*pyparser.Attribute)
+	if !ok || (attribute.Attr != "write" && attribute.Attr != "writelines") {
+		return false
+	}
+	switch receiver := attribute.Value.(type) {
+	case *pyparser.Name:
+		return handles[receiver.Id]
+	case *pyparser.Call:
+		return resolvePythonCallName(receiver, aliases) == "open" && pythonOpenForWrite(receiver)
+	}
+	return false
 }
 
 func pythonOpenForWrite(call *pyparser.Call) bool {

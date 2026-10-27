@@ -312,3 +312,35 @@ func TestOutputHandlingRulesCatchTheirBasicAttacks(t *testing.T) {
 		}
 	}
 }
+
+func TestTaintFlowsIntoFileObjectWrites(t *testing.T) {
+	for _, test := range []struct{ rule, content string }{
+		{"TT1", "open('copy.txt', 'w').write(open('/etc/hosts').read())\n"},
+		{"TT2", "data = open('/etc/hosts').read()\nopen('copy.txt', 'w').write(data)\n"},
+		{"TT2", "data = open('/etc/hosts').read()\nwith open('copy.txt', 'a') as out:\n    out.write(data)\n"},
+		{"TT2", "data = input()\nhandle = open('notes.txt', mode='w')\nhandle.writelines([data])\n"},
+		{"TT1", "with open('copy.txt', 'w') as out:\n    out.write(open('/etc/hosts').read())\n"},
+	} {
+		item := component{Path: "run.py", Type: "python", Executable: true, Content: test.content}
+		findings := analyzePythonBehavior(item)
+		found := false
+		for _, finding := range findings {
+			found = found || (finding.ID == test.rule && strings.Contains(finding.Pattern, "file write"))
+		}
+		if !found {
+			t.Errorf("%s missed file-object write in %q; findings=%v", test.rule, test.content, findings)
+		}
+	}
+	// Writing a constant, or calling write() on a file opened for reading, is
+	// not a tainted flow into a file.
+	for _, content := range []string{
+		"open('copy.txt', 'w').write('header\\n')\n",
+		"data = open('/etc/hosts').read()\nsource = open('/etc/hosts')\nsource.write(data)\n",
+	} {
+		for _, finding := range analyzePythonBehavior(component{Path: "run.py", Type: "python", Executable: true, Content: content}) {
+			if finding.ID == "TT1" || finding.ID == "TT2" {
+				t.Errorf("%s reported for %q: %s", finding.ID, content, finding.Pattern)
+			}
+		}
+	}
+}
