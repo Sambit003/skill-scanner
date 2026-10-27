@@ -53,6 +53,14 @@ func isReadOnlyPasswdVolumeMatch(content string, match []int) bool {
 	return false
 }
 
+// isMarkdownBoldWildcard reports an EA1 wildcard match whose "*" is the first
+// half of the closing "**" of a bold label such as "**Tools:**".
+func isMarkdownBoldWildcard(content string, match []int) bool {
+	star := strings.LastIndexByte(content[match[0]:match[1]], '*')
+	next := match[0] + star + 1
+	return star >= 0 && next < len(content) && content[next] == '*'
+}
+
 func validDockerContinuation(value string) bool {
 	for index := 0; index < len(value); index++ {
 		switch value[index] {

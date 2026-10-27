@@ -163,3 +163,25 @@ func TestSupplyChainRulesUseExactManifestNames(t *testing.T) {
 		}
 	}
 }
+
+func TestEA1IgnoresMarkdownBoldLabels(t *testing.T) {
+	for _, item := range []component{
+		// anthropics/skills mcp-builder/SKILL.md
+		{Path: "SKILL.md", Type: "markdown", Content: "**API Coverage vs. Workflow Tools:**\nBalance comprehensive API endpoint coverage with specialized workflow tools.\n"},
+		{Path: "SKILL.md", Type: "markdown", Content: "#### 2.3 Implement Tools\n\nFor each tool:\n\n**Input Schema:**\n- Use Zod (TypeScript) or Pydantic (Python)\n"},
+		// business-operations/skills/knowledge-ops/scripts/sop_generator.py
+		{Path: "sop_generator.py", Type: "python", Executable: true, Content: "        \"- **Supporting tools:** _(IAM console, IT ticketing, accounting \"\n"},
+		// engineering/llm-wiki/skills/llm-wiki/assets/AGENTS.md.template
+		{Path: "AGENTS.md.template", Type: "other", Content: "> **Tool:** Any AGENTS.md-aware CLI (Codex, Cursor, Antigravity, OpenCode, Gemini CLI, etc.).\n"},
+	} {
+		if got := countRule(scanComponents(t, item), "EA1"); got != 0 {
+			t.Errorf("%s: EA1 count=%d for a Markdown label, want 0", item.Path, got)
+		}
+	}
+	for _, grant := range []string{"allowed-tools: \"*\"", "tools: [\"*\"]", "permissions: *", "tools: '*'"} {
+		item := component{Path: "SKILL.md", Type: "markdown", Content: "---\nname: helper\n" + grant + "\n---\n\nFormats reports.\n"}
+		if got := countRule(scanComponents(t, item), "EA1"); got == 0 {
+			t.Errorf("EA1 missed wildcard grant %q", grant)
+		}
+	}
+}

@@ -210,7 +210,7 @@ var staticPatterns = []staticPattern{
 	newStaticPattern("AR3", "Anti-Refusal Statement", "Anti-Refusal", "HIGH", .8, `\b(?:free\s+from|without)\s+(?:any\s+)?(?:safety\s+)?(?:guardrails?|constraints?|safeguards?)\b`),
 
 	// Excessive agency (EA1-EA4).
-	newStaticPattern("EA1", "Unrestricted Tool Access", "Excessive Agency", "MEDIUM", .85, `(?:tools?|permissions?)\s*:\s*\[?\s*['\"]?\*['\"]?\s*\]?`),
+	newStaticPattern("EA1", "Unrestricted Tool Access", "Excessive Agency", "MEDIUM", .85, `(?:tools?|permissions?)[ \t]*:[ \t]*\[?[ \t]*['\"]?\*['\"]?[ \t]*\]?`),
 	newStaticPattern("EA1", "Unrestricted Tool Access", "Excessive Agency", "MEDIUM", .8, `(?:allow|grant|enable)\s+(?:access\s+to\s+)?(?:all|any|every)\s+tools?`),
 	newStaticPattern("EA1", "Unrestricted Tool Access", "Excessive Agency", "MEDIUM", .75, `(?:no|without)\s+(?:tool|permission|access|capability)\s+(?:restrictions?|constraints?|limitations?)`),
 	newStaticPattern("EA1", "Unrestricted Tool Access", "Excessive Agency", "MEDIUM", .8, `(?:call|invoke|use|execute)\s+(?:any|all|every)\s+(?:available\s+)?tools?`),
@@ -399,6 +399,9 @@ func analyzeSourceAndManifest(ctx context.Context, items []component, manifest m
 			}
 			for _, match := range pattern.compiled.FindAllStringIndex(item.Content, -1) {
 				if pattern.ID == "PE3" && isReadOnlyPasswdVolumeMatch(item.Content, match) {
+					continue
+				}
+				if pattern.ID == "EA1" && isMarkdownBoldWildcard(item.Content, match) {
 					continue
 				}
 				finding, ok := findingFromStaticMatch(item, pattern, match)
