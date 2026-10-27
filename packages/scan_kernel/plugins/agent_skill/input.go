@@ -156,6 +156,18 @@ func selectComponents(all []component, scanScope string, includeReadme bool) ([]
 	return selected, skills, nil
 }
 
+// isJunkFile reports operating-system and version-control clutter that never
+// holds skill content. Other dotfiles (.env, .notes.md, .helper.sh) are scanned
+// like any file: a hidden file is an easy place to keep an instruction or a
+// payload that the skill tells the agent to read or run.
+func isJunkFile(name string) bool {
+	switch name {
+	case ".DS_Store", ".git", ".localized":
+		return true
+	}
+	return strings.HasPrefix(name, "._")
+}
+
 func pathWithinSkill(path, root string) bool {
 	return root == "." || path == root || strings.HasPrefix(path, root+"/")
 }
@@ -433,12 +445,12 @@ func readComponents(root string) ([]component, map[string]any, error) {
 		}
 		if entry.IsDir() {
 			switch entry.Name() {
-			case ".git", "__pycache__", "node_modules", ".venv", "venv", ".tox", ".pytest_cache":
+			case ".git", ".hg", ".svn", "__pycache__", "node_modules", ".venv", "venv", ".tox", ".pytest_cache":
 				return filepath.SkipDir
 			}
 			return nil
 		}
-		if strings.HasPrefix(entry.Name(), ".") && !strings.HasPrefix(entry.Name(), ".claude") {
+		if isJunkFile(entry.Name()) {
 			return nil
 		}
 		ext := strings.ToLower(filepath.Ext(entry.Name()))
