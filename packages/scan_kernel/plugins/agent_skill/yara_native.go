@@ -283,8 +283,11 @@ func yaraFinding(item component, match yara.MatchRule) (model.Finding, bool) {
 	prefix := string(runes[:characterOffset])
 	line := 1 + strings.Count(prefix, "\n")
 	context := contextAtOffset(item.Content, len(prefix), 3)
-	if isCodeExample(context) {
-		confidence *= .5
+	switch exampleTreatmentAt(item, len(prefix), context, isCodeExample) {
+	case exampleFenced:
+		return model.Finding{}, false
+	case exampleNearby:
+		confidence *= exampleConfidenceFactor
 	}
 	if confidence < .4 && severity != "HIGH" && severity != "CRITICAL" {
 		return model.Finding{}, false

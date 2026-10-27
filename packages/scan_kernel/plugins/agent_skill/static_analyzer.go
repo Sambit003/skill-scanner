@@ -382,6 +382,7 @@ func analyzeSourceAndManifest(ctx context.Context, items []component, manifest m
 		if isEvalDataset(item.Path) || len(item.Content) > maxFileBytes || isBinaryScannerPath(item.Path) || strings.Contains(item.Content[:min(len(item.Content), 512)], "\x00") {
 			return nil
 		}
+		item.fencedBlocks, item.fencesComputed = fencedCodeBlocks(item.Content), true
 		itemFindings := make([]model.Finding, 0)
 		unsupported := analyzeUnsupportedRegexSemantics(item)
 		// Python evaluates the generic, negative-lookahead sudo expression
@@ -539,26 +540,21 @@ func findingFromStaticMatchWithContext(item component, pattern staticPattern, ma
 		return model.Finding{}, false
 	}
 
+	indicator := isCodeExample
+	if strings.HasPrefix(pattern.ID, "PE") && pattern.ID != "PE1" {
+		indicator = isPrivilegeDocumentationExample
+	}
+	switch exampleTreatmentAt(item, match[0], context, indicator) {
+	case exampleFenced:
+		return model.Finding{}, false
+	case exampleNearby:
+		confidence *= exampleConfidenceFactor
+	}
 	if strings.HasPrefix(pattern.ID, "AR") {
 		if pattern.ID == "AR3" && isSecurityReviewModeMatch(item.Content[match[0]:match[1]], context) {
 			return model.Finding{}, false
 		}
-		if isCodeExample(context) {
-			confidence -= .4
-		}
-		if confidence < .5 {
-			return model.Finding{}, false
-		}
 		confidence = math.Round(confidence*100) / 100
-	}
-	if (pattern.ID == "EA2" || pattern.ID == "MP3" || pattern.ID == "TM4") && isCodeExample(context) {
-		return model.Finding{}, false
-	}
-	if pattern.ID == "E5" && isCodeExample(context) {
-		return model.Finding{}, false
-	}
-	if strings.HasPrefix(pattern.ID, "PE") && pattern.ID != "PE1" && isPrivilegeDocumentationExample(context) {
-		return model.Finding{}, false
 	}
 	if pattern.ID == "SC3" && item.Type != "python" && item.Type != "javascript" && item.Type != "shell" && item.Type != "other" {
 		return model.Finding{}, false
@@ -594,25 +590,12 @@ func findingFromStaticMatchWithContext(item component, pattern staticPattern, ma
 		severity = "LOW"
 	}
 
-	if isCodeExample(context) {
-		// Only authored document/data types are non-executable here. Unknown
-		// extensions are downweighted even when inventory metadata does not
-		// mark them executable for scoring.
-		if isStaticNonExecutableType(item.Type) {
-			return model.Finding{}, false
-		}
-		confidence *= .5
-	}
 	line := 1 + strings.Count(item.Content[:match[0]], "\n")
 	if isDocumentationContext(pattern.ID, item, line) {
 		return model.Finding{}, false
 	}
 	if isDocumentationMarkdown(item.Path) {
 		confidence *= .3
-	}
-	// filter_findings applied the code-example reduction a second time.
-	if isCodeExample(context) {
-		confidence *= .5
 	}
 	if confidence < .4 && severity != "HIGH" && severity != "CRITICAL" {
 		return model.Finding{}, false
@@ -724,6 +707,96 @@ func pythonSplitLines(content string) []string {
 	return lines
 }
 
+type textSpan struct{ start, end int }
+
+// fencedCodeBlocks returns the byte ranges of fenced code blocks (``` or ~~~,
+// fence lines included). Fences may be indented, as inside list items, and an
+// unclosed fence runs to the end of the document, as in CommonMark.
+func fencedCodeBlocks(content string) []textSpan {
+	var blocks []textSpan
+	open, fenceLength := -1, 0
+	var fenceChar byte
+	for offset := 0; offset < len(content); {
+		next := len(content)
+		if index := strings.IndexByte(content[offset:], '\n'); index >= 0 {
+			next = offset + index + 1
+		}
+		line := strings.TrimLeft(content[offset:next], " \t")
+		run := 0
+		if line != "" && (line[0] == '`' || line[0] == '~') {
+			for run < len(line) && line[run] == line[0] {
+				run++
+			}
+		}
+		if open < 0 {
+			// A backtick fence's info string cannot contain backticks; such a
+			// line is inline code, not a fence.
+			if run >= 3 && !(line[0] == '`' && strings.Contains(line[run:], "`")) {
+				open, fenceChar, fenceLength = offset, line[0], run
+			}
+		} else if run >= fenceLength && line[0] == fenceChar && strings.TrimSpace(line[run:]) == "" {
+			blocks = append(blocks, textSpan{open, next})
+			open = -1
+		}
+		offset = next
+	}
+	if open >= 0 {
+		blocks = append(blocks, textSpan{open, len(content)})
+	}
+	return blocks
+}
+
+func insideFencedCodeBlock(item component, offset int) bool {
+	blocks := item.fencedBlocks
+	if !item.fencesComputed {
+		blocks = fencedCodeBlocks(item.Content)
+	}
+	for _, block := range blocks {
+		if offset < block.start {
+			return false
+		}
+		if offset < block.end {
+			return true
+		}
+	}
+	return false
+}
+
+// exampleTreatment says how example wording near a match counts.
+type exampleTreatment int
+
+const (
+	exampleNone exampleTreatment = iota
+	// exampleNearby lowers confidence by exampleConfidenceFactor.
+	exampleNearby
+	// exampleFenced drops the match.
+	exampleFenced
+)
+
+const exampleConfidenceFactor = .8
+
+// exampleTreatmentAt applies the example rules. SKILL.md is all instructions
+// to the agent, code blocks included, so nothing there is suppressed or
+// downgraded. In program source "# e.g." is only a comment, so nothing
+// changes either. In other documents a match inside a fenced code block is
+// dropped, and example wording within a few lines lowers confidence.
+func exampleTreatmentAt(item component, offset int, context string, indicator func(string) bool) exampleTreatment {
+	if isSkillManifestPath(item.Path) || isSourceCodeType(item.Type) || item.Executable {
+		return exampleNone
+	}
+	if insideFencedCodeBlock(item, offset) {
+		return exampleFenced
+	}
+	if indicator(context) {
+		return exampleNearby
+	}
+	return exampleNone
+}
+
+func isSkillManifestPath(path string) bool {
+	return strings.HasSuffix(strings.ToLower(strings.ReplaceAll(path, "\\", "/")), "skill.md")
+}
+
 func isCodeExample(context string) bool {
 	lower := strings.ToLower(context)
 	for _, indicator := range codeExampleIndicators {
@@ -747,15 +820,6 @@ func isDocumentationMarkdown(path string) bool {
 		}
 	}
 	return false
-}
-
-func isStaticNonExecutableType(fileType string) bool {
-	switch fileType {
-	case "markdown", "text", "json", "yaml", "toml":
-		return true
-	default:
-		return false
-	}
 }
 
 // isLicenseFile reports license texts such as LICENSE, COPYING or the SIL Open

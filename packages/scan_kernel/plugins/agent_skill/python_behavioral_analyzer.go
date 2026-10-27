@@ -549,10 +549,8 @@ func pythonStringConstant(expression pyparser.Expr) (string, bool) {
 }
 
 func pythonAnalyzerFinding(item component, id, message, severity string, confidence float64, line, endLine int, category string) (model.Finding, bool) {
+	// Python source gets no example handling: "# e.g." is only a comment.
 	context := contextAtLine(item.Content, line, 3)
-	if isCodeExample(context) {
-		confidence *= .5
-	}
 	if confidence < .4 && severity != "HIGH" && severity != "CRITICAL" {
 		return model.Finding{}, false
 	}

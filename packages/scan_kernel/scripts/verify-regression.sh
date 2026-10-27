@@ -10,8 +10,8 @@ FIXTURE_GOLDEN="${SCANNER_DIR}/testdata/regression/malicious-scan.json"
 CORPUS_COMMIT="84fdeffd12f2ee307994d1eb6feb48173b6e0502"
 # Canonical hashes for CORPUS_COMMIT. The first covers every user-visible
 # engine finding field; the second covers the complete summary.
-EXPECTED_FINDINGS_SHA256="e6a156bb08ee5b55a3519bc1ea23504fab00c61f7446eb63a7253e482d9db114"
-EXPECTED_SUMMARY_SHA256="15c087400bcb4e0be79cdaa6720963871a7224d8f78d202259a2beffe7511a8e"
+EXPECTED_FINDINGS_SHA256="77b3e5c1b0c3aedf6b74e5643bc709fd0e5b121d93759a8c9497c1103847e270"
+EXPECTED_SUMMARY_SHA256="8ed51be7701edb35ff0aae4cf3fb530351d30eb7e138a0a1a36087895ff599d0"
 REGRESSION_TMP="$(mktemp -d /tmp/scankernel-regression.XXXXXX)"
 trap 'rm -rf "${REGRESSION_TMP}"' EXIT
 SCAN_KERNEL_DOCKER_IMAGE=""

@@ -39,6 +39,9 @@ type component struct {
 	Executable bool   `json:"executable"`
 	SizeBytes  int    `json:"size_bytes"`
 	Content    string `json:"-"`
+	// fencedBlocks caches fencedCodeBlocks(Content) for one analysis pass.
+	fencedBlocks   []textSpan
+	fencesComputed bool
 }
 
 type preparedInput struct {
