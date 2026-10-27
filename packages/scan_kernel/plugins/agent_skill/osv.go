@@ -150,13 +150,12 @@ func analyzeDependencies(ctx context.Context, items []component, offline bool) [
 }
 
 func extractDependencyCoordinates(item component) []dependencyCoordinate {
-	lower := strings.ToLower(item.Path)
-	switch {
-	case strings.Contains(lower, "package.json"):
+	switch dependencyManifestKind(item.Path) {
+	case "npm":
 		return extractPackageJSONCoordinates(item)
-	case strings.Contains(lower, "pyproject.toml"):
+	case "pyproject":
 		return extractPyprojectCoordinates(item)
-	case strings.Contains(lower, "requirements"), strings.Contains(lower, "setup.py"), strings.Contains(lower, "pipfile"):
+	case "requirements":
 		return extractRequirementCoordinates(item)
 	default:
 		return nil

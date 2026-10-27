@@ -2,6 +2,7 @@ package agentskill
 
 import (
 	"fmt"
+	"path"
 	"regexp"
 	"strings"
 	"unicode"
@@ -199,9 +200,24 @@ func pythonStringRepr(value string) string {
 	return output.String()
 }
 
-func isDependencyFile(path string) bool {
-	lower := strings.ToLower(path)
-	return containsAny(lower, "requirements", "package.json", "pyproject.toml", "setup.py", "pipfile")
+func isDependencyFile(path string) bool { return dependencyManifestKind(path) != "" }
+
+// dependencyManifestKind classifies dependency manifests by exact file name:
+// requirements*.txt, package.json, pyproject.toml, setup.py and Pipfile.
+// Substring matching treated files such as tenant_setup.py and
+// compliance_requirements.md as manifests.
+func dependencyManifestKind(filePath string) string {
+	name := strings.ToLower(path.Base(strings.ReplaceAll(filePath, "\\", "/")))
+	switch {
+	case name == "package.json":
+		return "npm"
+	case name == "pyproject.toml":
+		return "pyproject"
+	case name == "setup.py", name == "pipfile", strings.HasPrefix(name, "requirements") && strings.HasSuffix(name, ".txt"):
+		return "requirements"
+	default:
+		return ""
+	}
 }
 
 func analyzeTriggers(manifest map[string]any) []model.Finding {

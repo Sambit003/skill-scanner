@@ -127,3 +127,39 @@ func TestPE2ChmodMatchesOnlySetuidAndSetgid(t *testing.T) {
 		}
 	}
 }
+
+func TestSupplyChainRulesUseExactManifestNames(t *testing.T) {
+	// engineering-team/skills/ms365-tenant-manager/scripts/tenant_setup.py and
+	// engineering-team/skills/senior-secops/references/compliance_requirements.md
+	lookalikes := []component{
+		{Path: "scripts/tenant_setup.py", Type: "python", Executable: true, Content: "        script = f\"\"\"<#\n.SYNOPSIS\n\n# Connect to Exchange Online\nConnect-ExchangeOnline\n\n# Connect to Microsoft Teams\nConnect-MicrosoftTeams\n\"\"\"\n"},
+		{Path: "references/compliance_requirements.md", Type: "markdown", Content: "            Request tracking information\n            Requested PHI elements if authorized\n            sort=[('timestamp', -1)]\n"},
+	}
+	for _, item := range lookalikes {
+		if isDependencyFile(item.Path) {
+			t.Errorf("isDependencyFile(%q)=true, want false", item.Path)
+		}
+	}
+	if got := countRule(scanComponents(t, lookalikes...), "SC1"); got != 0 {
+		t.Errorf("SC1 count=%d for files that are not dependency manifests, want 0", got)
+	}
+	for _, finding := range analyzeDependencies(context.Background(), lookalikes, true) {
+		t.Errorf("dependency analysis reported %s in %s:%d, want nothing", finding.ID, finding.Location.File, finding.Location.StartLine)
+	}
+
+	for _, name := range []string{"requirements.txt", "requirements-dev.txt", "app/requirements_test.txt", "package.json", "pyproject.toml", "setup.py", "Pipfile"} {
+		if !isDependencyFile(name) {
+			t.Errorf("isDependencyFile(%q)=false, want true", name)
+		}
+	}
+	manifest := []component{{Path: "requirements.txt", Type: "text", Content: "requests\npycrypto==2.6.1\nreqeusts==2.31.0\n"}}
+	if got := countRule(scanComponents(t, manifest...), "SC1"); got == 0 {
+		t.Error("SC1 missed an unpinned requirement")
+	}
+	dependencies := analyzeDependencies(context.Background(), manifest, true)
+	for _, id := range []string{"SC5", "SC6"} {
+		if !hasRule(dependencies, id) {
+			t.Errorf("%s missed in requirements.txt; got %#v", id, dependencies)
+		}
+	}
+}
