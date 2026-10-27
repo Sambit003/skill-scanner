@@ -740,9 +740,10 @@ func pythonSplitLines(content string) []string {
 
 type textSpan struct{ start, end int }
 
-// fencedCodeBlocks returns the byte ranges of fenced code blocks (``` or ~~~,
-// fence lines included). Fences may be indented, as inside list items, and an
-// unclosed fence runs to the end of the document, as in CommonMark.
+// fencedCodeBlocks returns the byte ranges of closed fenced code blocks (```
+// or ~~~, fence lines included). Fences may be indented, as inside list items.
+// An unclosed fence is not a block: the agent reads the raw text, not the
+// rendered page, so one stray fence line must not hide the rest of a file.
 func fencedCodeBlocks(content string) []textSpan {
 	var blocks []textSpan
 	open, fenceLength := -1, 0
@@ -770,9 +771,6 @@ func fencedCodeBlocks(content string) []textSpan {
 			open = -1
 		}
 		offset = next
-	}
-	if open >= 0 {
-		blocks = append(blocks, textSpan{open, len(content)})
 	}
 	return blocks
 }
