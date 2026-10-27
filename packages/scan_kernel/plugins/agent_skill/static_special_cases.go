@@ -124,9 +124,11 @@ func analyzeUnsupportedRegexSemantics(item component) []model.Finding {
 }
 
 // isDocumentationSkillLink reports a relative skills/<name>/SKILL.md path
-// written as a Markdown link or inline code outside program source. Such a
-// path cross-references a sibling skill in the same repository; a path under
-// an agent's skill directory (~/.claude/skills/...) is still reported.
+// written as a Markdown link, or as inline code holding only the path, outside
+// program source. Such a path cross-references a sibling skill in the same
+// repository. Absolute paths, paths under an agent's skill directory
+// (~/.claude/skills/...) and commands in a code span (`cat .../SKILL.md`)
+// are still reported.
 func isDocumentationSkillLink(item component, match []int) bool {
 	if isSourceCodeType(item.Type) {
 		return false
@@ -138,10 +140,10 @@ func isDocumentationSkillLink(item component, match []int) bool {
 	}
 	before, after := item.Content[lineStart:match[0]], item.Content[match[1]:lineEnd]
 	prefix := before[strings.LastIndexAny(before, " \t`([")+1:]
-	if strings.ContainsAny(prefix, "~$") || containsAny(strings.ToLower(prefix), ".claude/", ".codex/", ".gemini/", ".agents/") {
+	if strings.HasPrefix(prefix, "/") || strings.ContainsAny(prefix, "~$") || containsAny(strings.ToLower(prefix), ".claude/", ".codex/", ".gemini/", ".agents/") {
 		return false
 	}
-	inCode := strings.Count(before, "`")%2 == 1 && strings.Contains(after, "`")
+	inCode := strings.HasSuffix(before, "`"+prefix) && strings.HasPrefix(after, "`")
 	inLinkTarget := strings.LastIndex(before, "](") > strings.LastIndex(before, ")")
 	inLinkText := strings.LastIndex(before, "[") > strings.LastIndex(before, "]") && strings.Contains(after, "](")
 	return inCode || inLinkTarget || inLinkText
