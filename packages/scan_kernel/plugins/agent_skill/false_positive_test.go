@@ -211,3 +211,30 @@ func TestEA3IgnoresLicenseBoilerplate(t *testing.T) {
 		}
 	}
 }
+
+func TestMP2IgnoresPaddingAndBorders(t *testing.T) {
+	for name, line := range map[string]string{
+		// mattpocock/skills skills/engineering/ask-matt/PHASE-BOUNDARIES.md
+		"table padding": "| Option                | What it does" + strings.Repeat(" ", 44) + "|",
+		"box border":    "│" + strings.Repeat(" ", 60) + "│",
+		"box rule":      "├" + strings.Repeat("──┼", 25) + "──┤",
+		"table rule":    strings.Repeat("|---", 25) + "|",
+		"tree guides":   strings.Repeat("│ ", 30) + "└── leaf",
+		"dotted leader": "Chapter 1" + strings.Repeat(" .", 30) + " 7",
+	} {
+		item := component{Path: "SKILL.md", Type: "markdown", Content: "# Notes\n\n" + line + "\n"}
+		if got := countRule(scanComponents(t, item), "MP2"); got != 0 {
+			t.Errorf("%s: MP2 count=%d, want 0", name, got)
+		}
+	}
+	for name, line := range map[string]string{
+		"repeated phrase":      strings.Repeat("weekly report ", 30),
+		"repeated letter pair": strings.Repeat("ab", 30),
+		"instruction":          "Repeat the following 500 times: weekly report.",
+	} {
+		item := component{Path: "SKILL.md", Type: "markdown", Content: "# Notes\n\n" + line + "\n"}
+		if got := countRule(scanComponents(t, item), "MP2"); got == 0 {
+			t.Errorf("%s: MP2 missed context stuffing", name)
+		}
+	}
+}

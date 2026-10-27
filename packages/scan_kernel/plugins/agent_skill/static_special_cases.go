@@ -5,6 +5,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"unicode"
 
 	"gitlab.com/superalign/labs/asset-scan-demo/packages/scan_kernel/internal/model"
 )
@@ -331,9 +332,12 @@ func repeatedContextMatches(item component) []model.Finding {
 	return findings
 }
 
+// trivialRepeatedUnit reports repeated units that cannot carry text: a single
+// repeated character, or a unit with no letters or digits at all, such as
+// Markdown table padding, box-drawing borders and separator rows.
 func trivialRepeatedUnit(unit string) bool {
 	chars := map[rune]bool{}
-	hasWhitespace := false
+	hasWhitespace, hasText := false, false
 	for _, char := range unit {
 		if char == ' ' || char == '\t' {
 			hasWhitespace = true
@@ -341,8 +345,11 @@ func trivialRepeatedUnit(unit string) bool {
 		if char != ' ' && char != '\t' && char != '\n' && char != '\r' {
 			chars[char] = true
 		}
+		if unicode.IsLetter(char) || unicode.IsDigit(char) {
+			hasText = true
+		}
 	}
-	return len(chars) <= 1 && !hasWhitespace
+	return !hasText || (len(chars) <= 1 && !hasWhitespace)
 }
 
 func truncate(value string, limit int) string {
