@@ -325,3 +325,17 @@ func TestRP2MatchesPythonReprPermissions(t *testing.T) {
 		t.Fatalf("RP2 count=%d for a permissions block embedded in the description, want 1", got)
 	}
 }
+
+func TestRP3ReadsManifestVersion(t *testing.T) {
+	for version, want := range map[string]int{"latest": 1, "\"*\"": 1, "^1.2.0": 1, "\">=1.0\"": 1, "1.4.2": 0, "\"2.0.1\"": 0} {
+		manifest := parseFrontmatter("---\nname: test-rp3\ndescription: Formats reports.\nversion: " + version + "\n---\n\nFormats reports.\n")
+		if got := countRule(analyzeMCPRugPull(nil, manifest), "RP3"); got != want {
+			t.Errorf("version %s: RP3 count=%d, want %d (manifest %s)", version, got, want, pythonManifestRepr(manifest))
+		}
+	}
+	// anthropics/skills xlsx/SKILL.md has no version field.
+	plain := parseFrontmatter("---\nname: xlsx\ndescription: \"Use this skill any time a spreadsheet file is the primary input or output.\"\nlicense: Proprietary. LICENSE.txt has complete terms\n---\n")
+	if got := countRule(analyzeMCPRugPull(nil, plain), "RP3"); got != 0 {
+		t.Fatalf("RP3 count=%d without a version field, want 0", got)
+	}
+}

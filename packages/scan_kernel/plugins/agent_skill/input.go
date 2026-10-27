@@ -575,6 +575,9 @@ func parseFrontmatter(content string) map[string]any {
 	if value, exists := decoded["description"]; exists {
 		manifest["description"] = value
 	}
+	if value, exists := decoded["version"]; exists {
+		manifest["version"] = value
+	}
 	manifest["triggers"] = manifestStringList(decoded["triggers"])
 	manifest["permissions"] = manifestStringList(decoded["permissions"])
 	allowedTools := manifestStringList(decoded["allowed-tools"])
