@@ -265,3 +265,20 @@ func TestTM2IgnoresYAMLBlockScalarsAndNumberedProse(t *testing.T) {
 		}
 	}
 }
+
+func TestTM4HasNoPatternShadowedByPE5(t *testing.T) {
+	const command = "kubectl run pwn --image=alpine --privileged"
+	for _, pattern := range allStaticPatterns {
+		if pattern.ID == "TM4" && pattern.compiled.MatchString(command) {
+			t.Errorf("TM4 pattern %q can never report: PE5 owns --privileged on the same line", pattern.Expression)
+		}
+	}
+	findings := scanComponents(t, component{Path: "setup.sh", Type: "shell", Executable: true, Content: command + "\n"})
+	if got := countRule(findings, "PE5") + countRule(findings, "TM4"); got != 1 {
+		t.Fatalf("privileged kubectl run reported %d times across PE5/TM4, want once; findings=%#v", got, findings)
+	}
+	helm := component{Path: "deploy.sh", Type: "shell", Executable: true, Content: "helm upgrade app ./chart --set securityContext.privileged=true\n"}
+	if got := countRule(scanComponents(t, helm), "TM4"); got != 1 {
+		t.Fatalf("TM4 count=%d for a helm privileged override, want 1", got)
+	}
+}

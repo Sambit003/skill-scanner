@@ -215,7 +215,8 @@ var portedStaticPatterns = []staticPattern{
 	newStaticPattern("TM3", "Unsafe Defaults", "Tool Misuse", "MEDIUM", 0.8, "(?:safe[_-]?mode|secure[_-]?mode|sandbox)\\s*=\\s*(?:False|false|0|off|no|disable)"),
 	newStaticPattern("TM3", "Unsafe Defaults", "Tool Misuse", "MEDIUM", 0.7, "(?:by\\s+default|default\\s+to)\\s+(?:allow|accept|trust)\\s+(?:all|any|everything)"),
 	newStaticPattern("TM3", "Unsafe Defaults", "Tool Misuse", "MEDIUM", 0.7, "(?:trust|accept|allow)\\s+(?:all|any)\\s+(?:input|connections?|certificates?|origins?)\\s+(?:by\\s+default)"),
-	newStaticPattern("TM4", "Privileged Kubernetes Deployment Command", "Tool Misuse", "HIGH", 0.7, "kubectl\\s+run\\b[^\\n]*--privileged"),
+	// `kubectl run ... --privileged` is reported by PE5's --privileged pattern;
+	// keepBestPrivilegeFindingPerLine dropped a same-line TM4 copy anyway.
 	newStaticPattern("TM4", "Privileged Kubernetes Deployment Command", "Tool Misuse", "HIGH", 0.6, "--set\\b[^\\n]*privileged\\s*=\\s*true"),
 	// static_patterns_supply_chain.py
 	newStaticPattern("SC2", "External Script Fetching", "Supply Chain", "HIGH", 0.9, "curl\\s+[^|]*\\|\\s*(?:sudo\\s+)?(?:ba)?sh"),
