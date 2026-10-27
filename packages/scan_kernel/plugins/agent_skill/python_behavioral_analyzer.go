@@ -75,9 +75,10 @@ type taintedVariable struct {
 }
 
 func analyzePythonBehavior(item component) []model.Finding {
-	if !strings.HasSuffix(item.Path, ".py") || len(item.Content) > maxFileBytes {
+	if !strings.HasSuffix(item.Path, ".py") {
 		return nil
 	}
+	item.Content, _ = scanPrefix(item.Content)
 	pythonParserMu.Lock()
 	defer pythonParserMu.Unlock()
 	module, err := pyparser.ParseFile(item.Path, item.Content)

@@ -95,9 +95,7 @@ func scanYARA(ctx context.Context, items []component, customRules string) ([]mod
 					continue
 				}
 				item := results[index].item
-				if utf8.RuneCountInString(item.Content) > maxFileBytes {
-					continue
-				}
+				item.Content, _ = scanPrefix(item.Content)
 				var matches yara.MatchRules
 				if err := scanner.SetCallback(&matches).ScanMem([]byte(item.Content)); err != nil {
 					// Python treats a per-file YARA match error as a skipped file.

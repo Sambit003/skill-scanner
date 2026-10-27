@@ -344,7 +344,7 @@ const rawFamilies = [
   { id: "P", title: "Prompt and instruction manipulation", summary: "Override, hidden instruction, prompt leakage, and harmful content patterns." },
   { id: "E", title: "Exfiltration and sensitive data", summary: "Environment, credential, file, network, and cloud upload exposure." },
   { id: "PE", title: "Privilege escalation", summary: "Root access, credential files, Docker socket access, and container escape capability." },
-  { id: "SC", title: "Supply chain and dependency risk", summary: "Unpinned installs, remote bootstrap, typosquats, and unsigned images." },
+  { id: "SC", title: "Supply chain and dependency risk", summary: "Unpinned installs, remote bootstrap, typosquats, unsigned images, and files too large to scan fully." },
   { id: "EA", title: "Excessive agency", summary: "Unrestricted tools, destructive autonomy, scope creep, and unbounded resources." },
   { id: "OH", title: "Output handling", summary: "Unsafe use of model or tool output across execution and trust boundaries." },
   { id: "MP", title: "Memory poisoning", summary: "Persistent context injection, context stuffing, and agent state manipulation." },

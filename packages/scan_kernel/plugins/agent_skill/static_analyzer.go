@@ -378,8 +378,13 @@ var trustedSupplyChainDomains = []string{
 
 func analyzeSourceAndManifest(ctx context.Context, items []component, manifest map[string]any) ([]model.Finding, error) {
 	staticFindings, err := analyzeItemsParallel(ctx, items, func(item component) []model.Finding {
-		if isEvalDataset(item.Path) || len(item.Content) > maxFileBytes || isBinaryScannerPath(item.Path) || strings.Contains(item.Content[:min(len(item.Content), 512)], "\x00") {
+		if isEvalDataset(item.Path) || isBinaryScannerPath(item.Path) || strings.Contains(item.Content[:min(len(item.Content), 512)], "\x00") {
 			return nil
+		}
+		var oversized []model.Finding
+		if scanned, cut := scanPrefix(item.Content); cut {
+			oversized = append(oversized, oversizedFileFinding(item, scanned))
+			item.Content = scanned
 		}
 		item.fencedBlocks, item.fencesComputed = fencedCodeBlocks(item.Content), true
 		itemFindings := make([]model.Finding, 0)
@@ -418,7 +423,7 @@ func analyzeSourceAndManifest(ctx context.Context, items []component, manifest m
 			}
 		}
 		itemFindings = append(itemFindings, analyzeSpecialStatic(item)...)
-		return keepBestPrivilegeFindingPerLine(itemFindings)
+		return append(keepBestPrivilegeFindingPerLine(itemFindings), oversized...)
 	})
 	if err != nil {
 		return nil, err
@@ -509,6 +514,33 @@ func analyzeItemsParallel(ctx context.Context, items []component, analyze func(c
 		}
 	}
 	return findings, nil
+}
+
+// scanPrefix returns the part of content the analyzers read: all of it, or for
+// a file over maxFileBytes the first maxFileBytes bytes, ending after the last
+// complete line when there is one. cut reports whether content was shortened.
+func scanPrefix(content string) (scanned string, cut bool) {
+	if len(content) <= maxFileBytes {
+		return content, false
+	}
+	end := maxFileBytes
+	if index := strings.LastIndexByte(content[:end], '\n'); index >= 0 {
+		end = index + 1
+	}
+	for end > 0 && !utf8.RuneStart(content[end]) {
+		end--
+	}
+	return content[:end], true
+}
+
+// oversizedFileFinding reports (SC8) that only the scanned prefix of a file
+// was analyzed. It points at the first line past the limit.
+func oversizedFileFinding(item component, scanned string) model.Finding {
+	text := fmt.Sprintf("Only the first %d of %d bytes were scanned", len(scanned), len(item.Content))
+	explanation, remediation := ruleText("SC8")
+	return model.Finding{ID: "SC8", Category: "Supply Chain", Pattern: "Oversized File", Severity: "MEDIUM", Confidence: 1,
+		Location: model.Location{File: item.Path, StartLine: 1 + strings.Count(scanned, "\n")}, Finding: text, MatchedText: text,
+		Explanation: explanation, Remediation: remediation, Tags: []string{"Supply Chain"}}
 }
 
 func isBinaryScannerPath(path string) bool {
