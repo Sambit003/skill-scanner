@@ -356,7 +356,7 @@ const rawFamilies = [
   { id: "TT", title: "Taint tracking", summary: "Source-to-sink flows involving credentials, files, external input, network, or execution." },
   { id: "YR", title: "YARA signatures", summary: "Malware, webshell, cryptominer, and offensive-tool indicators." },
   { id: "LP", title: "Least privilege", summary: "Capability declarations, wildcard permissions, undeclared operations, and overdeclaration." },
-  { id: "TP", title: "Tool metadata poisoning", summary: "Hidden metadata, Unicode deception, parameter injection, and description mismatch." },
+  { id: "TP", title: "Tool metadata poisoning", summary: "Hidden metadata, Unicode deception, and parameter injection." },
   { id: "AS", title: "Agent snooping", summary: "Agent config, MCP config, and peer skill enumeration." },
   { id: "AR", title: "Anti-refusal", summary: "Instructions that suppress refusal, warnings, or safety policy boundaries." },
   { id: "SSRF", title: "Server-side request forgery", summary: "Metadata endpoints, private network targets, and dynamic request hosts." },
