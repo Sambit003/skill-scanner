@@ -23,7 +23,7 @@ rule offensive_tool_references
         $burpsuite     = /burpsuite|BurpCollaborator/ nocase
         $responder     = /Responder\.py/ nocase
         $bloodhound    = /SharpHound|BloodHound/ nocase
-        $crackmapexec  = /crackmapexec|cme\s+smb/ nocase
+        $crackmapexec  = /crackmapexec|\bcme\s+smb\b/ nocase
         $impacket      = /impacket.*(smbclient|psexec|wmiexec|secretsdump)/ nocase
     condition:
         any of them
@@ -42,7 +42,7 @@ rule network_reconnaissance
         $arp_scan      = /arp-scan\s+--/ nocase
         $enum4linux    = /enum4linux/ nocase
         $snmp_walk     = /snmpwalk\s+-/ nocase
-        $dns_enum      = /(dnsenum|dnsrecon|fierce)/ nocase
+        $dns_enum      = /\b(dnsenum|dnsrecon)\b|\bfierce\s+-{1,2}(dns|domain)\b/ nocase
     condition:
         any of them
 }
@@ -80,7 +80,7 @@ rule exploit_framework
         $beef_hook     = /hook\.js.*BeEF/ nocase
         $set_toolkit   = /(setoolkit|Social-Engineer)/ nocase
         $pwntools      = /from\s+pwn\s+import/ nocase
-        $rop_chain     = /ROP\s*\(.*elf\)/ nocase
+        $rop_chain     = /\bROP\s*\([^)\n]*\belf\)/ nocase
         $shellcode_gen = /shellcode.*\\x[0-9a-f]{2}\\x[0-9a-f]{2}\\x[0-9a-f]{2}/ nocase
     condition:
         any of them

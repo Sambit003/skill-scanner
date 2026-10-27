@@ -91,11 +91,14 @@ rule agent_skill_mcp_tool_poisoning_metadata
         $schema_tools = /['"]?tools['"]?\s*[:=]/ nocase
         $schema_parameters = /['"]?(parameters|inputSchema|toolSchema|description|triggers)['"]?\s*[:=]/ nocase
 
-        $hidden_html = /<!--[^>]{0,240}(SYSTEM|IGNORE|OVERRIDE|DEVELOPER|ASSISTANT)[^>]{0,240}-->/ nocase
-        $hidden_markdown = /\[\/\/\]:\s*#\s*\([^)]{0,240}(SYSTEM|IGNORE|OVERRIDE|DEVELOPER|ASSISTANT)[^)]{0,240}\)/ nocase
+        $hidden_html = /<!--[^>]{0,240}(IGNORE|OVERRIDE|DEVELOPER|ASSISTANT)[^>]{0,240}-->/ nocase
+        $hidden_html_system = /<!--[^>]{0,240}\bSYSTEM\b[^>]{0,240}-->/
+        $hidden_markdown = /\[\/\/\]:\s*#\s*\([^)]{0,240}(IGNORE|OVERRIDE|DEVELOPER|ASSISTANT)[^)]{0,240}\)/ nocase
+        $hidden_markdown_system = /\[\/\/\]:\s*#\s*\([^)]{0,240}\bSYSTEM\b[^)]{0,240}\)/
         $data_uri = /data:text\/[a-zA-Z0-9.+-]+;base64,/ nocase
         $long_base64 = /[A-Za-z0-9+\/]{120,}={0,2}/
-        $param_injection = /(parameter|argument|description).{0,160}(ignore previous|override safety|send to|transmit|exfiltrate|SYSTEM:)/ nocase
+        $param_injection = /(parameter|argument|description).{0,160}(ignore previous|override safety|send to|transmit|exfiltrate)/ nocase
+        $param_injection_system = /([Pp]arameter|[Aa]rgument|[Dd]escription|PARAMETER|ARGUMENT|DESCRIPTION).{0,160}\bSYSTEM:/
 
         $zero_width_zwsp = { E2 80 8B }
         $zero_width_zwnj = { E2 80 8C }
@@ -108,7 +111,7 @@ rule agent_skill_mcp_tool_poisoning_metadata
             any of ($hidden_*) or
             $data_uri or
             $long_base64 or
-            $param_injection or
+            any of ($param_injection*) or
             any of ($zero_width_*) or
             any of ($rtl_*)
         )
@@ -124,15 +127,13 @@ rule agent_skill_destructive_autonomous_actions
         reference = "https://owasp.org/www-project-top-10-for-large-language-model-applications/"
     strings:
         $destructive_rm_root = /rm\s+-[rfRf]+\s+\/(\s|$)/ nocase
-        $destructive_rm_workspace = /rm\s+-[rfRf]+\s+(\.\/|\.\.\/|~\/|\$HOME|workspace|repo|project)/ nocase
-        $destructive_python_rmtree = /(shutil\.rmtree|fs\.rmSync|fs\.rm)\s*\([^)]*(HOME|home|workspace|repo|project)/ nocase
-        $destructive_windows_delete = /(del|rmdir)\s+.*(\/s|\/q).*%?(USERPROFILE|HOMEPATH|CD)%?/ nocase
-        $destructive_git_state = /git\s+(clean\s+-fdx|reset\s+--hard|push\s+--force)/ nocase
-        $destructive_history_wipe = /(history\s+-c|rm\s+[^;\n]*\.bash_history|Clear-History)/ nocase
 
-        $autonomy_without_confirmation = /without\s+(asking|confirmation|prompting)/ nocase
-        $autonomy_do_not_ask = /do\s+not\s+(ask|prompt|request\s+confirmation)/ nocase
-        $autonomy_silent = /(silently|non-interactive|unattended)/ nocase
+        // A destructive command only counts as autonomous when the autonomy
+        // wording is on the same line, within 160 characters. Matching the two
+        // anywhere in a file flagged skills that delete a temp file on one line
+        // and mention "silently" in unrelated prose elsewhere.
+        $near_destructive_autonomy = /(rm\s+-[rfRf]+\s+(\.\/|\.\.\/|~\/|\$HOME|workspace|repo|project)|(shutil\.rmtree|fs\.rmSync|fs\.rm)\s*\([^)\n]*(HOME|home|workspace|repo|project)|(del|rmdir)\s+[^\n]*(\/s|\/q)[^\n]*%?(USERPROFILE|HOMEPATH|CD)%?|git\s+(clean\s+-fdx|reset\s+--hard|push\s+--force)|history\s+-c|rm\s+[^;\n]*\.bash_history|Clear-History)[^\n]{0,160}(without\s+(asking|confirmation|prompting)|do\s+not\s+(ask|prompt|request\s+confirmation)|silently|non-interactive|unattended)/ nocase
+        $near_autonomy_destructive = /(without\s+(asking|confirmation|prompting)|do\s+not\s+(ask|prompt|request\s+confirmation)|silently|non-interactive|unattended)[^\n]{0,160}(rm\s+-[rfRf]+\s+(\.\/|\.\.\/|~\/|\$HOME|workspace|repo|project)|(shutil\.rmtree|fs\.rmSync|fs\.rm)\s*\([^)\n]*(HOME|home|workspace|repo|project)|(del|rmdir)\s+[^\n]*(\/s|\/q)[^\n]*%?(USERPROFILE|HOMEPATH|CD)%?|git\s+(clean\s+-fdx|reset\s+--hard|push\s+--force)|history\s+-c|rm\s+[^;\n]*\.bash_history|Clear-History)/ nocase
     condition:
-        $destructive_rm_root or (any of ($destructive_*) and any of ($autonomy_*))
+        $destructive_rm_root or any of ($near_*)
 }
