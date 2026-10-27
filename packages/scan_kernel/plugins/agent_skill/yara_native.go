@@ -65,16 +65,19 @@ func scanYARA(ctx context.Context, items []component, customRules string) ([]mod
 		item     component
 		findings []model.Finding
 	}
-	cache := make(map[string]int, len(items))
+	// yaraFinding's example handling reads the path, type and executable bit,
+	// so files share a scan only when their analysisCacheKey matches.
+	cache := make(map[analysisKey]int, len(items))
 	results := make([]cachedYARAResult, 0, len(items))
 	resultFor := make([]int, len(items))
 	for index, item := range items {
-		if cached, exists := cache[item.Content]; exists {
+		key := analysisCacheKey(item)
+		if cached, exists := cache[key]; exists {
 			resultFor[index] = cached
 			continue
 		}
 		resultFor[index] = len(results)
-		cache[item.Content] = len(results)
+		cache[key] = len(results)
 		results = append(results, cachedYARAResult{item: item})
 	}
 	workers := min(len(results), max(1, min(runtime.GOMAXPROCS(0), 16)))

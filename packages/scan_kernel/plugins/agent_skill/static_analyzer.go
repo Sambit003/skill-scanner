@@ -440,35 +440,42 @@ func analyzeSourceAndManifest(ctx context.Context, items []component, manifest m
 	return findings, nil
 }
 
+// analysisKey identifies files that every analyzer treats identically: the
+// same content, type and executable bit, and the same path-derived flags
+// (manifest, documentation, dependency, license, Python, ...). The static and
+// native-YARA analyzers analyze one file per key and copy its findings to the
+// others, so anything an analyzer reads from the path must be a flag here.
+type analysisKey struct {
+	content    string
+	fileType   string
+	executable bool
+	pathFlags  uint16
+}
+
+func analysisCacheKey(item component) analysisKey {
+	normalized := strings.ToLower(strings.ReplaceAll(item.Path, "\\", "/"))
+	var flags uint16
+	for index, enabled := range []bool{
+		isEvalDataset(item.Path), isBinaryScannerPath(item.Path), strings.EqualFold(item.Path, "LICENSE"),
+		isDependencyFile(item.Path), isDocumentationMarkdown(item.Path), strings.HasSuffix(normalized, "skill.md"),
+		strings.HasSuffix(normalized, ".py"), isSkillManifestPath(item.Path),
+	} {
+		if enabled {
+			flags |= 1 << index
+		}
+	}
+	return analysisKey{content: item.Content, fileType: item.Type, executable: item.Executable, pathFlags: flags}
+}
+
 func analyzeItemsParallel(ctx context.Context, items []component, analyze func(component) []model.Finding) ([]model.Finding, error) {
 	if len(items) == 0 {
 		return nil, ctx.Err()
 	}
-	type cacheKey struct {
-		content    string
-		fileType   string
-		executable bool
-		pathFlags  uint16
-	}
-	keyFor := func(item component) cacheKey {
-		normalized := strings.ToLower(strings.ReplaceAll(item.Path, "\\", "/"))
-		var flags uint16
-		for index, enabled := range []bool{
-			isEvalDataset(item.Path), isBinaryScannerPath(item.Path), strings.EqualFold(item.Path, "LICENSE"),
-			isDependencyFile(item.Path), isDocumentationMarkdown(item.Path), strings.HasSuffix(normalized, "skill.md"),
-			strings.HasSuffix(normalized, ".py"), isSkillManifestPath(item.Path),
-		} {
-			if enabled {
-				flags |= 1 << index
-			}
-		}
-		return cacheKey{content: item.Content, fileType: item.Type, executable: item.Executable, pathFlags: flags}
-	}
 	representatives := make([]component, 0, len(items))
 	representativeFor := make([]int, len(items))
-	seen := make(map[cacheKey]int, len(items))
+	seen := make(map[analysisKey]int, len(items))
 	for index, item := range items {
-		key := keyFor(item)
+		key := analysisCacheKey(item)
 		representative, exists := seen[key]
 		if !exists {
 			representative = len(representatives)
