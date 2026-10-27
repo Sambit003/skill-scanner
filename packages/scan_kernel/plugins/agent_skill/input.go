@@ -54,6 +54,7 @@ type skillInput struct {
 	ManifestPath string
 	Components   []component
 	Manifest     map[string]any
+	TriggerLines []int
 }
 
 func (p *preparedInput) cleanup() {
@@ -144,6 +145,7 @@ func selectComponents(all []component, scanScope string, includeReadme bool) ([]
 			unit.Components = append(unit.Components, copy)
 			if item.Path == manifestPath {
 				unit.Manifest = parseFrontmatter(item.Content)
+				unit.TriggerLines = frontmatterTriggerLines(item.Content)
 			}
 		}
 		skills = append(skills, unit)
@@ -552,17 +554,38 @@ func pythonDecodeUTF8(raw []byte) string {
 	return decoded.String()
 }
 
-func parseFrontmatter(content string) map[string]any {
+var frontmatterEnd = regexp.MustCompile(`\n---\s*\n`)
+
+// frontmatterYAML returns the YAML between the opening "---" and the closing
+// "---" line. It starts on the opening line, so YAML line N is file line N.
+func frontmatterYAML(content string) (string, bool) {
 	if !strings.HasPrefix(content, "---") {
-		return map[string]any{}
+		return "", false
 	}
-	endPattern := regexp.MustCompile(`\n---\s*\n`)
-	end := endPattern.FindStringIndex(content[3:])
+	end := frontmatterEnd.FindStringIndex(content[3:])
 	if len(end) != 2 {
+		return "", false
+	}
+	return content[3 : 3+end[0]], true
+}
+
+// frontmatterTriggerLines returns the SKILL.md line of each trigger that
+// parseFrontmatter keeps, in the same order.
+func frontmatterTriggerLines(content string) []int {
+	block, ok := frontmatterYAML(content)
+	if !ok {
+		return nil
+	}
+	return yamlSequenceLines([]byte(block), "triggers")
+}
+
+func parseFrontmatter(content string) map[string]any {
+	block, ok := frontmatterYAML(content)
+	if !ok {
 		return map[string]any{}
 	}
 	var decoded map[string]any
-	if err := yamlUnmarshal([]byte(content[3:3+end[0]]), &decoded); err != nil {
+	if err := yamlUnmarshal([]byte(block), &decoded); err != nil {
 		return map[string]any{}
 	}
 	if decoded == nil {

@@ -316,7 +316,7 @@ func TestTriggerRulesOnlyAnalyzeManifestTriggers(t *testing.T) {
 		t.Fatal("TR1 must not scan arbitrary prose")
 	}
 	manifest := map[string]any{"triggers": []any{"help"}}
-	if findings := analyzeTriggers(manifest); !hasRule(findings, "TR2") {
+	if findings := analyzeTriggers(manifest, nil); !hasRule(findings, "TR2") {
 		t.Fatal("TR2 must analyze manifest triggers")
 	}
 }

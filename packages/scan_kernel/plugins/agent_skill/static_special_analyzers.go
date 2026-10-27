@@ -220,7 +220,9 @@ func dependencyManifestKind(filePath string) string {
 	}
 }
 
-func analyzeTriggers(manifest map[string]any) []model.Finding {
+// analyzeTriggers checks manifest triggers; lines holds each trigger's SKILL.md
+// line from frontmatterTriggerLines, with line 1 as the fallback.
+func analyzeTriggers(manifest map[string]any, lines []int) []model.Finding {
 	raw, ok := manifest["triggers"].([]any)
 	if !ok {
 		return nil
@@ -234,6 +236,10 @@ func analyzeTriggers(manifest map[string]any) []model.Finding {
 		if trigger == "" {
 			continue
 		}
+		line := 1
+		if index < len(lines) {
+			line = lines[index]
+		}
 		lower := strings.ToLower(trigger)
 		words := strings.Fields(lower)
 		if (len(words) == 1 && broad[lower]) || len(lower) <= 2 {
@@ -241,13 +247,13 @@ func analyzeTriggers(manifest map[string]any) []model.Finding {
 			if len(lower) <= 2 {
 				confidence = .7
 			}
-			findings = append(findings, manifestFinding("TR1", "Overly Broad Trigger", "LOW", confidence, index+1, trigger))
+			findings = append(findings, manifestFinding("TR1", "Overly Broad Trigger", "LOW", confidence, line, trigger))
 		}
 		if builtins[lower] || (len(words) > 0 && len(words) <= 2 && builtins[words[0]]) {
-			findings = append(findings, manifestFinding("TR2", "Shadow Command Trigger", "MEDIUM", .7, index+1, trigger))
+			findings = append(findings, manifestFinding("TR2", "Shadow Command Trigger", "MEDIUM", .7, line, trigger))
 		}
 		if bait.MatchString(lower) {
-			findings = append(findings, manifestFinding("TR3", "Keyword Baiting Trigger", "MEDIUM", .8, index+1, trigger))
+			findings = append(findings, manifestFinding("TR3", "Keyword Baiting Trigger", "MEDIUM", .8, line, trigger))
 		}
 	}
 	return findings

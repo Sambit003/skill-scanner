@@ -7,6 +7,8 @@ package agentskill
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -392,4 +394,50 @@ func TestAS3IgnoresDocumentationSkillLinks(t *testing.T) {
 			t.Errorf("%q: AS3 missed peer skill access", item.Content)
 		}
 	}
+}
+
+func TestTriggerFindingsReportTheTriggerLine(t *testing.T) {
+	skill := "---\nname: report-helper\ndescription: Formats weekly reports.\ntriggers:\n  - weekly report\n  - \"\"\n  - help\n  - anything\n  - hi\n---\n\nFormats reports.\n"
+	findings := analyzeTriggers(parseFrontmatter(skill), frontmatterTriggerLines(skill))
+	want := map[string]int{"TR2": 7, "TR3": 8, "TR1": 9}
+	for _, finding := range findings {
+		if line, ok := want[finding.ID]; ok {
+			if finding.Location.StartLine != line {
+				t.Errorf("%s %q line=%d, want %d (the trigger's line, not its index)", finding.ID, finding.MatchedText, finding.Location.StartLine, line)
+			}
+			delete(want, finding.ID)
+		}
+	}
+	for id := range want {
+		t.Errorf("missing %s; findings=%#v", id, findings)
+	}
+
+	flow := "---\nname: report-helper\ndescription: Formats weekly reports.\ntriggers: [help, hi]\n---\n"
+	for _, finding := range analyzeTriggers(parseFrontmatter(flow), frontmatterTriggerLines(flow)) {
+		if finding.Location.StartLine != 4 {
+			t.Errorf("flow-style %s line=%d, want 4", finding.ID, finding.Location.StartLine)
+		}
+	}
+
+	root := t.TempDir()
+	directory := filepath.Join(root, "skills", "report-helper")
+	if err := os.MkdirAll(directory, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(directory, "SKILL.md"), []byte(skill), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	result, err := New().Scan(context.Background(), model.ScanRequest{Target: root, AssetType: "skill", Offline: true, OutputFormats: []string{"json"}, TimeoutSeconds: 30})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, finding := range result.Findings {
+		if finding.ID == "TR2" {
+			if finding.Location.File != "skills/report-helper/SKILL.md" || finding.Location.StartLine != 7 {
+				t.Fatalf("TR2 location=%s:%d, want skills/report-helper/SKILL.md:7", finding.Location.File, finding.Location.StartLine)
+			}
+			return
+		}
+	}
+	t.Fatalf("scan did not report TR2; findings=%#v", result.Findings)
 }
