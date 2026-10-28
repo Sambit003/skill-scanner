@@ -197,6 +197,25 @@ func TestActivationHijackWording(t *testing.T) {
 		}
 	}
 
+	// when_to_use says when to load the skill, so a bare "every task" there is
+	// unconditional; in a description it is not enough on its own.
+	for value, want := range map[string]bool{
+		"Always, on every task.":                      true,
+		"On any request.":                             true,
+		"Use for every Terraform task.":               false,
+		"For all requests involving Terraform state.": false,
+		"For any question about pricing.":             false,
+		"When the user asks to fill any PDF form.":    false,
+	} {
+		findings := analyzeActivationHijack(claudeSkill("when_to_use: "+value+"\n", "Formats reports.\n"))
+		if got := hasRule(findings, "TR1"); got != want {
+			t.Errorf("when_to_use %q: TR1=%v, want %v; findings=%#v", value, got, want, findings)
+		}
+	}
+	if findings := analyzeActivationHijack("---\nname: report-helper\ndescription: Formats reports on every task.\n---\n"); len(findings) != 0 {
+		t.Errorf("a bare scope in description must not fire: %#v", findings)
+	}
+
 	result := scanSkillFiles(t, map[string]string{"SKILL.md": "---\nname: report-helper\ndescription: >\n  Formats reports. Use this skill before\n  any other skill.\n---\n\nFormats reports.\n"})
 	for _, finding := range result.Findings {
 		if finding.ID == "TR2" {

@@ -153,6 +153,12 @@ var activationHijackPatterns = []struct {
 	{"TR3", "Keyword Baiting Trigger", regexp.MustCompile(`(?i)\b(?:for|on)\s+whatever\s+the\s+user\s+(?:asks|says|wants|requests|types)\b`), false},
 }
 
+// whenToUseEveryScope is TR1 for when_to_use only: that field says when to
+// load the skill, so a bare "every task" or "all requests" there is already
+// unconditional ("when_to_use: Always, on every task."), where a description
+// would need "use this skill for".
+var whenToUseEveryScope = regexp.MustCompile(`(?i)\b(?:every|all|any|each)\s+` + hijackScope + `\b`)
+
 var (
 	hijackQualifier = regexp.MustCompile(`(?i)^\s*(?:where|that|which|who|whose|when|whenever|if|involving|related|relating|about|regarding|concerning|mentioning|containing|asking|with|in|from|of|on|under|within|for)\b`)
 	hijackRequest   = regexp.MustCompile(`(?i)(?:requests?|tasks?|questions?|quer(?:y|ies))$`)
@@ -192,15 +198,27 @@ func analyzeActivationHijack(content string) []model.Finding {
 				continue
 			}
 			reported[pattern.id] = true
-			matched = truncateRunes(strings.Join(strings.Fields(matched), " "), 200)
-			explanation, remediation := ruleText(pattern.id)
-			findings = append(findings, model.Finding{ID: pattern.id, Category: "Trigger Abuse", Pattern: pattern.title, Severity: "MEDIUM",
-				Confidence: .8, Location: model.Location{File: "SKILL.md", StartLine: key.Line}, Finding: field + ": " + matched,
-				MatchedText: matched, Explanation: explanation, Remediation: remediation, CodeSnippet: lineSnippet(content, key.Line),
-				Tags: []string{"Trigger Abuse"}})
+			findings = append(findings, activationHijackFinding(content, pattern.id, pattern.title, field, matched, key.Line))
+		}
+		if field == "when_to_use" && !reported["TR1"] {
+			for _, location := range whenToUseEveryScope.FindAllStringIndex(value.Value, -1) {
+				matched := value.Value[location[0]:location[1]]
+				if !scopedByQualifier(matched, value.Value[location[1]:]) {
+					findings = append(findings, activationHijackFinding(content, "TR1", "Overly Broad Trigger", field, matched, key.Line))
+					break
+				}
+			}
 		}
 	}
 	return findings
+}
+
+func activationHijackFinding(content, id, title, field, matched string, line int) model.Finding {
+	matched = truncateRunes(strings.Join(strings.Fields(matched), " "), 200)
+	explanation, remediation := ruleText(id)
+	return model.Finding{ID: id, Category: "Trigger Abuse", Pattern: title, Severity: "MEDIUM", Confidence: .8,
+		Location: model.Location{File: "SKILL.md", StartLine: line}, Finding: field + ": " + matched, MatchedText: matched,
+		Explanation: explanation, Remediation: remediation, CodeSnippet: lineSnippet(content, line), Tags: []string{"Trigger Abuse"}}
 }
 
 // skillHook is one hook handler from the hooks field of SKILL.md front matter:
