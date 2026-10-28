@@ -50,6 +50,9 @@ type preparedInput struct {
 	TempDir    string
 	Components []component
 	Skills     []skillInput
+	// NoManifest is set when the target has no SKILL.md in any letter case;
+	// every file was then selected and the scan reports SC9.
+	NoManifest bool
 }
 
 type skillInput struct {
@@ -89,7 +92,17 @@ func prepare(ctx context.Context, target string, offline bool, scanScope string,
 		prepared.cleanup()
 		return nil, err
 	}
+	prepared.NoManifest = !hasSkillManifest(allComponents)
 	return prepared, nil
+}
+
+func hasSkillManifest(all []component) bool {
+	for _, item := range all {
+		if isSkillManifestPath(item.Path) {
+			return true
+		}
+	}
+	return false
 }
 
 func selectComponents(all []component, scanScope string, includeReadme bool) ([]component, []skillInput, error) {
@@ -103,14 +116,23 @@ func selectComponents(all []component, scanScope string, includeReadme bool) ([]
 		return nil, nil, errors.New("include_readme is not applicable to skill_files scope")
 	}
 
+	// The instruction file is matched in any letter case: an agent on a
+	// case-insensitive file system loads skill.md as SKILL.md.
 	manifestPaths := make([]string, 0)
 	for _, item := range all {
-		if filepath.Base(filepath.FromSlash(item.Path)) == "SKILL.md" {
+		if isSkillManifestPath(item.Path) {
 			manifestPaths = append(manifestPaths, item.Path)
 		}
 	}
 	if scanScope != "repository" && len(manifestPaths) == 0 {
-		return nil, nil, errors.New("no specification-compliant SKILL.md files were found in the target")
+		if len(all) == 0 {
+			return nil, nil, errors.New("the target contains no files to scan")
+		}
+		// No instruction file under any name the scanner knows (SKILLS.md, a
+		// prompt file, nothing). Scan every file, README included, since any
+		// of them may be what the agent is told to read: a file name must not
+		// decide whether the target gets a verdict. The caller reports SC9.
+		return all, nil, nil
 	}
 
 	selected := make([]component, 0, len(all))
@@ -120,7 +142,7 @@ func selectComponents(all []component, scanScope string, includeReadme bool) ([]
 		}
 		include := scanScope == "repository"
 		if scanScope == "skill_files" {
-			include = filepath.Base(filepath.FromSlash(item.Path)) == "SKILL.md"
+			include = isSkillManifestPath(item.Path)
 		} else if scanScope == "skill_folders" {
 			for _, manifestPath := range manifestPaths {
 				if pathWithinSkill(item.Path, filepath.ToSlash(filepath.Dir(filepath.FromSlash(manifestPath)))) {
