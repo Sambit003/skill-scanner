@@ -5,7 +5,8 @@ package agentskill
 // texts, or the deny list of a Claude settings file. A rule match inside such
 // a string describes what the tool detects, so it is marked for review
 // ("detection rule") instead of scored. A string that is executed, or passed
-// to subprocess, exec or open, is not detection data.
+// to subprocess, exec or open, is not detection data, and neither is a tool
+// definition: an agent reads a tool's name and description as instructions.
 
 import (
 	"regexp"
@@ -16,9 +17,16 @@ const reviewDetectionRule = "detection rule"
 
 var (
 	nameSegment = regexp.MustCompile(`[A-Z]?[a-z]+|[A-Z]+(?:[^a-z]|$)|[0-9]+`)
-	// detectionDataKey is a key whose string value is detection data:
-	// "pattern": r"...", "fix": "Remove privileged: true", "risk": "...".
-	detectionDataKey = regexp.MustCompile(`(?i)^(?:\w*_)?(?:patterns?|regex(?:es|p)?|risk|fix|message|msg|description|desc|recommendation|severity|remediation|reason|explanation|details?|title|summary|hint|note|warning|name|example|label)$`)
+	// detectionMetadataKey is a key whose string value is always detection
+	// data: "pattern": r"...", "fix": "Remove privileged: true", "risk": "...".
+	detectionMetadataKey = regexp.MustCompile(`(?i)^(?:\w*_)?(?:patterns?|regex(?:es|p)?|risk|fix|remediation|recommendation|severity)$`)
+	// descriptiveKey is a key whose value is detection data only next to a
+	// detectionSiblingKey in the same object or call: {"check": ...,
+	// "message": "..."}, but not {"name": ..., "description": "..."}.
+	descriptiveKey      = regexp.MustCompile(`(?i)^(?:\w*_)?(?:description|desc|message|msg|name|title|summary|note|label|hint|details?|explanation|reason|warning|example)$`)
+	detectionSiblingKey = regexp.MustCompile(`(?i)^(?:\w*_)?(?:patterns?|regex(?:es|p)?|severity|risk|fix|remediation|recommendation|check|cwe|mitre|atlas_id|tactic|category)$`)
+	// toolSchemaKey marks a tool definition: {name, description, inputSchema}.
+	toolSchemaKey = regexp.MustCompile(`(?i)^input_?schema$`)
 	// detectionAssignment is the head of a collection opener that names it:
 	// PATTERNS = [, "deny": [, risk: [, export const RULES = [.
 	detectionAssignment = regexp.MustCompile(`["']?([A-Za-z_$][\w.$-]*)["']?\s*(?::\s*[\w\[\]., |]+?)?\s*[:=]\s*$`)
@@ -30,15 +38,15 @@ var (
 // detectionDataWords are the name segments of a collection or key whose
 // entries are detection data: PATTERNS = [...], "deny": [...],
 // SEED_PROMPTS = [...], dangerousCommands = [...]. Whole segments only, so
-// TASKS is not ASK.
+// TASKS is not ASK. Words that also name ordinary data (prompt, payload,
+// example, sample, secret) are not here: PAYLOAD = [...] may be run.
 var detectionDataWords = map[string]bool{
 	"pattern": true, "regex": true, "regexp": true, "rule": true, "signature": true, "indicator": true, "detector": true,
 	"detection": true, "check": true, "deny": true, "denylist": true, "ask": true, "block": true, "blocklist": true,
 	"blocked": true, "forbid": true, "forbidden": true, "danger": true, "dangerous": true, "risk": true, "risky": true,
-	"smell": true, "secret": true, "threat": true, "attack": true, "ioc": true, "hint": true, "seed": true, "prompt": true,
-	"payload": true, "example": true, "sample": true, "keyword": true, "suspicious": true, "unsafe": true, "malicious": true,
-	"injection": true, "jailbreak": true, "technique": true, "atlas": true, "cwe": true, "vuln": true, "vulnerability": true,
-	"finding": true, "issue": true, "warning": true, "lint": true, "bad": true,
+	"smell": true, "threat": true, "attack": true, "ioc": true, "seed": true, "suspicious": true, "unsafe": true,
+	"malicious": true, "injection": true, "jailbreak": true, "technique": true, "atlas": true, "cwe": true, "vuln": true,
+	"vulnerability": true, "lint": true,
 }
 
 // isDetectionDataName splits a name into words (snake_case, camelCase,
@@ -63,6 +71,12 @@ var executingCalls = map[string]bool{
 	"urlopen": true, "fetch": true, "post": true, "get": true, "put": true, "request": true, "send": true, "write": true,
 	"writeFile": true, "writeFileSync": true, "sh": true, "bash": true, "shell": true, "Command": true, "create_subprocess_exec": true,
 	"create_subprocess_shell": true, "startfile": true,
+}
+
+// toolCalls define or register a tool for an agent: @mcp.tool(...),
+// server.tool(...), Tool(name=..., description=...).
+var toolCalls = map[string]bool{
+	"tool": true, "Tool": true, "registerTool": true, "register_tool": true, "addTool": true, "add_tool": true,
 }
 
 // regexConstructors take a pattern: their string argument is detection data.
@@ -96,14 +110,24 @@ func detectionDataReason(item component, offset int) string {
 	if !ok {
 		return ""
 	}
+	if insideToolDefinition(item.Content, openers, item.Type) {
+		return ""
+	}
 	lineStart := strings.LastIndexByte(item.Content[:literalStart], '\n') + 1
 	before := item.Content[lineStart:literalStart]
-	// A key's value: "fix": "...", pattern=r"...".
-	if match := detectionKeyValue.FindStringSubmatch(before); match != nil && detectionDataKey.MatchString(match[1]) {
-		if !insideExecutingCall(item.Content, openers) {
-			return reviewDetectionRule
+	// A key's value: "fix": "...", pattern=r"...", or "message": "..." next
+	// to "severity".
+	if match := detectionKeyValue.FindStringSubmatch(before); match != nil {
+		metadata := detectionMetadataKey.MatchString(match[1])
+		if !metadata && descriptiveKey.MatchString(match[1]) && len(openers) > 0 {
+			metadata = anyKey(objectKeys(item.Content, openers[len(openers)-1], item.Type), detectionSiblingKey)
 		}
-		return ""
+		if metadata {
+			if !insideExecutingCall(item.Content, openers) {
+				return reviewDetectionRule
+			}
+			return ""
+		}
 	}
 	if collectionIsDetectionData(item.Content, openers) {
 		return reviewDetectionRule
@@ -208,6 +232,85 @@ func collectionIsDetectionData(content string, openers []int) bool {
 	return false
 }
 
+// insideToolDefinition reports a literal inside a tool registration call or
+// an object with an inputSchema key, at any depth.
+func insideToolDefinition(content string, openers []int, fileType string) bool {
+	for _, opener := range openers {
+		if content[opener] == '(' {
+			if call := detectionCall.FindStringSubmatch(openerHead(content, opener)); call != nil {
+				if toolCalls[call[1][strings.LastIndexByte(call[1], '.')+1:]] {
+					return true
+				}
+			}
+		}
+		if anyKey(objectKeys(content, opener, fileType), toolSchemaKey) {
+			return true
+		}
+	}
+	return false
+}
+
+func anyKey(keys []string, pattern *regexp.Regexp) bool {
+	for _, key := range keys {
+		if pattern.MatchString(key) {
+			return true
+		}
+	}
+	return false
+}
+
+// objectKeys returns the keys directly inside the bracket at opener: dict
+// and object keys ("severity": , name:) and keyword arguments (severity=).
+func objectKeys(content string, opener int, fileType string) []string {
+	hashComments := fileType == "python" || fileType == "ruby" || fileType == "toml"
+	slashComments := fileType == "javascript" || fileType == "typescript" || fileType == "go" || fileType == "rust" || fileType == "json"
+	var keys []string
+	depth, entryStart := 0, opener+1
+	for index := opener; index < len(content); index++ {
+		switch char := content[index]; {
+		case hashComments && char == '#', slashComments && char == '/' && index+1 < len(content) && content[index+1] == '/':
+			if end := strings.IndexByte(content[index:], '\n'); end >= 0 {
+				index += end
+			} else {
+				return keys
+			}
+		case char == '"' || char == '\'' || (char == '`' && fileType != "python"):
+			quote := content[index : index+1]
+			if fileType == "python" && strings.HasPrefix(content[index:], strings.Repeat(quote, 3)) {
+				quote = strings.Repeat(quote, 3)
+			}
+			index = literalEnd(content, index+len(quote), quote) - 1
+		case char == '(' || char == '[' || char == '{':
+			depth++
+		case char == ')' || char == ']' || char == '}':
+			if depth--; depth == 0 {
+				return appendEntryKey(keys, content[entryStart:index])
+			}
+		case char == ',' && depth == 1:
+			keys = appendEntryKey(keys, content[entryStart:index])
+			entryStart = index + 1
+		}
+	}
+	return keys
+}
+
+var entryKey = regexp.MustCompile(`^\s*["']?([A-Za-z_][\w-]*)["']?\s*(?::|=[^=])`)
+
+func appendEntryKey(keys []string, entry string) []string {
+	// Skip comment lines before the key.
+	for entry = strings.TrimLeft(entry, " \t\r\n"); strings.HasPrefix(entry, "#") || strings.HasPrefix(entry, "//"); entry = strings.TrimLeft(entry, " \t\r\n") {
+		end := strings.IndexByte(entry, '\n')
+		if end < 0 {
+			return keys
+		}
+		entry = entry[end:]
+	}
+	if match := entryKey.FindStringSubmatch(entry); match != nil {
+		return append(keys, match[1])
+	}
+	return keys
+}
+
 func insideExecutingCall(content string, openers []int) bool {
 	for _, opener := range openers {
 		if content[opener] != '(' {
@@ -234,7 +337,9 @@ func yamlDetectionData(content string, offset int) bool {
 	}
 	line := content[lineStart:lineEnd]
 	if match := yamlKeyLine.FindStringSubmatchIndex(line); match != nil && lineStart+match[1] <= offset {
-		return detectionDataKey.MatchString(line[match[4]:match[5]])
+		key := line[match[4]:match[5]]
+		return detectionMetadataKey.MatchString(key) ||
+			(descriptiveKey.MatchString(key) && anyKey(yamlSiblingKeys(content, lineStart, match[4]), detectionSiblingKey))
 	}
 	trimmed := strings.TrimLeft(line, " ")
 	if !strings.HasPrefix(trimmed, "- ") {
@@ -257,4 +362,51 @@ func yamlDetectionData(content string, offset int) bool {
 		}
 	}
 	return false
+}
+
+// yamlSiblingKeys returns the keys of the YAML mapping holding the key that
+// starts at column on the line at lineStart: lines whose key starts at the
+// same column, up to the item's "- " line above and the next item below.
+func yamlSiblingKeys(content string, lineStart, column int) []string {
+	lines := strings.Split(content, "\n")
+	current := strings.Count(content[:lineStart], "\n")
+	var keys []string
+	keyAt := func(line string) (string, int, bool) {
+		match := yamlKeyLine.FindStringSubmatchIndex(line)
+		if match == nil {
+			return "", 0, false
+		}
+		return line[match[4]:match[5]], match[4], true
+	}
+	indentOf := func(line string) int { return len(line) - len(strings.TrimLeft(line, " ")) }
+	if !strings.HasPrefix(strings.TrimLeft(lines[current], " "), "- ") {
+		for index := current - 1; index >= 0; index-- {
+			line := lines[index]
+			if strings.TrimSpace(line) == "" || indentOf(line) > column {
+				continue
+			}
+			key, keyColumn, ok := keyAt(line)
+			if !ok || keyColumn != column {
+				break
+			}
+			keys = append(keys, key)
+			if indentOf(line) < column {
+				break
+			}
+		}
+	}
+	for index := current + 1; index < len(lines); index++ {
+		line := lines[index]
+		if strings.TrimSpace(line) == "" || indentOf(line) > column {
+			continue
+		}
+		key, keyColumn, ok := keyAt(line)
+		if !ok || indentOf(line) < column {
+			break
+		}
+		if keyColumn == column {
+			keys = append(keys, key)
+		}
+	}
+	return keys
 }
