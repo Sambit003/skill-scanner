@@ -42,6 +42,12 @@ func (Plugin) Scan(ctx context.Context, request model.ScanRequest) (model.ScanRe
 	if prepared.NoManifest && len(prepared.Components) > 0 {
 		findings = append(findings, noManifestFinding(prepared.Components))
 	}
+	for _, skill := range prepared.Skills {
+		if skill.NonStandardManifest {
+			findings = append(findings, skillInstructionFileFinding(skill.ManifestPath,
+				"No SKILL.md in this folder; this file has skill front matter and was scanned as the skill's instruction file"))
+		}
+	}
 	if err := ctx.Err(); err != nil {
 		return model.ScanResult{}, err
 	}
@@ -115,7 +121,10 @@ func noManifestFinding(components []component) model.Finding {
 			file, rank = item.Path, itemRank
 		}
 	}
-	text := "No SKILL.md in the target; all files were scanned"
+	return skillInstructionFileFinding(file, "No SKILL.md in the target; all files were scanned")
+}
+
+func skillInstructionFileFinding(file, text string) model.Finding {
 	explanation, remediation := ruleText("SC9")
 	return model.Finding{ID: "SC9", Category: "Supply Chain", Pattern: "No Skill Instruction File", Severity: "LOW", Confidence: 1,
 		Location: model.Location{File: file, StartLine: 1}, Finding: text, MatchedText: text,

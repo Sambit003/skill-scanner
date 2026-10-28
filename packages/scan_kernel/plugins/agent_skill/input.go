@@ -64,6 +64,10 @@ type skillInput struct {
 	// ManifestContent is the SKILL.md text, for analyzers that need the
 	// front matter's line numbers.
 	ManifestContent string
+	// NonStandardManifest is set when the instruction file is not SKILL.md
+	// but another Markdown file with skill front matter; the scan reports
+	// SC9 for it.
+	NonStandardManifest bool
 }
 
 func (p *preparedInput) cleanup() {
@@ -134,6 +138,13 @@ func selectComponents(all []component, scanScope string, includeReadme bool) ([]
 		// decide whether the target gets a verdict. The caller reports SC9.
 		return all, nil, nil
 	}
+	nonStandard := map[string]bool{}
+	if scanScope != "repository" {
+		for _, path := range nonStandardManifestPaths(all, manifestPaths) {
+			manifestPaths = append(manifestPaths, path)
+			nonStandard[path] = true
+		}
+	}
 
 	selected := make([]component, 0, len(all))
 	for _, item := range all {
@@ -142,7 +153,7 @@ func selectComponents(all []component, scanScope string, includeReadme bool) ([]
 		}
 		include := scanScope == "repository"
 		if scanScope == "skill_files" {
-			include = isSkillManifestPath(item.Path)
+			include = isSkillManifestPath(item.Path) || nonStandard[item.Path]
 		} else if scanScope == "skill_folders" {
 			for _, manifestPath := range manifestPaths {
 				if pathWithinSkill(item.Path, filepath.ToSlash(filepath.Dir(filepath.FromSlash(manifestPath)))) {
@@ -159,7 +170,7 @@ func selectComponents(all []component, scanScope string, includeReadme bool) ([]
 	skills := make([]skillInput, 0, len(manifestPaths))
 	for _, manifestPath := range manifestPaths {
 		root := filepath.ToSlash(filepath.Dir(filepath.FromSlash(manifestPath)))
-		unit := skillInput{Root: root, ManifestPath: manifestPath}
+		unit := skillInput{Root: root, ManifestPath: manifestPath, NonStandardManifest: nonStandard[manifestPath]}
 		for _, item := range selected {
 			if !pathWithinSkill(item.Path, root) {
 				continue
@@ -180,6 +191,64 @@ func selectComponents(all []component, scanScope string, includeReadme bool) ([]
 		skills = append(skills, unit)
 	}
 	return selected, skills, nil
+}
+
+// nonStandardManifestPaths finds skills whose instruction file is not
+// SKILL.md: a Markdown file, other than a README or a template, with name and
+// description front matter, in a folder that is neither inside nor above a
+// SKILL.md folder. One file per folder is returned, and a folder inside
+// another such folder is part of it. Plain documentation has no such front
+// matter. Claude Code subagents and commands (a file under an agents or
+// commands folder) carry the same front matter but are not skills.
+func nonStandardManifestPaths(all []component, manifestPaths []string) []string {
+	taken := make([]string, 0, len(manifestPaths))
+	for _, path := range manifestPaths {
+		taken = append(taken, filepath.ToSlash(filepath.Dir(filepath.FromSlash(path))))
+	}
+	var candidates []string
+	for _, item := range all {
+		extension := strings.ToLower(filepath.Ext(item.Path))
+		if (extension != ".md" && extension != ".markdown") || isSkillManifestPath(item.Path) || isReadmePath(item.Path) ||
+			strings.Contains(strings.ToLower(filepath.Base(item.Path)), "template") || underAgentComponentFolder(item.Path) {
+			continue
+		}
+		manifest := parseFrontmatter(item.Content)
+		name, _ := manifest["name"].(string)
+		description, _ := manifest["description"].(string)
+		if strings.TrimSpace(name) != "" && strings.TrimSpace(description) != "" {
+			candidates = append(candidates, item.Path)
+		}
+	}
+	// Outer folders first, so a nested folder joins its parent.
+	sort.SliceStable(candidates, func(i, j int) bool {
+		return strings.Count(candidates[i], "/") < strings.Count(candidates[j], "/")
+	})
+	var result []string
+	for _, path := range candidates {
+		root := filepath.ToSlash(filepath.Dir(filepath.FromSlash(path)))
+		related := false
+		for _, other := range taken {
+			if pathWithinSkill(root, other) || pathWithinSkill(other, root) {
+				related = true
+				break
+			}
+		}
+		if !related {
+			taken = append(taken, root)
+			result = append(result, path)
+		}
+	}
+	return result
+}
+
+func underAgentComponentFolder(path string) bool {
+	parts := strings.Split(path, "/")
+	for _, part := range parts[:len(parts)-1] {
+		if part == "agents" || part == "commands" {
+			return true
+		}
+	}
+	return false
 }
 
 // isJunkFile reports operating-system and version-control clutter that never
