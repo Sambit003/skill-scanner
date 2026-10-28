@@ -55,6 +55,7 @@ var scoringRulePolicies = map[string]rulePolicy{
 	"SC1": {ruleHygiene, contextAny}, "RP1": {ruleHygiene, contextAny}, "RP2": {ruleHygiene, contextAny},
 	"RP3": {ruleHygiene, contextAny}, "SC5": {ruleHygiene, contextAny}, "SC6": {ruleHygiene, contextAny},
 	"SC7": {ruleHygiene, contextAny}, "SC8": {ruleHygiene, contextAny},
+	"SC9": {ruleHygiene, contextAny},
 }
 
 func classifyRule(id string) rulePolicy {
