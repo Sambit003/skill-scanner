@@ -2,14 +2,14 @@
   "summary": {
     "risk_score": 100,
     "vulnerability_score": 100,
-    "exposure_score": 47.4,
+    "exposure_score": 44.5,
     "severity": "CRITICAL",
     "recommendation": "DO_NOT_INSTALL",
     "safe_to_install": false,
-    "findings_count": 14,
+    "findings_count": 13,
     "findings_by_severity": {
       "HIGH": 8,
-      "MEDIUM": 5,
+      "MEDIUM": 4,
       "CRITICAL": 1
     },
     "findings_by_category": {
@@ -20,8 +20,7 @@
       "Rogue Agent": 1,
       "YARA Match": 2,
       "Dangerous Code Execution": 2,
-      "Data Flow": 1,
-      "MCP Least Privilege": 1
+      "Data Flow": 1
     },
     "scanner_version": "1.0.0",
     "scan_mode": "deterministic",
@@ -501,41 +500,6 @@
           "MEASURE 2.10",
           "MEASURE 2.7"
         ]
-      }
-    },
-    {
-      "id": "LP3",
-      "category": "MCP Least Privilege",
-      "pattern": null,
-      "severity": "MEDIUM",
-      "confidence": 0.7,
-      "location": {
-        "file": "SKILL.md",
-        "start_line": 1,
-        "end_line": null
-      },
-      "finding": null,
-      "explanation": "Without declared permissions the skill's intent is opaque and cannot be validated.",
-      "remediation": "Add a 'permissions' field to SKILL.md listing the capabilities this skill requires.",
-      "code_snippet": null,
-      "intent": null,
-      "tags": [
-        "ASI02"
-      ],
-      "frameworks": {
-        "mapping_version": "2026.09-1",
-        "owasp_agentic": [
-          "AST03",
-          "AST04",
-          "AST10"
-        ],
-        "owasp_llm": [
-          "LLM03:2026"
-        ],
-        "nist_gai_risks": [
-          "Information Security"
-        ],
-        "nist_rmf": []
       }
     }
   ]

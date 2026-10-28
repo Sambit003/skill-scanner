@@ -263,7 +263,7 @@ func analyzeRP2ManifestPreStaging(manifestText string) []model.Finding {
 	}{
 		// manifestText is a Python-style repr, so keys are single-quoted; a
 		// JSON permissions block inside a string value keeps double quotes.
-		// parseFrontmatter always sets permissions, so require entries.
+		// A declared permissions list may be empty, so require entries.
 		{regexp.MustCompile(`(?i)['"]permissions?['"]\s*:\s*\[[^\]]+\]`), .6},
 		{regexp.MustCompile(`(?i)(?:add|grant|request|require)\s+(?:new|additional|extra|more)\s+(?:permissions?|tools?|access)`), .7},
 	}

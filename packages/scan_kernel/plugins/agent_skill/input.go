@@ -617,15 +617,20 @@ func parseFrontmatter(content string) map[string]any {
 		manifest["version"] = value
 	}
 	manifest["triggers"] = manifestStringList(decoded["triggers"])
-	manifest["permissions"] = manifestStringList(decoded["permissions"])
+	// Claude Code skills have no permissions field, so the key is set only
+	// when the front matter declares one: the LP rules check declared
+	// permissions and must stay quiet for skills that have none to declare.
+	// A scalar is a comma-separated list, as for allowed-tools.
+	if value, exists := decoded["permissions"]; exists {
+		permissions := manifestStringList(value)
+		if text, ok := value.(string); ok {
+			permissions = commaSeparatedList(text)
+		}
+		manifest["permissions"] = permissions
+	}
 	allowedTools := manifestStringList(decoded["allowed-tools"])
 	if text, ok := decoded["allowed-tools"].(string); ok {
-		allowedTools = nil
-		for _, value := range strings.Split(text, ",") {
-			if value = strings.TrimSpace(value); value != "" {
-				allowedTools = append(allowedTools, value)
-			}
-		}
+		allowedTools = commaSeparatedList(text)
 	}
 	manifest["allowed-tools"] = allowedTools
 	parameters := make([]any, 0)
@@ -638,6 +643,16 @@ func parseFrontmatter(content string) map[string]any {
 	}
 	manifest["parameters"] = parameters
 	return manifest
+}
+
+func commaSeparatedList(text string) []any {
+	var values []any
+	for _, value := range strings.Split(text, ",") {
+		if value = strings.TrimSpace(value); value != "" {
+			values = append(values, value)
+		}
+	}
+	return values
 }
 
 func manifestStringList(value any) []any {

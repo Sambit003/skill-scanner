@@ -52,8 +52,13 @@ func compileCapabilityPatterns(expressions ...string) []*regexp.Regexp {
 	return patterns
 }
 
+// analyzeMCPLeastPrivilege compares declared permissions with the
+// capabilities detected in executable files. It runs only for a manifest that
+// declares a permissions field: Claude Code skills have none (allowed-tools
+// pre-approves tools rather than restricting them), so a skill without the
+// field has nothing to under- or over-declare.
 func analyzeMCPLeastPrivilege(items []component, manifest map[string]any) []model.Finding {
-	if len(manifest) == 0 {
+	if _, declared := manifest["permissions"]; !declared {
 		return nil
 	}
 	hasExecutable := false
@@ -97,8 +102,8 @@ func analyzeMCPLeastPrivilege(items []component, manifest map[string]any) []mode
 		findings = append(findings, model.Finding{
 			ID: "LP3", Category: "MCP Least Privilege", Severity: "MEDIUM", Confidence: .7,
 			Location: model.Location{File: "SKILL.md", StartLine: 1}, Tags: []string{"ASI02"},
-			Explanation: "Without declared permissions the skill's intent is opaque and cannot be validated.",
-			Remediation: "Add a 'permissions' field to SKILL.md listing the capabilities this skill requires.",
+			Explanation: "The manifest declares an empty permissions list, but the skill's code uses capabilities that list should name.",
+			Remediation: "List the capabilities the code uses in the manifest's permissions field, or remove the code that needs them.",
 		})
 	}
 	if len(permissions) == 0 && len(allowedTools) == 0 {
