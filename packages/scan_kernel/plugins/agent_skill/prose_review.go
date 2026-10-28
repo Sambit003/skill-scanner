@@ -102,14 +102,35 @@ func isTableRow(line string) bool {
 	return strings.HasPrefix(trimmed, "|") && strings.Count(trimmed, "|") >= 2
 }
 
-// insideDoubleQuotes reports a match between a pair of double quotes on its
-// line: straight quotes with an odd count before it and one after, or a
-// typographic opening quote not yet closed.
+// insideDoubleQuotes reports a match inside a quotation on its line: straight
+// double quotes with an odd count before it and one after, or a typographic
+// opening quote not yet closed. A quoted path, URL or command is not a
+// quotation: paths with spaces must be quoted to be used at all.
 func insideDoubleQuotes(before, after string) bool {
-	if strings.Count(before, `"`)%2 == 1 && strings.Contains(after, `"`) {
-		return true
+	if strings.Count(before, `"`)%2 == 1 {
+		if end := strings.IndexByte(after, '"'); end >= 0 {
+			return !looksLikePathOrCommand(before[strings.LastIndexByte(before, '"')+1:] + after[:end])
+		}
 	}
-	return strings.Count(before, "\u201c") > strings.Count(before, "\u201d") && strings.Contains(after, "\u201d")
+	if strings.Count(before, "\u201c") > strings.Count(before, "\u201d") {
+		if end := strings.Index(after, "\u201d"); end >= 0 {
+			return !looksLikePathOrCommand(before[strings.LastIndex(before, "\u201c")+len("\u201c"):] + after[:end])
+		}
+	}
+	return false
+}
+
+var (
+	quotedFileExtension = regexp.MustCompile(`\.[A-Za-z0-9]{1,8}$`)
+	quotedCommandWord   = regexp.MustCompile(`(?i)^(?:sudo|curl|wget|rm|cat|cp|mv|chmod|chown|ssh|scp|rsync|docker|kubectl|npx|npm|pip|pip3|uvx|python[0-9.]*|node|bash|sh|zsh|git|gh|aws|gcloud|az|open|source|eval|exec|powershell|pwsh|iwr|iex|nc|base64|tar|find|grep|echo|printf|export|env|set)\b`)
+)
+
+// looksLikePathOrCommand reports quoted text that is a path, URL or command
+// rather than a quotation: it contains / \ ~ or $, ends in a file extension,
+// or starts with a command word.
+func looksLikePathOrCommand(quoted string) bool {
+	trimmed := strings.TrimSpace(quoted)
+	return strings.ContainsAny(trimmed, "/\\~$") || quotedFileExtension.MatchString(trimmed) || quotedCommandWord.MatchString(trimmed)
 }
 
 // negatedBefore reports a negation shortly before the match in the same
