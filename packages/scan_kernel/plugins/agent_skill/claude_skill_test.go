@@ -8,6 +8,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"gitlab.com/superalign/labs/asset-scan-demo/packages/scan_kernel/internal/model"
@@ -246,22 +247,22 @@ func TestActivationHijackWording(t *testing.T) {
 
 func TestRugPullOnlyForMCPServers(t *testing.T) {
 	servers := []struct{ name, path, kind, content, severity string }{
-		{"scoped MCP package", "SKILL.md", "markdown", "Run `npx -y @modelcontextprotocol/server-filesystem` first.\n", "MEDIUM"},
-		{"-mcp package", "SKILL.md", "markdown", "npx -y @acme/github-mcp\n", "MEDIUM"},
-		{"mcp-server- package", "SKILL.md", "markdown", "uvx mcp-server-fetch\n", "MEDIUM"},
-		{"bunx", "SKILL.md", "markdown", "bunx acme-mcp-server\n", "MEDIUM"},
-		{"inline docker image then a period", "SKILL.md", "markdown", "Run `docker run -i --rm ghcr.io/github/github-mcp-server`.\n", "MEDIUM"},
-		{"inline npx then a comma", "SKILL.md", "markdown", "Start `npx -y @acme/github-mcp`, then continue.\n", "MEDIUM"},
+		{"scoped MCP package", "SKILL.md", "markdown", "Run `npx -y @modelcontextprotocol/server-filesystem` first.\n", "LOW"},
+		{"-mcp package", "SKILL.md", "markdown", "npx -y @acme/github-mcp\n", "LOW"},
+		{"mcp-server- package", "SKILL.md", "markdown", "uvx mcp-server-fetch\n", "LOW"},
+		{"bunx", "SKILL.md", "markdown", "bunx acme-mcp-server\n", "LOW"},
+		{"inline docker image then a period", "SKILL.md", "markdown", "Run `docker run -i --rm ghcr.io/github/github-mcp-server`.\n", "LOW"},
+		{"inline npx then a comma", "SKILL.md", "markdown", "Start `npx -y @acme/github-mcp`, then continue.\n", "LOW"},
 		{"pip MCP server", "SKILL.md", "markdown", "pip install mcp-atlassian\n", "LOW"},
-		{"docker mcp namespace", "SKILL.md", "markdown", "docker run -i --rm mcp/github\n", "MEDIUM"},
-		{"claude mcp add", "SKILL.md", "markdown", "claude mcp add tools -- npx -y @acme/tools\n", "MEDIUM"},
+		{"docker mcp namespace", "SKILL.md", "markdown", "docker run -i --rm mcp/github\n", "LOW"},
+		{"claude mcp add", "SKILL.md", "markdown", "claude mcp add tools -- npx -y @acme/tools\n", "LOW"},
 		{"fenced mcpServers JSON", "references/setup.md", "markdown",
-			"Add this:\n\n```json\n{\"mcpServers\": {\"tools\": {\"command\": \"npx\", \"args\": [\"-y\", \"@acme/tools\"]}}}\n```\n", "MEDIUM"},
+			"Add this:\n\n```json\n{\"mcpServers\": {\"tools\": {\"command\": \"npx\", \"args\": [\"-y\", \"@acme/tools\"]}}}\n```\n", "LOW"},
 		{"docker in mcpServers JSON", "references/setup.md", "markdown",
-			"```json\n{\n  \"mcpServers\": {\n    \"tools\": {\n      \"command\": \"docker\",\n      \"args\": [\"run\", \"-i\", \"--rm\", \"-e\", \"TOKEN\", \"ghcr.io/acme/tools\"]\n    }\n  }\n}\n```\n", "MEDIUM"},
-		{".mcp.json", ".mcp.json", "other", "{\"mcpServers\": {\"tools\": {\"command\": \"bunx\", \"args\": [\"acme-tools\"]}}}\n", "MEDIUM"},
-		{"TOML mcp_servers", "config.toml", "other", "[mcp_servers.tools]\ncommand = \"npx\"\nargs = [\"-y\", \"acme-tools\"]\n", "MEDIUM"},
-		{"YAML mcpServers", "config.yaml", "other", "mcpServers:\n  tools:\n    command: uvx\n    args:\n      - acme-tools\n", "MEDIUM"},
+			"```json\n{\n  \"mcpServers\": {\n    \"tools\": {\n      \"command\": \"docker\",\n      \"args\": [\"run\", \"-i\", \"--rm\", \"-e\", \"TOKEN\", \"ghcr.io/acme/tools\"]\n    }\n  }\n}\n```\n", "LOW"},
+		{".mcp.json", ".mcp.json", "other", "{\"mcpServers\": {\"tools\": {\"command\": \"bunx\", \"args\": [\"acme-tools\"]}}}\n", "LOW"},
+		{"TOML mcp_servers", "config.toml", "other", "[mcp_servers.tools]\ncommand = \"npx\"\nargs = [\"-y\", \"acme-tools\"]\n", "LOW"},
+		{"YAML mcpServers", "config.yaml", "other", "mcpServers:\n  tools:\n    command: uvx\n    args:\n      - acme-tools\n", "LOW"},
 	}
 	for _, test := range servers {
 		item := component{Path: test.path, Type: test.kind, Content: test.content}
@@ -300,6 +301,12 @@ func TestRugPullOnlyForMCPServers(t *testing.T) {
 	findings := analyzeMCPRugPull(nil, manifest)
 	if countRule(findings, "RP1") != 1 {
 		t.Errorf("manifest RP1 count=%d, want 1 (the MCP server only); findings=%#v", countRule(findings, "RP1"), findings)
+	}
+	// RP1 is LOW for every launcher, and its text is about hardening.
+	for _, finding := range append(findings, rp1CommandFindings(component{Path: "SKILL.md", Type: "markdown", Content: "docker run -i --rm mcp/github\nuvx mcp-server-fetch\n"})...) {
+		if finding.ID == "RP1" && (finding.Severity != "LOW" || !strings.Contains(finding.Explanation, "defense against a malicious or broken future release")) {
+			t.Errorf("RP1 severity=%s explanation=%q", finding.Severity, finding.Explanation)
+		}
 	}
 }
 

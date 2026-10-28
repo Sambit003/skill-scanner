@@ -180,10 +180,10 @@ func analyzeMCPRugPull(items []component, manifest map[string]any) []model.Findi
 			continue
 		}
 		matched := manifestText[match[0]:match[1]]
-		findings = append(findings, model.Finding{ID: "RP1", Category: "MCP Rug Pull", Severity: "MEDIUM", Confidence: .7,
+		explanation, remediation := rp1Text("npx")
+		findings = append(findings, model.Finding{ID: "RP1", Category: "MCP Rug Pull", Severity: rp1Severity, Confidence: .7,
 			Location: model.Location{File: "SKILL.md", StartLine: 1}, MatchedText: truncate(matched, 200),
-			Explanation: "MCP server references in the skill manifest without version pinning are a rug-pull risk.",
-			Remediation: "Always pin MCP server versions in manifest references.", Tags: []string{"ASI16"}})
+			Explanation: explanation, Remediation: remediation, Tags: []string{"ASI16"}})
 	}
 	findings = append(findings, analyzeRP2ManifestPreStaging(manifestText)...)
 	if version, ok := manifest["version"].(string); ok {

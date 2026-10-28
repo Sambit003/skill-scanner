@@ -121,7 +121,7 @@ func rp1CommandFindings(item component) []model.Finding {
 	regions := mcpConfigRegions(item)
 	lines := map[int]bool{}
 	var findings []model.Finding
-	report := func(start int, kind, matched string, severity string, confidence float64) {
+	report := func(start int, kind, matched string, confidence float64) {
 		line := 1 + strings.Count(item.Content[:start], "\n")
 		if lines[line] {
 			return
@@ -129,7 +129,7 @@ func rp1CommandFindings(item component) []model.Finding {
 		lines[line] = true
 		explanation, remediation := rp1Text(kind)
 		matched = truncate(matched, 200)
-		findings = append(findings, model.Finding{ID: "RP1", Category: "MCP Rug Pull", Severity: severity, Confidence: confidence,
+		findings = append(findings, model.Finding{ID: "RP1", Category: "MCP Rug Pull", Severity: rp1Severity, Confidence: confidence,
 			Location: model.Location{File: item.Path, StartLine: line}, Finding: matched, MatchedText: matched,
 			Explanation: explanation, Remediation: remediation, CodeSnippet: lineSnippet(item.Content, line), Tags: []string{"ASI16"}})
 	}
@@ -148,9 +148,8 @@ func rp1CommandFindings(item component) []model.Finding {
 	for _, command := range []struct {
 		re         *regexp.Regexp
 		kind       string
-		severity   string
 		confidence float64
-	}{{rp1NPX, "npx", "MEDIUM", .7}, {rp1UVX, "uvx", "MEDIUM", .65}, {rp1PIP, "pip", "LOW", .6}} {
+	}{{rp1NPX, "npx", .7}, {rp1UVX, "uvx", .65}, {rp1PIP, "pip", .6}} {
 		for _, match := range command.re.FindAllStringSubmatchIndex(item.Content, -1) {
 			full := item.Content[match[0]:match[1]]
 			rest, _, _ := strings.Cut(item.Content[match[1]:], "\n")
@@ -164,7 +163,7 @@ func rp1CommandFindings(item component) []model.Finding {
 				continue
 			}
 			if isServer(match[0], name) {
-				report(match[0], command.kind, full, command.severity, command.confidence)
+				report(match[0], command.kind, full, command.confidence)
 			}
 		}
 	}
@@ -178,7 +177,7 @@ func rp1CommandFindings(item component) []model.Finding {
 		}
 		matched := item.Content[match[0]:match[2]] + strings.Join(arguments[:index+1], " ")
 		if isServer(match[0], image) {
-			report(match[0], "docker", matched, "MEDIUM", .75)
+			report(match[0], "docker", matched, .75)
 		}
 	}
 	for _, match := range rp1ConfigCommand.FindAllStringSubmatchIndex(item.Content, -1) {
@@ -223,22 +222,32 @@ func rp1CommandFindings(item component) []model.Finding {
 			kind = "npx"
 		}
 		confidence := map[string]float64{"npx": .7, "uvx": .65, "docker": .75}[kind]
-		report(match[0], kind, item.Content[match[2]:match[3]]+" "+strings.Join(arguments, " "), "MEDIUM", confidence)
+		report(match[0], kind, item.Content[match[2]:match[3]]+" "+strings.Join(arguments, " "), confidence)
 	}
 	return findings
 }
 
+// rp1Severity is LOW for every launcher: an unpinned server is a hardening
+// gap, not evidence of an attack.
+const rp1Severity = "LOW"
+
+// rp1Text explains an unpinned MCP server. Pinning defends against a
+// malicious or broken future release; it says nothing bad about the current
+// one. Remote MCP servers cannot be pinned and are not reported.
 func rp1Text(kind string) (string, string) {
+	const why = " Pinning is a defense against a malicious or broken future release; an unpinned server is not a sign that the current release is malicious."
 	switch kind {
 	case "uvx":
-		return "uvx/uv tool run commands without ==version create a rug-pull risk.", "Pin the version: uvx package-name==1.2.3"
+		return "This MCP server is started with uvx or uv tool run without a version, so each start runs whatever release the registry serves." + why,
+			"Pin the version: uvx package-name==1.2.3"
 	case "pip":
-		return "pip install without ==version installs the latest release, which could include malicious changes.", "Pin the version: pip install package==1.2.3"
+		return "This MCP server package is installed with pip without a version, so a later install can bring a different release." + why,
+			"Pin the version: pip install package==1.2.3"
 	case "docker":
-		return "Docker image references without a specific tag (:latest is implicit) or digest (@sha256:...) can be silently replaced by a malicious image.",
-			"Pin the image: image:tag or image@sha256:abc123"
+		return "This MCP server image has no fixed tag or digest, so a later pull can run a different image." + why,
+			"Pin the image: image:tag, or better image@sha256:..."
 	default:
-		return "npx commands without a version suffix (e.g. @1.0.0) create a rug-pull risk if the upstream server is compromised and publishes a malicious update.",
+		return "This MCP server is started with npx (or bunx, pnpx) without a version, so each start runs whatever release the registry serves." + why,
 			"Pin the version: npx @scope/server@1.2.3"
 	}
 }
