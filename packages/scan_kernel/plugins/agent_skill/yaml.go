@@ -33,3 +33,31 @@ func yamlSequenceLines(raw []byte, key string) []int {
 	}
 	return nil
 }
+
+// frontmatterRoot returns the top-level mapping of a SKILL.md front matter.
+// Node lines are SKILL.md lines because frontmatterYAML starts on line 1.
+func frontmatterRoot(content string) *yaml.Node {
+	block, ok := frontmatterYAML(content)
+	if !ok {
+		return nil
+	}
+	var document yaml.Node
+	if yaml.Unmarshal([]byte(block), &document) != nil || len(document.Content) == 0 || document.Content[0].Kind != yaml.MappingNode {
+		return nil
+	}
+	return document.Content[0]
+}
+
+// mappingEntry returns the key and value nodes for key in a mapping node, or
+// nils when the node is not a mapping or has no such key.
+func mappingEntry(node *yaml.Node, key string) (*yaml.Node, *yaml.Node) {
+	if node == nil || node.Kind != yaml.MappingNode {
+		return nil, nil
+	}
+	for index := 0; index+1 < len(node.Content); index += 2 {
+		if node.Content[index].Value == key {
+			return node.Content[index], node.Content[index+1]
+		}
+	}
+	return nil, nil
+}

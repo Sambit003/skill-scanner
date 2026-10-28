@@ -46,6 +46,7 @@ var scoringRulePolicies = map[string]rulePolicy{
 	"LP2": {ruleCapability, contextAny}, "LP3": {ruleCapability, contextAny}, "LP4": {ruleCapability, contextAny},
 	"RA1": {ruleCapability, contextAny}, "RA2": {ruleCapability, contextAny}, "EA1": {ruleCapability, contextAny},
 	"EA2": {ruleCapability, contextAny}, "EA3": {ruleCapability, contextAny}, "EA4": {ruleCapability, contextAny},
+	"EA5": {ruleCapability, contextAny},
 	"TM1": {ruleCapability, contextAny}, "TM2": {ruleCapability, contextAny}, "TM3": {ruleCapability, contextAny},
 	"OH1": {ruleCapability, contextAny}, "OH2": {ruleCapability, contextAny}, "OH3": {ruleCapability, contextAny},
 	"P2": {ruleCapability, contextInstructions}, "P4": {ruleCapability, contextInstructions},

@@ -47,6 +47,7 @@ func (Plugin) Scan(ctx context.Context, request model.ScanRequest) (model.ScanRe
 		manifestFindings = append(manifestFindings, analyzeMCPLeastPrivilege(skill.Components, skill.Manifest)...)
 		manifestFindings = append(manifestFindings, analyzeMCPToolPoisoning(skill.Manifest)...)
 		manifestFindings = append(manifestFindings, analyzeTriggers(skill.Manifest, skill.TriggerLines)...)
+		manifestFindings = append(manifestFindings, analyzeToolPreApproval(skill.ManifestContent)...)
 		findings = append(findings, rebaseSkillFindings(manifestFindings, skill.Root)...)
 	}
 	yaraFindings, err := scanYARA(ctx, prepared.Components, request.YARARulesDir)

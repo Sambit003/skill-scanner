@@ -58,6 +58,9 @@ type skillInput struct {
 	Components   []component
 	Manifest     map[string]any
 	TriggerLines []int
+	// ManifestContent is the SKILL.md text, for analyzers that need the
+	// front matter's line numbers.
+	ManifestContent string
 }
 
 func (p *preparedInput) cleanup() {
@@ -149,6 +152,7 @@ func selectComponents(all []component, scanScope string, includeReadme bool) ([]
 			if item.Path == manifestPath {
 				unit.Manifest = parseFrontmatter(item.Content)
 				unit.TriggerLines = frontmatterTriggerLines(item.Content)
+				unit.ManifestContent = item.Content
 			}
 		}
 		skills = append(skills, unit)
@@ -630,7 +634,10 @@ func parseFrontmatter(content string) map[string]any {
 	}
 	allowedTools := manifestStringList(decoded["allowed-tools"])
 	if text, ok := decoded["allowed-tools"].(string); ok {
-		allowedTools = commaSeparatedList(text)
+		allowedTools = nil
+		for _, entry := range splitAllowedTools(text) {
+			allowedTools = append(allowedTools, entry)
+		}
 	}
 	manifest["allowed-tools"] = allowedTools
 	parameters := make([]any, 0)

@@ -63,7 +63,7 @@ The AST01–AST10 taxonomy is an exact match (IDs, titles, order, severity tiers
 |---|---|---|---|---|
 | LLM01 Prompt Injection | Detections present | P1–5, TP1–3, AR1–3, MP1–3, YR5 | Embedded instruction and metadata injection; no runtime adversarial evaluation. |
 | LLM02 Sensitive Information Disclosure | Detections present | E1–5, TT1–4, AS1–3 | Environment, secret file, config access and data flow detection. |
-| LLM03 Excessive Agency | Detections present | EA1–4, LP1–4, PE1–5, TM1–4, RA1–2 | Over-permissioning, autonomous high-impact actions, container escapes. |
+| LLM03 Excessive Agency | Detections present | EA1–5, LP1–4, PE1–5, TM1–4, RA1–2 | Over-permissioning, autonomous high-impact actions, container escapes. |
 | LLM04 Supply Chain | Detections present | SC1–8, RP1–3, YR1–4, TR1–3 | Unpinned dependencies, malware signatures, trigger-namespace squatting. SC4 excluded in HSBC build. |
 | LLM05 Data & Model Poisoning | Partial | MP3 | Persistent memory-store poisoning in agent scope. Pre-training and fine-tuning poisoning are out of static scope. |
 | LLM06 Unbounded Consumption | Partial | EA4, OH3, MP2 | Static unbounded resource markers and context stuffing patterns. No runtime latency/cost measurement. |

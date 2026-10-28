@@ -76,3 +76,63 @@ func ruleIDs(findings []model.Finding) []string {
 	}
 	return ids
 }
+
+func TestSplitAllowedToolsKeepsScopedEntriesWhole(t *testing.T) {
+	got := splitAllowedTools("Read Grep Bash(git add:*), Bash(gh pr view *),Write")
+	want := []string{"Read", "Grep", "Bash(git add:*)", "Bash(gh pr view *)", "Write"}
+	if len(got) != len(want) {
+		t.Fatalf("splitAllowedTools=%q, want %q", got, want)
+	}
+	for index := range want {
+		if got[index] != want[index] {
+			t.Fatalf("splitAllowedTools=%q, want %q", got, want)
+		}
+	}
+}
+
+func TestBroadToolPreApproval(t *testing.T) {
+	for _, test := range []struct {
+		frontmatter, severity string
+		line                  int
+	}{
+		{"allowed-tools: Bash\n", "MEDIUM", 4},
+		{"allowed-tools: Read, Bash(*)\n", "MEDIUM", 4},
+		{"allowed-tools: Bash(**)\n", "MEDIUM", 4},
+		{"allowed-tools: \"*\"\n", "MEDIUM", 4},
+		{"allowed-tools:\n  - Read\n  - Write\n  - Bash\n", "MEDIUM", 7},
+		{"allowed-tools: Read Write\n", "LOW", 4},
+		{"allowed-tools: Edit, WebFetch\n", "LOW", 4},
+		{"allowed-tools: mcp__github__*\n", "LOW", 4},
+		{"allowed-tools: mcp__github\n", "LOW", 4},
+		{"allowed-tools: Bash(gh *) Bash(git add:*)\n", "", 0},
+		{"allowed-tools: Read, Grep, Glob, WebSearch\n", "", 0},
+		{"allowed-tools: mcp__github__get_issue\n", "", 0},
+		{"", "", 0},
+	} {
+		findings := analyzeToolPreApproval(claudeSkill(test.frontmatter, "Formats reports.\n"))
+		if test.severity == "" {
+			if len(findings) != 0 {
+				t.Errorf("%q: unexpected %#v", test.frontmatter, findings)
+			}
+			continue
+		}
+		if len(findings) != 1 || findings[0].ID != "EA5" || findings[0].Severity != test.severity || findings[0].Location.StartLine != test.line {
+			t.Errorf("%q: got %#v, want one EA5 %s on line %d", test.frontmatter, findings, test.severity, test.line)
+			continue
+		}
+		if !isCapabilityFinding(findings[0]) || isEvidenceFinding(findings[0]) {
+			t.Errorf("%q: EA5 must score as a capability", test.frontmatter)
+		}
+	}
+
+	result := scanSkillFiles(t, map[string]string{"SKILL.md": claudeSkill("allowed-tools: Write, Bash\n", "Formats reports.\n")})
+	for _, finding := range result.Findings {
+		if finding.ID == "EA5" {
+			if finding.Location.File != "skills/report-helper/SKILL.md" || finding.Location.StartLine != 4 || finding.Finding != "allowed-tools: Write, Bash" {
+				t.Fatalf("EA5=%s:%d %q", finding.Location.File, finding.Location.StartLine, finding.Finding)
+			}
+			return
+		}
+	}
+	t.Fatalf("scan did not report EA5; findings=%v", ruleIDs(result.Findings))
+}
