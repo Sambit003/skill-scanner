@@ -112,8 +112,7 @@ func TestCredentialAccessNeedsARealFile(t *testing.T) {
 		"security find-generic-password -s github -w",
 		"cat .env",
 		"Load the values from \".env.local\" first.",
-		"gws auth export --unmasked > credentials.json",
-		"<code>~/.aws/credentials</code>",
+		"Read <code>~/.aws/credentials</code> into the report.",
 	} {
 		if !hasRule(scanComponents(t, component{Path: "notes.md", Type: "markdown", Content: text + "\n"}), "PE3") {
 			t.Errorf("PE3 missed %q", text)
@@ -127,6 +126,9 @@ func TestCredentialAccessNeedsARealFile(t *testing.T) {
 		"Set KUBECONFIG via your kubeconfig context.",
 		"export GOOGLE_WORKSPACE_CLI_CREDENTIALS_FILE=/path/to/credentials.json",
 		"Copy your-secrets.json from the vault.",
+		// Writing a file, or naming one, is not reading it (F2).
+		"gws auth export --unmasked > credentials.json",
+		"Keep <code>~/.aws/credentials</code> out of the repository.",
 	} {
 		if hasRule(scanComponents(t, component{Path: "notes.md", Type: "markdown", Content: text + "\n"}), "PE3") {
 			t.Errorf("PE3 reported %q", text)

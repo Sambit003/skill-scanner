@@ -592,7 +592,7 @@ func findingFromStaticMatchWithContext(item component, pattern staticPattern, ma
 	context := contextAtOffset(item.Content, match[0], contextWindow)
 	confidence := pattern.Confidence
 	if pattern.ID == "PE3" && (isEnvironmentFileDocumentationReference(item, context) || isAttributeEnvMatch(item.Content, match) ||
-		isEnvLoadOrTemplateCopy(item.Content, match) || isPlaceholderPath(item.Content, match)) {
+		isEnvLoadOrTemplateCopy(item.Content, match) || isPlaceholderPath(item.Content, match) || !credentialAccessed(item, match)) {
 		return model.Finding{}, false
 	}
 
@@ -626,6 +626,9 @@ func findingFromStaticMatchWithContext(item component, pattern staticPattern, ma
 
 	matched := item.Content[match[0]:match[1]]
 	severity := pattern.Severity
+	if pattern.ID == "PE3" {
+		severity = credentialSeverity(item.Content, match)
+	}
 	if pattern.ID == "SC2" && isSafeSupplyChainPattern(matched) {
 		confidence = math.Min(confidence, .15)
 		severity = "LOW"

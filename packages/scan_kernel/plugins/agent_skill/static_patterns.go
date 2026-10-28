@@ -124,6 +124,7 @@ var portedStaticPatterns = []staticPattern{
 	newStaticPattern("PE3", "Credential Access", "Privilege Escalation", "HIGH", 0.7, "~?/?\\.npmrc"),
 	newStaticPattern("PE3", "Credential Access", "Privilege Escalation", "HIGH", 0.9, "~?/?\\.git-credentials"),
 	newStaticPattern("PE3", "Credential Access", "Privilege Escalation", "HIGH", 0.8, "~?/?\\.netrc"),
+	newStaticPattern("PE3", "Credential Access", "Privilege Escalation", "HIGH", 0.8, "~?/?\\.pypirc"),
 	newStaticPattern("PE3", "Credential Access", "Privilege Escalation", "HIGH", 0.6, "/etc/passwd"),
 	newStaticPattern("PE3", "Credential Access", "Privilege Escalation", "HIGH", 0.95, "/etc/shadow"),
 	newStaticPattern("PE3", "Credential Access", "Privilege Escalation", "HIGH", 0.7, "(?:password|credentials?|secrets?)\\.(?:txt|json|yaml|yml|env)"),
