@@ -23,20 +23,28 @@ const agentObjectCore = `your\s+(?:own\s+)?(?:memory|memories|context|instructio
 
 // agentObjects adds each rule's own objects to agentObjectCore.
 var agentObjects = map[string]*regexp.Regexp{
-	"MP3": agentObjectPattern(`(?:false|fake|fabricated|malicious)\s+(?:memories?|information|context|data|history)|assistant|helper|bot`),
-	"RA1": agentObjectPattern(`its\s+own`),
-	"E4":  agentObjectPattern(`conversation|chat|dialog|transcript|messages?|prompts?|user\s+input|interactions?|session`),
-	"EA1": agentObjectPattern(`tools?|functions?|apis?|(?:the|your)\s+(?:shell|terminal|host|machine|system)`),
-	"EA2": agentObjectPattern(`approv\w*|confirm\w*|consent|permission|(?:asking|ask|consulting|checking\s+with|prompting|prompt|waiting\s+for|telling|notifying)\s+(?:the\s+)?(?:user|human|operator)`),
-	"EA3": agentObjectPattern(`your\s+(?:scope|responsibilit\w+|capabilities|functionality|tasks?)`),
-	"TM3": agentObjectPattern(`this\s+(?:server|tool|service)`),
-	"E3":  agentObjectPattern(`(?:credential|secret|key|\.env|ssh|password)s?\s+files?|home\s+(?:directory|folder|dir)|~/|\$HOME|/Users/|/home/|(?:entire|whole)\s+(?:file\s*system|disk|machine|computer)|file\s*system`),
-	"OH3": agentObjectPattern(`output|text|tokens?|responses?|content|writing|generating`),
-	"MP2": agentObjectPattern(`context(?:\s+window)?|prompt|token\s+(?:budget|limit|window)|memory|window|(?:\d{3,}|many|hundreds?|thousands?)\s+times`),
+	"MP3": agentObjectPattern(`(?:false|fake|fabricated|malicious)\s+(?:memories?|information|context|data|history)|assistant|helper|bot`, ""),
+	"RA1": agentObjectPattern(`its\s+own`, ""),
+	"E4":  agentObjectPattern(`conversation|chat|dialog|transcript|messages?|prompts?|user\s+input|interactions?|session`, ""),
+	"EA1": agentObjectPattern(`tools?|functions?|apis?|(?:the|your)\s+(?:shell|terminal|host|machine|system)`, ""),
+	"EA2": agentObjectPattern(`approv\w*|confirm\w*|consent|permission|(?:asking|ask|consulting|checking\s+with|prompting|prompt|waiting\s+for|telling|notifying)\s+(?:the\s+)?(?:user|human|operator)`, ""),
+	"EA3": agentObjectPattern(`your\s+(?:scope|responsibilit\w+|capabilities|functionality|tasks?)`, ""),
+	"TM3": agentObjectPattern(`this\s+(?:server|tool|service)`, ""),
+	"E3": agentObjectPattern(`(?:credential|secret|key|env|ssh|password)s?\s+files?|home\s+(?:directory|folder|dir)|(?:entire|whole)\s+(?:file\s*system|disk|machine|computer)|file\s*system`,
+		`~/|\$\{?HOME\b|/Users/|/home/|\.env\s+files?`),
+	"OH3": agentObjectPattern(`output|text|tokens?|responses?|content|writing|generating`, ""),
+	"MP2": agentObjectPattern(`context(?:\s+window)?|prompt|token\s+(?:budget|limit|window)|memory|window|(?:\d{3,}|many|hundreds?|thousands?)\s+times`, ""),
 }
 
-func agentObjectPattern(extra string) *regexp.Regexp {
-	return regexp.MustCompile(`(?i)\b(?:` + agentObjectCore + `|` + extra + `)\b`)
+// agentObjectPattern joins agentObjectCore, the rule's word objects (whole
+// words) and its path objects (~/, $HOME), which start with a symbol and so
+// cannot sit behind a word boundary.
+func agentObjectPattern(words, paths string) *regexp.Regexp {
+	expression := `(?i)\b(?:` + agentObjectCore + `|` + words + `)\b`
+	if paths != "" {
+		expression += `|(?i:` + paths + `)`
+	}
+	return regexp.MustCompile(expression)
 }
 
 var (
