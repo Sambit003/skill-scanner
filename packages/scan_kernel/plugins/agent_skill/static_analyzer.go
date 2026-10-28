@@ -458,7 +458,7 @@ func analysisCacheKey(item component) analysisKey {
 	for index, enabled := range []bool{
 		isEvalDataset(item.Path), isBinaryScannerPath(item.Path), strings.EqualFold(item.Path, "LICENSE"),
 		isDependencyFile(item.Path), isDocumentationMarkdown(item.Path), strings.HasSuffix(normalized, "skill.md"),
-		strings.HasSuffix(normalized, ".py"), isSkillManifestPath(item.Path),
+		strings.HasSuffix(normalized, ".py"), isSkillManifestPath(item.Path), isReadmePath(item.Path),
 	} {
 		if enabled {
 			flags |= 1 << index
@@ -582,10 +582,10 @@ func findingFromStaticMatchWithContext(item component, pattern staticPattern, ma
 	if strings.HasPrefix(pattern.ID, "PE") && pattern.ID != "PE1" {
 		indicator = isPrivilegeDocumentationExample
 	}
-	switch exampleTreatmentAt(item, match[0], context, indicator) {
-	case exampleFenced:
+	switch treatment := exampleTreatmentAt(item, match[0], context, indicator); {
+	case treatment == exampleFenced && !reportedInsideFence(item, pattern.ID, match[0]):
 		return model.Finding{}, false
-	case exampleNearby:
+	case treatment != exampleNone:
 		confidence *= exampleConfidenceFactor
 	}
 	if strings.HasPrefix(pattern.ID, "AR") {
@@ -815,7 +815,8 @@ const exampleConfidenceFactor = .8
 // to the agent, code blocks included, so nothing there is suppressed or
 // downgraded. In program source "# e.g." is only a comment, so nothing
 // changes either. In other documents a match inside a fenced code block is
-// dropped, and example wording within a few lines lowers confidence.
+// dropped (but see reportedInsideFence), and example wording within a few
+// lines lowers confidence.
 func exampleTreatmentAt(item component, offset int, context string, indicator func(string) bool) exampleTreatment {
 	if isSkillManifestPath(item.Path) || isSourceCodeType(item.Type) || item.Executable {
 		return exampleNone
@@ -827,6 +828,51 @@ func exampleTreatmentAt(item component, offset int, context string, indicator fu
 		return exampleNearby
 	}
 	return exampleNone
+}
+
+// dangerousFencedCommands are the command lines still reported inside a
+// closed fenced code block of a Markdown document other than SKILL.md and a
+// README: an agent told to follow the document can run them as written. They
+// are reported by fencedCommandRules, at the exampleNearby confidence.
+var dangerousFencedCommands = []struct {
+	// trustedInstallerExempt skips installers from the hosts SC2 trusts.
+	trustedInstallerExempt bool
+	compiled               *regexp.Regexp
+}{
+	// Download and execute: curl|wget ... | sh, iwr | iex, bash <(curl ...),
+	// base64 -d | sh.
+	{true, regexp.MustCompile(`(?i)\b(?:curl|wget)\b[^\n|]*\|\s*(?:sudo\s+)?(?:(?:ba|z|da|k)?sh|python[0-9.]*|node|perl|ruby)\b|\b(?:iwr|irm|Invoke-WebRequest|Invoke-RestMethod)\b[^\n]*\|\s*(?:iex|Invoke-Expression)\b|\biex\s*\(\s*(?:New-Object\s+Net\.WebClient|iwr|irm|Invoke-WebRequest|Invoke-RestMethod)|\b(?:(?:ba|z)?sh|source)\s+<\(\s*(?:curl|wget)\b|\bbase64\s+(?:-d|--decode|-D)\b[^\n]*\|\s*(?:sudo\s+)?(?:(?:ba|z)?sh|python[0-9.]*)\b`)},
+	// Recursive delete of /, ~, $HOME or a system directory.
+	{false, regexp.MustCompile(`(?i)\brm\s+(?:-[a-z]+\s+|--[a-z-]+\s+)*?(?:-[a-z]*r[a-z]*|--recursive)\s+(?:-[a-z]+\s+|--[a-z-]+\s+)*["']?(?:/|~/?|\$\{?HOME\}?/?|/(?:usr|etc|var|home|opt|bin|sbin|lib|root|Users|System)/?)\*?["']?(?:\s|$|[;&|])|\bRemove-Item\b[^\n]*-Recurse[^\n]*(?:\b[A-Z]:\\\s|~|\$HOME|\$env:USERPROFILE)`)},
+	// Reading SSH private keys or cloud credential files.
+	{false, regexp.MustCompile(`(?i)(?:\b(?:cat|less|more|head|tail|cp|mv|scp|rsync|tar|zip|base64|xxd|od|strings|type|Get-Content|gc)\b[^\n|;&]*?|\bopen\s*\([^)\n]*?|\bread(?:_text|_bytes|File|FileSync)?\s*\([^)\n]*?)(?:(?:~|\$\{?HOME\}?|/home/[^/\s]+|/root)/\.ssh/(?:id_[a-z0-9_]+\b(?:[^.]|$)|[^\s/]*_key\b)|\.aws/credentials|\.config/gcloud/(?:application_default_credentials\.json|credentials\.db|legacy_credentials|access_tokens\.db)|\.azure/(?:accessTokens\.json|msal_token_cache\.(?:json|bin)))`)},
+	// Sending file contents or the environment to a remote endpoint.
+	{false, regexp.MustCompile(`(?i)\bcurl\b[^\n]*\s(?:-d|--data(?:-binary|-raw|-urlencode)?|-F|--form|-T|--upload-file)[\s=]*["']?(?:[^\s"']*=)?@\S|\bcurl\b[^\n]*\s(?:-d|--data[a-z-]*|-F|--form)[\s=]*["']?[^\n]*\$\((?:cat|env|printenv|base64)\b|\b(?:env|printenv|cat\s+[^|\n]+|tar\s+[^|\n]+)\|\s*(?:curl|wget|nc|ncat|netcat)\b|\bwget\b[^\n]*--post-file|\b(?:nc|ncat|netcat)\b[^\n]*<\s*\S`)},
+}
+
+// fencedCommandRules are the command rules that report a
+// dangerousFencedCommands line.
+var fencedCommandRules = map[string]bool{"SC2": true, "SC3": true, "TM1": true, "TM2": true, "PE3": true, "E1": true, "E2": true, "E3": true, "TT3": true}
+
+// reportedInsideFence reports a match in a fenced code block that is still a
+// finding: a fencedCommandRules match on a dangerousFencedCommands line in a
+// Markdown document other than SKILL.md and a README.
+func reportedInsideFence(item component, ruleID string, offset int) bool {
+	if !fencedCommandRules[ruleID] || item.Type != "markdown" || isReadmePath(item.Path) {
+		return false
+	}
+	start := strings.LastIndexByte(item.Content[:offset], '\n') + 1
+	end := len(item.Content)
+	if index := strings.IndexByte(item.Content[offset:], '\n'); index >= 0 {
+		end = offset + index
+	}
+	line := item.Content[start:end]
+	for _, class := range dangerousFencedCommands {
+		if class.compiled.MatchString(line) && !(class.trustedInstallerExempt && isSafeSupplyChainPattern(line)) {
+			return true
+		}
+	}
+	return false
 }
 
 // isSkillManifestPath compares the base name case-insensitively, so skill.md

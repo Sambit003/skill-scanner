@@ -110,8 +110,15 @@ func TestSkillManifestCodeBlocksAreInstructions(t *testing.T) {
 }
 
 func TestFencedExamplesInOtherDocumentsStaySuppressed(t *testing.T) {
+	// Download-and-execute, wide recursive deletes, credential reads and
+	// sends are reported even in a fence (see reportedInsideFence), except
+	// in a README.
+	dangerous := map[string]bool{"SC2": true, "TM1": true, "PE3": true, "E1": true}
 	for _, test := range shellAttacks {
 		for _, path := range []string{"README.md", "references/setup.md"} {
+			if dangerous[test.rule] && path != "README.md" {
+				continue
+			}
 			item := component{Path: path, Type: "markdown", Content: "# Setup\n\nThe installer used to run:\n\n```bash\n" + test.command + "\n```\n"}
 			if got := countRule(scanComponents(t, item), test.rule); got != 0 {
 				t.Errorf("%s: reported %q inside a fenced block in %s", test.rule, test.command, path)
@@ -346,7 +353,9 @@ func TestTaintFlowsIntoFileObjectWrites(t *testing.T) {
 }
 
 func TestSkillManifestCheckIgnoresCase(t *testing.T) {
-	command := "rm -rf ~/"
+	// TM3 in a fence is suppressed in documents other than SKILL.md; a wide
+	// rm -rf would be reported anywhere (see reportedInsideFence).
+	command := "export NODE_TLS_REJECT_UNAUTHORIZED=0"
 	for path, manifest := range map[string]bool{
 		"SKILL.md": true, "skill.md": true, "Skill.md": true, "skills/report/sKiLl.MD": true,
 		"my-skill.md": false, "skill.md.txt": false, "notes.md": false,
@@ -355,8 +364,8 @@ func TestSkillManifestCheckIgnoresCase(t *testing.T) {
 			t.Errorf("isSkillManifestPath(%q)=%v, want %v", path, got, manifest)
 		}
 		item := component{Path: path, Type: "markdown", Content: "Run this first:\n\n```bash\n" + command + "\n```\n"}
-		if reported := countRule(scanComponents(t, item), "TM1") > 0; reported != manifest {
-			t.Errorf("%s: fenced TM1 reported=%v, want %v", path, reported, manifest)
+		if reported := countRule(scanComponents(t, item), "TM3") > 0; reported != manifest {
+			t.Errorf("%s: fenced TM3 reported=%v, want %v", path, reported, manifest)
 		}
 	}
 	// Identical content under a manifest name and an ordinary name must not
@@ -364,8 +373,8 @@ func TestSkillManifestCheckIgnoresCase(t *testing.T) {
 	content := "Run this first:\n\n```bash\n" + command + "\n```\n"
 	findings := scanComponents(t, component{Path: "skill.md", Type: "markdown", Content: content}, component{Path: "my-skill.md", Type: "markdown", Content: content})
 	for _, finding := range findings {
-		if finding.ID == "TM1" && finding.Location.File != "skill.md" {
-			t.Errorf("TM1 reported in %s, want only skill.md", finding.Location.File)
+		if finding.ID == "TM3" && finding.Location.File != "skill.md" {
+			t.Errorf("TM3 reported in %s, want only skill.md", finding.Location.File)
 		}
 	}
 }
