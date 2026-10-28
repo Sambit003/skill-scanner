@@ -4,17 +4,18 @@ package agentskill
 // request from one that only authenticates it. A key read from the
 // environment and sent in an Authorization or X-API-Key header, or as the
 // auth= argument, is how a skill calls its own API, when the API is the
-// key's: the host comes from configuration (an environment value, an
-// argument), or the host names the key's service (UNSPLASH_ACCESS_KEY to
-// api.unsplash.com). An environment value that names the host
+// key's: the host comes from configuration (an environment variable or a
+// function argument without a literal default), or the literal host names
+// the key's service (UNSPLASH_ACCESS_KEY to api.unsplash.com). A host the
+// scanner cannot resolve does not count as configured. An environment value that names the host
 // (https://{HOST}/...) chooses the destination. Neither is exfiltration.
 //
 // CRITICAL: a credential in the body, JSON, form data, query string or URL;
 // the whole environment; the content of a credential file; any credential
 // sent to a collection host (webhook.site, a Discord webhook, a raw IP
 // address); a cloud secret or more than one credential in one request.
-// HIGH: one credential in an auth header to a fixed host that does not name
-// its service (OPENAI_API_KEY to metrics.example.com).
+// HIGH: one credential in an auth header to any other host
+// (OPENAI_API_KEY to metrics.example.com).
 
 import (
 	"reflect"
@@ -67,9 +68,9 @@ var (
 		"access": true, "auth": true, "bearer": true, "client": true, "id": true, "password": true}
 	nameWordSeparator = regexp.MustCompile(`[^A-Za-z0-9]+`)
 	nonAlphanumeric   = regexp.MustCompile(`[^a-z0-9]+`)
-	// urlLiteralHost is a URL whose host is literal text; \x00 stands for a
-	// value the scanner cannot resolve.
-	urlLiteralHost = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9+.-]*://([^/?#:\x00@]+)(?:[/?#:]|$)`)
+	// urlLiteralHost is a URL's host part; it may hold the markers for a
+	// configured or an unresolved value.
+	urlLiteralHost = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9+.-]*://([^/?#:@]+)(?:[/?#:]|$)`)
 	// collectionHost is a service that collects whatever is sent to it, or
 	// a raw IPv4 address.
 	collectionHost = regexp.MustCompile(`(?i)webhook\.site|requestbin|pipedream\.net|\bngrok(?:-free)?\.(?:io|app|dev)|discord(?:app)?\.com/api/webhooks|hooks\.slack\.com|api\.telegram\.org/bot|pastebin\.com|paste\.ee|hastebin|transfer\.sh|interact\.sh|\boast\.(?:fun|pro|live|site|online|me)\b|burpcollaborator\.net|requestcatcher\.com|beeceptor\.com|webhook\.cool|://(?:\d{1,3}\.){3}\d{1,3}(?:[:/]|$)`)
@@ -86,6 +87,8 @@ type pythonCredentialFlow struct {
 	// assigned holds every value assigned to a name, for following a URL
 	// or a path to its string literals.
 	assigned map[string][]pyparser.Expr
+	// definitions resolves a name where it is used (credential_destination.go).
+	definitions *pythonDefinitions
 	// environment names variables that hold the whole environment
 	// (env = dict(os.environ)). They matter only at a network sink.
 	environment map[string]bool
@@ -94,6 +97,7 @@ type pythonCredentialFlow struct {
 func newPythonCredentialFlow(module *pyparser.Module, aliases, types map[string]string, tainted map[string]taintedVariable) *pythonCredentialFlow {
 	flow := &pythonCredentialFlow{aliases: aliases, types: types, tainted: tainted,
 		assigned: map[string][]pyparser.Expr{}, environment: map[string]bool{}}
+	flow.definitions = newPythonDefinitions(module)
 	pythonWalk(module, func(raw any) {
 		switch node := raw.(type) {
 		case *pyparser.Assign:
@@ -164,7 +168,7 @@ func (flow *pythonCredentialFlow) role(expression pyparser.Expr) (credentialRole
 	case *pyparser.JoinedStr:
 		return flow.stringRole(node.Values)
 	case *pyparser.BinOp:
-		if node.Op == "+" {
+		if node.Op == "Add" {
 			return flow.stringRole(flattenPythonConcatenation(node))
 		}
 	}
@@ -273,7 +277,7 @@ func (flow *pythonCredentialFlow) stringRole(parts []pyparser.Expr) (credentialR
 func flattenPythonConcatenation(node *pyparser.BinOp) []pyparser.Expr {
 	var parts []pyparser.Expr
 	for _, side := range []pyparser.Expr{node.Left, node.Right} {
-		if inner, ok := side.(*pyparser.BinOp); ok && inner.Op == "+" {
+		if inner, ok := side.(*pyparser.BinOp); ok && inner.Op == "Add" {
 			parts = append(parts, flattenPythonConcatenation(inner)...)
 		} else {
 			parts = append(parts, side)
@@ -364,8 +368,11 @@ func (flow *pythonCredentialFlow) sinkLeak(call *pyparser.Call, sink string, mod
 	if !tainted {
 		return ""
 	}
-	// The credentials sit only where they authenticate the request.
-	names := flow.credentialNames(call)
+	// The credentials sit only where they authenticate the request. Names
+	// and the destination are resolved where the call is, so a name that
+	// holds a key in another function does not count here.
+	line, scope := call.P.Line, flow.definitions.scopeAt(call.P.Line)
+	names := flow.credentialNamesAt(call, line, scope, pythonResolveDepth)
 	if len(names) == 0 {
 		return ""
 	}
@@ -377,11 +384,14 @@ func (flow *pythonCredentialFlow) sinkLeak(call *pyparser.Call, sink string, mod
 	if len(names) > 1 {
 		return "CRITICAL"
 	}
-	hosts, configured := flow.destinationHosts(destination)
-	if configured || credentialNameMatchesHost(names[0], hosts) {
-		return ""
+	if destination != nil {
+		for _, text := range flow.stringValuesAt(destination, line, scope, pythonResolveDepth) {
+			if !destinationBelongsTo(names[0], text) {
+				return "HIGH"
+			}
+		}
 	}
-	return "HIGH"
+	return ""
 }
 
 func pythonCallArgument(call *pyparser.Call, position int, keyword string) pyparser.Expr {
@@ -396,144 +406,22 @@ func pythonCallArgument(call *pyparser.Call, position int, keyword string) pypar
 	return nil
 }
 
-// credentialNames returns the distinct secret environment variable names
-// whose values reach an expression; "*" stands for a name the scanner
-// cannot resolve or a credential file.
-func (flow *pythonCredentialFlow) credentialNames(expression pyparser.Expr) []string {
-	seen := map[string]bool{}
-	var names []string
-	add := func(name string) {
-		if !seen[name] {
-			seen[name] = true
-			names = append(names, name)
-		}
+// destinationBelongsTo reports whether a resolved URL is the credential's own
+// API: its host comes from configuration (an environment variable or a
+// function argument without a literal default), or its literal host names the
+// credential's service. A host the scanner cannot resolve does not count.
+func destinationBelongsTo(name, url string) bool {
+	if strings.HasPrefix(url, configuredValue) {
+		return true
 	}
-	addKey := func(key pyparser.Expr) {
-		keys := []string{"*"}
-		if key != nil {
-			if constants := flow.stringConstants(key, 2); len(constants) > 0 {
-				keys = constants
-			}
-		}
-		for _, name := range keys {
-			if name == "*" || secretEnvironmentName.MatchString(name) {
-				add(name)
-			}
-		}
+	match := urlLiteralHost.FindStringSubmatch(url)
+	if match == nil {
+		return false
 	}
-	pythonWalk(expression, func(raw any) {
-		switch node := raw.(type) {
-		case *pyparser.Call:
-			switch name := resolvePythonCallNameTyped(node, flow.types, flow.aliases); {
-			case name == "os.getenv" || name == "os.environ.get":
-				addKey(pythonCallArgument(node, 0, "key"))
-			case flow.readsCredentialFile(node):
-				add("*")
-			}
-		case *pyparser.Subscript:
-			if flow.isEnvironment(node.Value) {
-				addKey(node.Slice)
-			}
-		case *pyparser.Name:
-			if variable, ok := flow.tainted[node.Id]; ok && isCredentialTaint(variable) {
-				for _, name := range variable.credentialNames {
-					add(name)
-				}
-			}
-		}
-	})
-	return names
-}
-
-// destinationHosts returns the literal hosts a URL expression can have, and
-// whether any part of the host comes from configuration: an environment
-// value, a function argument, a config lookup.
-func (flow *pythonCredentialFlow) destinationHosts(expression pyparser.Expr) ([]string, bool) {
-	if expression == nil {
-		return nil, true
+	if strings.Contains(match[1], configuredValue) && !strings.Contains(match[1], unresolvedValue) {
+		return true
 	}
-	var hosts []string
-	for _, text := range flow.stringValues(expression, 3) {
-		match := urlLiteralHost.FindStringSubmatch(text)
-		if match == nil {
-			return nil, true
-		}
-		hosts = append(hosts, match[1])
-	}
-	return hosts, false
-}
-
-// stringValues evaluates a string expression from its literals. A part the
-// scanner cannot resolve becomes \x00. Names are followed through their
-// assignments up to depth levels; at most 16 values are returned.
-func (flow *pythonCredentialFlow) stringValues(expression pyparser.Expr, depth int) []string {
-	const limit = 16
-	concat := func(parts []pyparser.Expr) []string {
-		values := []string{""}
-		for _, part := range parts {
-			if formatted, ok := part.(*pyparser.FormattedValue); ok {
-				part = formatted.Value
-			}
-			var next []string
-			for _, prefix := range values {
-				for _, suffix := range flow.stringValues(part, depth) {
-					if len(next) < limit {
-						next = append(next, prefix+suffix)
-					}
-				}
-			}
-			values = next
-		}
-		return values
-	}
-	switch node := expression.(type) {
-	case *pyparser.Constant:
-		if text, ok := node.Value.(string); ok {
-			return []string{text}
-		}
-	case *pyparser.JoinedStr:
-		return concat(node.Values)
-	case *pyparser.BinOp:
-		if node.Op == "+" {
-			return concat(flattenPythonConcatenation(node))
-		}
-	case *pyparser.Name:
-		if depth > 0 && len(flow.assigned[node.Id]) > 0 {
-			var values []string
-			for _, value := range flow.assigned[node.Id] {
-				for _, text := range flow.stringValues(value, depth-1) {
-					if len(values) < limit {
-						values = append(values, text)
-					}
-				}
-			}
-			return values
-		}
-	case *pyparser.Call:
-		name := resolvePythonCallNameTyped(node, flow.types, flow.aliases)
-		switch {
-		case name == "urllib.request.Request":
-			if url := pythonCallArgument(node, 0, "url"); url != nil {
-				return flow.stringValues(url, depth)
-			}
-		case name == "requests.Request":
-			if url := pythonCallArgument(node, 1, "url"); url != nil {
-				return flow.stringValues(url, depth)
-			}
-		case name == "urllib.parse.urljoin" || name == "str":
-			if len(node.Args) > 0 {
-				return flow.stringValues(node.Args[0], depth)
-			}
-		}
-		// "...".format(...), url.strip(): the receiver's literal text.
-		if attribute, ok := node.Func.(*pyparser.Attribute); ok {
-			switch attribute.Attr {
-			case "format", "strip", "rstrip", "lstrip":
-				return flow.stringValues(attribute.Value, depth)
-			}
-		}
-	}
-	return []string{"\x00"}
+	return !strings.ContainsAny(match[1], configuredValue+unresolvedValue) && credentialNameMatchesHost(name, match[1:2])
 }
 
 // credentialNameMatchesHost reports whether a word of the variable name

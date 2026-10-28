@@ -77,13 +77,11 @@ type taintedVariable struct {
 	name       string
 	sourceCall string
 	line       int
-	// role, credentialFile and credentialNames describe a credential
-	// (credential_flow.go): where it sits in the value, whether it is a
-	// credential file's content, and which secret environment variables
-	// it holds.
-	role            credentialRole
-	credentialFile  bool
-	credentialNames []string
+	// role and credentialFile describe a credential (credential_flow.go):
+	// where it sits in the value, and whether it is a credential file's
+	// content.
+	role           credentialRole
+	credentialFile bool
 }
 
 func analyzePythonBehavior(item component) []model.Finding {
@@ -262,7 +260,7 @@ func analyzePythonTaint(item component, module *pyparser.Module, aliases, types 
 			properties := taintRuleProperties[id]
 			if id == "TT3" && leak == "HIGH" {
 				properties.severity, properties.confidence = "HIGH", .8
-				message += " (credential in an auth header to a fixed host that does not name its service)"
+				message += " (credential in an auth header to a host that is not its own service)"
 			}
 			if finding, ok := pythonAnalyzerFinding(item, id, message, properties.severity, properties.confidence, line, endLine, "Data Flow"); ok {
 				findings = append(findings, finding)
@@ -405,7 +403,6 @@ func (flow *pythonCredentialFlow) markTargets(targets []pyparser.Expr, value pyp
 func (flow *pythonCredentialFlow) mark(name string, value pyparser.Expr, source string, line int) {
 	variable := taintedVariable{name: name, sourceCall: source, line: line}
 	variable.role, _ = flow.role(value)
-	variable.credentialNames = flow.credentialNames(value)
 	pythonWalk(value, func(raw any) {
 		switch node := raw.(type) {
 		case *pyparser.Call:
