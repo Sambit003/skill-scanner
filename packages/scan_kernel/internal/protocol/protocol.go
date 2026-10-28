@@ -24,6 +24,8 @@ type rawRequest struct {
 	RuleID          string   `json:"rule_id,omitempty"`
 	ScanScope       *string  `json:"scan_scope,omitempty"`
 	IncludeReadme   *bool    `json:"include_readme,omitempty"`
+	// IncludeCapabilities opts a v2 scan into the separate capabilities list.
+	IncludeCapabilities *bool `json:"include_capabilities,omitempty"`
 }
 
 type Envelope struct {
@@ -68,7 +70,8 @@ func Execute(parent context.Context, registry *engine.Registry, raw []byte) (Env
 		}
 		result, err := registry.Scan(ctx, model.ScanRequest{Target: request.Target, AssetType: request.AssetType,
 			OutputFormats: request.OutputFormats, TimeoutSeconds: request.TimeoutSeconds,
-			ScanScope: scope, IncludeReadme: includeReadme})
+			ScanScope: scope, IncludeReadme: includeReadme,
+			ListCapabilities: request.IncludeCapabilities != nil && *request.IncludeCapabilities})
 		if err == nil {
 			if request.ProtocolVersion == model.LegacyProtocolVersion {
 				result.Summary.ScanScope = ""
@@ -138,8 +141,8 @@ func decode(raw []byte) (rawRequest, error) {
 			return rawRequest{}, errors.New("scan does not accept rule_id")
 		}
 		if request.ProtocolVersion == model.LegacyProtocolVersion {
-			if request.ScanScope != nil || request.IncludeReadme != nil {
-				return rawRequest{}, errors.New("protocol v1 scan does not accept scan_scope or include_readme")
+			if request.ScanScope != nil || request.IncludeReadme != nil || request.IncludeCapabilities != nil {
+				return rawRequest{}, errors.New("protocol v1 scan does not accept scan_scope, include_readme or include_capabilities")
 			}
 		} else {
 			if request.ScanScope == nil || request.IncludeReadme == nil {
@@ -153,14 +156,14 @@ func decode(raw []byte) (rawRequest, error) {
 			}
 		}
 	case "list_rules":
-		if request.Target != "" || request.AssetType != "" || request.OutputFormats != nil || request.TimeoutSeconds != 0 || request.RuleID != "" || request.ScanScope != nil || request.IncludeReadme != nil {
+		if request.Target != "" || request.AssetType != "" || request.OutputFormats != nil || request.TimeoutSeconds != 0 || request.RuleID != "" || request.ScanScope != nil || request.IncludeReadme != nil || request.IncludeCapabilities != nil {
 			return rawRequest{}, errors.New("list_rules accepts only operation and protocol_version")
 		}
 	case "get_rule":
 		if strings.TrimSpace(request.RuleID) == "" {
 			return rawRequest{}, errors.New("get_rule requires rule_id")
 		}
-		if request.Target != "" || request.AssetType != "" || request.OutputFormats != nil || request.TimeoutSeconds != 0 || request.ScanScope != nil || request.IncludeReadme != nil {
+		if request.Target != "" || request.AssetType != "" || request.OutputFormats != nil || request.TimeoutSeconds != 0 || request.ScanScope != nil || request.IncludeReadme != nil || request.IncludeCapabilities != nil {
 			return rawRequest{}, errors.New("get_rule accepts only operation, protocol_version, and rule_id")
 		}
 	default:

@@ -132,7 +132,12 @@ func TestUnpinnedToolCapabilities(t *testing.T) {
 
 func TestCapabilitiesInReports(t *testing.T) {
 	files := map[string]string{"SKILL.md": claudeSkill("", "Run run.py.\n"), "run.py": "import subprocess\nsubprocess.run(['git', 'status'])\n"}
-	result := scanSkillFiles(t, files)
+	// Without ListCapabilities (protocol clients that did not opt in) the
+	// findings keep their earlier shape.
+	if legacy := scanSkillFiles(t, files); len(legacy.Capabilities) != 0 || !hasRule(legacy.Findings, "AST4") {
+		t.Fatalf("without ListCapabilities: capabilities=%v findings=%v", legacy.Capabilities, ruleIDs(legacy.Findings))
+	}
+	result := scanSkillFilesWith(t, files, true)
 	if len(result.Capabilities) != 1 || result.Capabilities[0].Label != "Runs shell commands" || result.Capabilities[0].Location.File != "skills/report-helper/run.py" {
 		t.Fatalf("capabilities=%#v", result.Capabilities)
 	}

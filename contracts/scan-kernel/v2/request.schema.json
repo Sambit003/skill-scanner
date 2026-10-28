@@ -25,7 +25,11 @@
         },
         "timeout_seconds": { "type": "number", "exclusiveMinimum": 0, "maximum": 3600 },
         "scan_scope": { "enum": ["skill_files", "skill_folders", "repository"] },
-        "include_readme": { "type": "boolean" }
+        "include_readme": { "type": "boolean" },
+        "include_capabilities": {
+          "description": "Opt in to the separate capabilities list. Without it the result keeps the findings shape from before capabilities existed.",
+          "type": "boolean"
+        }
       },
       "allOf": [
         {

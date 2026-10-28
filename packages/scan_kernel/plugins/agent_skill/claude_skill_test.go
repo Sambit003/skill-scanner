@@ -22,6 +22,13 @@ func claudeSkill(frontmatter, body string) string {
 // scanSkillFiles writes files into skills/report-helper and scans the tree.
 func scanSkillFiles(t *testing.T, files map[string]string) model.ScanResult {
 	t.Helper()
+	return scanSkillFilesWith(t, files, false)
+}
+
+// scanSkillFilesWith scans as scanSkillFiles does, optionally listing
+// capabilities apart from findings.
+func scanSkillFilesWith(t *testing.T, files map[string]string, listCapabilities bool) model.ScanResult {
+	t.Helper()
 	root := t.TempDir()
 	skill := filepath.Join(root, "skills", "report-helper")
 	for name, content := range files {
@@ -34,7 +41,7 @@ func scanSkillFiles(t *testing.T, files map[string]string) model.ScanResult {
 		}
 	}
 	result, err := New().Scan(context.Background(), model.ScanRequest{Target: root, AssetType: "skill", Offline: true,
-		OutputFormats: []string{"json"}, TimeoutSeconds: 30})
+		OutputFormats: []string{"json"}, TimeoutSeconds: 30, ListCapabilities: listCapabilities})
 	if err != nil {
 		t.Fatal(err)
 	}

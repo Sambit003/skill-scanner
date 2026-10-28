@@ -75,7 +75,11 @@ func (Plugin) Scan(ctx context.Context, request model.ScanRequest) (model.ScanRe
 	for index := range formats {
 		formats[index] = strings.ToLower(formats[index])
 	}
-	summary, kept, capabilities := scoreAndListCapabilities(kept, prepared.Components)
+	summary := summarize(kept, prepared.Components)
+	var capabilities []model.Capability
+	if request.ListCapabilities {
+		summary, kept, capabilities = scoreAndListCapabilities(kept, prepared.Components)
+	}
 	// Secret values are masked only in output, after scoring (which
 	// de-duplicates on matched text) and baseline filtering.
 	kept = maskFindingSecrets(kept)

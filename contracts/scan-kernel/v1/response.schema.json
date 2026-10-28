@@ -54,10 +54,6 @@
           "type": "array",
           "items": { "$ref": "#/$defs/finding" }
         },
-        "capabilities": {
-          "type": "array",
-          "items": { "$ref": "#/$defs/capability" }
-        },
         "reports": {
           "type": "object",
           "minProperties": 1,
@@ -140,27 +136,6 @@
     "counts": {
       "type": "object",
       "additionalProperties": { "type": "integer", "minimum": 0 }
-    },
-    "capability": {
-      "description": "Something the skill can do, listed apart from findings; not counted in findings or the risk score.",
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["rule_id", "label", "location"],
-      "properties": {
-        "rule_id": { "type": "string", "minLength": 1 },
-        "label": { "type": "string", "minLength": 1 },
-        "location": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["file", "start_line", "end_line"],
-          "properties": {
-            "file": { "type": "string" },
-            "start_line": { "type": "integer", "minimum": 1 },
-            "end_line": { "type": ["integer", "null"], "minimum": 1 }
-          }
-        },
-        "snippet": { "type": "string" }
-      }
     },
     "finding": {
       "type": "object",

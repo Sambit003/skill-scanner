@@ -239,3 +239,43 @@ func TestV2ProtocolEnvelopesEmitFrameworks(t *testing.T) {
 		t.Errorf("Markdown report missing Compliance summary: %s", mdRep.Content)
 	}
 }
+
+func TestV2CapabilitiesAreOptIn(t *testing.T) {
+	request := map[string]any{"operation": "scan", "protocol_version": "2", "target": fixture(t, "malicious_skill"),
+		"asset_type": "skill", "output_formats": []string{"json"}, "timeout_seconds": 30,
+		"scan_scope": "repository", "include_readme": true}
+	hasFinding := func(result model.ScanResult, id string) bool {
+		for _, finding := range result.Findings {
+			if finding.ID == id {
+				return true
+			}
+		}
+		return false
+	}
+	envelope, code := execute(t, request)
+	legacy, ok := envelope.Result.(model.ScanResult)
+	if code != 0 || !ok {
+		t.Fatalf("scan failed: code=%d envelope=%+v", code, envelope)
+	}
+	raw, _ := json.Marshal(envelope)
+	if len(legacy.Capabilities) != 0 || strings.Contains(string(raw), `"capabilities"`) || !hasFinding(legacy, "AST4") {
+		t.Fatalf("without include_capabilities the result must keep its earlier shape: capabilities=%v", legacy.Capabilities)
+	}
+
+	request["include_capabilities"] = true
+	envelope, code = execute(t, request)
+	listed, ok := envelope.Result.(model.ScanResult)
+	if code != 0 || !ok || len(listed.Capabilities) == 0 || hasFinding(listed, "AST4") {
+		t.Fatalf("include_capabilities must list capabilities apart from findings: code=%d capabilities=%v", code, listed.Capabilities)
+	}
+	if listed.Summary.RiskScore != legacy.Summary.RiskScore || listed.Summary.ExposureScore != legacy.Summary.ExposureScore ||
+		listed.Summary.VulnerabilityScore != legacy.Summary.VulnerabilityScore || listed.Summary.FindingsCount != len(listed.Findings) {
+		t.Fatalf("scores must not change: legacy=%+v listed=%+v", legacy.Summary, listed.Summary)
+	}
+
+	v1 := map[string]any{"operation": "scan", "protocol_version": "1", "target": fixture(t, "safe_skill"),
+		"asset_type": "skill", "output_formats": []string{"json"}, "timeout_seconds": 10, "include_capabilities": true}
+	if envelope, code := execute(t, v1); code != 2 || envelope.OK {
+		t.Fatalf("v1 must reject include_capabilities: code=%d", code)
+	}
+}

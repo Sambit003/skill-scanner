@@ -78,7 +78,7 @@ func scan(args []string, registry scanner, output, diagnostic io.Writer) int {
 	defer cancel()
 	result, err := registry.Scan(ctx, model.ScanRequest{Target: flags.Arg(0), AssetType: *assetType, OutputFormats: requested,
 		TimeoutSeconds: timeout.Seconds(), BaselinePath: *baseline, YARARulesDir: *yaraRules, Offline: *offline,
-		ScanScope: *scanScope, IncludeReadme: *includeReadme})
+		ScanScope: *scanScope, IncludeReadme: *includeReadme, ListCapabilities: true})
 	if err != nil {
 		fmt.Fprintf(diagnostic, "ScanKernel scan failed: %v\n", err)
 		return 3
@@ -181,7 +181,7 @@ func serveMCP(registry scanner, diagnostic io.Writer) int {
 				scope = model.ScanScopeSkillFolders
 			}
 			result, err := registry.Scan(ctx, model.ScanRequest{Target: input.Target, AssetType: "skill", OutputFormats: []string{"json"}, TimeoutSeconds: 300, Offline: input.Offline,
-				ScanScope: scope, IncludeReadme: input.IncludeReadme})
+				ScanScope: scope, IncludeReadme: input.IncludeReadme, ListCapabilities: true})
 			return nil, mcpScanOutput{Result: result}, err
 		})
 	if err := server.Run(context.Background(), &mcp.StdioTransport{}); err != nil {

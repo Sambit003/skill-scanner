@@ -26,6 +26,10 @@ type ScanRequest struct {
 	Offline        bool     `json:"-"`
 	ScanScope      string   `json:"-"`
 	IncludeReadme  bool     `json:"-"`
+	// ListCapabilities moves capability findings into ScanResult.Capabilities.
+	// Without it the findings keep their pre-capabilities shape, for
+	// protocol clients that have not opted in.
+	ListCapabilities bool `json:"-"`
 }
 
 type Location struct {
