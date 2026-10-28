@@ -77,11 +77,13 @@ type taintedVariable struct {
 	name       string
 	sourceCall string
 	line       int
-	// role and credentialFile describe a credential (credential_flow.go):
-	// where it sits in the value, and whether it is a credential file's
-	// content.
-	role           credentialRole
-	credentialFile bool
+	// role, credentialFile and credentialNames describe a credential
+	// (credential_flow.go): where it sits in the value, whether it is a
+	// credential file's content, and which secret environment variables
+	// it holds.
+	role            credentialRole
+	credentialFile  bool
+	credentialNames []string
 }
 
 func analyzePythonBehavior(item component) []model.Finding {
@@ -244,6 +246,13 @@ func analyzePythonTaint(item component, module *pyparser.Module, aliases, types 
 		}
 		line := call.P.Line
 		endLine := pythonCallEndLine(item.Content, call.P.Line, call.P.Col)
+		// A credential sent only to authenticate the request to its own API
+		// is not TT3; see credential_flow.go.
+		leak := ""
+		if taintNetworkOutputSinks[sink] {
+			leak = flow.sinkLeak(call, sink, moduleReadsCredentialFile)
+		}
+		leaks := leak != ""
 		emit := func(id, message string) {
 			key := fmt.Sprintf("%s\x00%d", id, line)
 			if seen[key] {
@@ -251,13 +260,14 @@ func analyzePythonTaint(item component, module *pyparser.Module, aliases, types 
 			}
 			seen[key] = true
 			properties := taintRuleProperties[id]
+			if id == "TT3" && leak == "HIGH" {
+				properties.severity, properties.confidence = "HIGH", .8
+				message += " (credential in an auth header to a fixed host that does not name its service)"
+			}
 			if finding, ok := pythonAnalyzerFinding(item, id, message, properties.severity, properties.confidence, line, endLine, "Data Flow"); ok {
 				findings = append(findings, finding)
 			}
 		}
-		// A credential sent only to authenticate the request is not TT3;
-		// see credential_flow.go.
-		leaks := taintNetworkOutputSinks[sink] && flow.sinkLeaks(call, sink, moduleReadsCredentialFile)
 		for _, source := range findNestedPythonSources(call, types, aliases) {
 			if source.name == "open" && source.call != nil && pythonOpenForWrite(source.call) {
 				continue
@@ -395,6 +405,7 @@ func (flow *pythonCredentialFlow) markTargets(targets []pyparser.Expr, value pyp
 func (flow *pythonCredentialFlow) mark(name string, value pyparser.Expr, source string, line int) {
 	variable := taintedVariable{name: name, sourceCall: source, line: line}
 	variable.role, _ = flow.role(value)
+	variable.credentialNames = flow.credentialNames(value)
 	pythonWalk(value, func(raw any) {
 		switch node := raw.(type) {
 		case *pyparser.Call:

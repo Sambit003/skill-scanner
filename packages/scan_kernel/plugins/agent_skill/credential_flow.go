@@ -3,12 +3,18 @@ package agentskill
 // TT3 (credential network flow) separates a credential that leaves in a
 // request from one that only authenticates it. A key read from the
 // environment and sent in an Authorization or X-API-Key header, or as the
-// auth= argument, is how a skill calls its own API; an environment value that
-// names the host (https://{HOST}/...) chooses the destination. Neither is
-// exfiltration. A credential in the body, JSON, form data, query string or
-// URL, the whole environment, the content of a credential file, and any
-// credential sent to a collection host (webhook.site, a Discord webhook, a
-// raw IP address) stay TT3.
+// auth= argument, is how a skill calls its own API, when the API is the
+// key's: the host comes from configuration (an environment value, an
+// argument), or the host names the key's service (UNSPLASH_ACCESS_KEY to
+// api.unsplash.com). An environment value that names the host
+// (https://{HOST}/...) chooses the destination. Neither is exfiltration.
+//
+// CRITICAL: a credential in the body, JSON, form data, query string or URL;
+// the whole environment; the content of a credential file; any credential
+// sent to a collection host (webhook.site, a Discord webhook, a raw IP
+// address); a cloud secret or more than one credential in one request.
+// HIGH: one credential in an auth header to a fixed host that does not name
+// its service (OPENAI_API_KEY to metrics.example.com).
 
 import (
 	"reflect"
@@ -52,6 +58,18 @@ var (
 	// credentialFilePath names a file whose content is a credential: SSH
 	// keys, cloud credentials, a .env file.
 	credentialFilePath = regexp.MustCompile(`(?:^|[/\\])\.env(?:\.[\w-]+)?$`)
+	// cloudSecretName is a cloud credential that no skill sends in a
+	// header to its own API.
+	cloudSecretName = regexp.MustCompile(`(?i)^(?:AWS_SECRET_ACCESS_KEY|AWS_SESSION_TOKEN|GOOGLE_APPLICATION_CREDENTIALS)$|^AZURE_\w*SECRET`)
+	// genericCredentialWord is a part of an environment variable name that
+	// says nothing about the service the key belongs to.
+	genericCredentialWord = map[string]bool{"api": true, "key": true, "keys": true, "token": true, "tokens": true, "secret": true,
+		"access": true, "auth": true, "bearer": true, "client": true, "id": true, "password": true}
+	nameWordSeparator = regexp.MustCompile(`[^A-Za-z0-9]+`)
+	nonAlphanumeric   = regexp.MustCompile(`[^a-z0-9]+`)
+	// urlLiteralHost is a URL whose host is literal text; \x00 stands for a
+	// value the scanner cannot resolve.
+	urlLiteralHost = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9+.-]*://([^/?#:\x00@]+)(?:[/?#:]|$)`)
 	// collectionHost is a service that collects whatever is sent to it, or
 	// a raw IPv4 address.
 	collectionHost = regexp.MustCompile(`(?i)webhook\.site|requestbin|pipedream\.net|\bngrok(?:-free)?\.(?:io|app|dev)|discord(?:app)?\.com/api/webhooks|hooks\.slack\.com|api\.telegram\.org/bot|pastebin\.com|paste\.ee|hastebin|transfer\.sh|interact\.sh|\boast\.(?:fun|pro|live|site|online|me)\b|burpcollaborator\.net|requestcatcher\.com|beeceptor\.com|webhook\.cool|://(?:\d{1,3}\.){3}\d{1,3}(?:[:/]|$)`)
@@ -77,11 +95,24 @@ func newPythonCredentialFlow(module *pyparser.Module, aliases, types map[string]
 	flow := &pythonCredentialFlow{aliases: aliases, types: types, tainted: tainted,
 		assigned: map[string][]pyparser.Expr{}, environment: map[string]bool{}}
 	pythonWalk(module, func(raw any) {
-		if assignment, ok := raw.(*pyparser.Assign); ok {
-			for _, target := range assignment.Targets {
+		switch node := raw.(type) {
+		case *pyparser.Assign:
+			for _, target := range node.Targets {
 				if name, ok := target.(*pyparser.Name); ok {
-					flow.assigned[name.Id] = append(flow.assigned[name.Id], assignment.Value)
+					flow.assigned[name.Id] = append(flow.assigned[name.Id], node.Value)
 				}
+			}
+		case *pyparser.For:
+			// for name in ["A_KEY", "B_TOKEN"]: each element is a value of name.
+			name, ok := node.Target.(*pyparser.Name)
+			if !ok {
+				return
+			}
+			switch iter := node.Iter.(type) {
+			case *pyparser.List:
+				flow.assigned[name.Id] = append(flow.assigned[name.Id], iter.Elts...)
+			case *pyparser.Tuple:
+				flow.assigned[name.Id] = append(flow.assigned[name.Id], iter.Elts...)
 			}
 		}
 	})
@@ -309,20 +340,212 @@ func credentialRoleAllowed(parameter string, role credentialRole) bool {
 	return false
 }
 
-// sinkLeaks reports whether a network sink call sends a credential in a way
-// TT3 covers.
-func (flow *pythonCredentialFlow) sinkLeaks(call *pyparser.Call, sink string, moduleReadsCredentialFile bool) bool {
-	positions := []string{"url"}
+// sinkLeak returns the TT3 severity of a network sink call, or "" when no
+// credential leaves in it.
+func (flow *pythonCredentialFlow) sinkLeak(call *pyparser.Call, sink string, moduleReadsCredentialFile bool) string {
 	if strings.HasPrefix(sink, "socket.") {
-		positions = []string{"data"}
+		if tainted, _ := flow.argumentsLeak(call, []string{"data"}); tainted {
+			return "CRITICAL"
+		}
+		return ""
 	}
-	tainted, harmful := flow.argumentsLeak(call, positions)
+	tainted, harmful := flow.argumentsLeak(call, []string{"url"})
 	if harmful {
-		return true
+		return "CRITICAL"
 	}
-	if (tainted || moduleReadsCredentialFile) && len(call.Args) > 0 && !strings.HasPrefix(sink, "socket.") {
-		for _, text := range flow.stringConstants(call.Args[0], 3) {
+	destination := pythonCallArgument(call, 0, "url")
+	if (tainted || moduleReadsCredentialFile) && destination != nil {
+		for _, text := range flow.stringConstants(destination, 3) {
 			if collectionHost.MatchString(text) {
+				return "CRITICAL"
+			}
+		}
+	}
+	if !tainted {
+		return ""
+	}
+	// The credentials sit only where they authenticate the request.
+	names := flow.credentialNames(call)
+	if len(names) == 0 {
+		return ""
+	}
+	for _, name := range names {
+		if cloudSecretName.MatchString(name) {
+			return "CRITICAL"
+		}
+	}
+	if len(names) > 1 {
+		return "CRITICAL"
+	}
+	hosts, configured := flow.destinationHosts(destination)
+	if configured || credentialNameMatchesHost(names[0], hosts) {
+		return ""
+	}
+	return "HIGH"
+}
+
+func pythonCallArgument(call *pyparser.Call, position int, keyword string) pyparser.Expr {
+	for _, argument := range call.Keywords {
+		if argument.Arg == keyword {
+			return argument.Value
+		}
+	}
+	if position < len(call.Args) {
+		return call.Args[position]
+	}
+	return nil
+}
+
+// credentialNames returns the distinct secret environment variable names
+// whose values reach an expression; "*" stands for a name the scanner
+// cannot resolve or a credential file.
+func (flow *pythonCredentialFlow) credentialNames(expression pyparser.Expr) []string {
+	seen := map[string]bool{}
+	var names []string
+	add := func(name string) {
+		if !seen[name] {
+			seen[name] = true
+			names = append(names, name)
+		}
+	}
+	addKey := func(key pyparser.Expr) {
+		keys := []string{"*"}
+		if key != nil {
+			if constants := flow.stringConstants(key, 2); len(constants) > 0 {
+				keys = constants
+			}
+		}
+		for _, name := range keys {
+			if name == "*" || secretEnvironmentName.MatchString(name) {
+				add(name)
+			}
+		}
+	}
+	pythonWalk(expression, func(raw any) {
+		switch node := raw.(type) {
+		case *pyparser.Call:
+			switch name := resolvePythonCallNameTyped(node, flow.types, flow.aliases); {
+			case name == "os.getenv" || name == "os.environ.get":
+				addKey(pythonCallArgument(node, 0, "key"))
+			case flow.readsCredentialFile(node):
+				add("*")
+			}
+		case *pyparser.Subscript:
+			if flow.isEnvironment(node.Value) {
+				addKey(node.Slice)
+			}
+		case *pyparser.Name:
+			if variable, ok := flow.tainted[node.Id]; ok && isCredentialTaint(variable) {
+				for _, name := range variable.credentialNames {
+					add(name)
+				}
+			}
+		}
+	})
+	return names
+}
+
+// destinationHosts returns the literal hosts a URL expression can have, and
+// whether any part of the host comes from configuration: an environment
+// value, a function argument, a config lookup.
+func (flow *pythonCredentialFlow) destinationHosts(expression pyparser.Expr) ([]string, bool) {
+	if expression == nil {
+		return nil, true
+	}
+	var hosts []string
+	for _, text := range flow.stringValues(expression, 3) {
+		match := urlLiteralHost.FindStringSubmatch(text)
+		if match == nil {
+			return nil, true
+		}
+		hosts = append(hosts, match[1])
+	}
+	return hosts, false
+}
+
+// stringValues evaluates a string expression from its literals. A part the
+// scanner cannot resolve becomes \x00. Names are followed through their
+// assignments up to depth levels; at most 16 values are returned.
+func (flow *pythonCredentialFlow) stringValues(expression pyparser.Expr, depth int) []string {
+	const limit = 16
+	concat := func(parts []pyparser.Expr) []string {
+		values := []string{""}
+		for _, part := range parts {
+			if formatted, ok := part.(*pyparser.FormattedValue); ok {
+				part = formatted.Value
+			}
+			var next []string
+			for _, prefix := range values {
+				for _, suffix := range flow.stringValues(part, depth) {
+					if len(next) < limit {
+						next = append(next, prefix+suffix)
+					}
+				}
+			}
+			values = next
+		}
+		return values
+	}
+	switch node := expression.(type) {
+	case *pyparser.Constant:
+		if text, ok := node.Value.(string); ok {
+			return []string{text}
+		}
+	case *pyparser.JoinedStr:
+		return concat(node.Values)
+	case *pyparser.BinOp:
+		if node.Op == "+" {
+			return concat(flattenPythonConcatenation(node))
+		}
+	case *pyparser.Name:
+		if depth > 0 && len(flow.assigned[node.Id]) > 0 {
+			var values []string
+			for _, value := range flow.assigned[node.Id] {
+				for _, text := range flow.stringValues(value, depth-1) {
+					if len(values) < limit {
+						values = append(values, text)
+					}
+				}
+			}
+			return values
+		}
+	case *pyparser.Call:
+		name := resolvePythonCallNameTyped(node, flow.types, flow.aliases)
+		switch {
+		case name == "urllib.request.Request":
+			if url := pythonCallArgument(node, 0, "url"); url != nil {
+				return flow.stringValues(url, depth)
+			}
+		case name == "requests.Request":
+			if url := pythonCallArgument(node, 1, "url"); url != nil {
+				return flow.stringValues(url, depth)
+			}
+		case name == "urllib.parse.urljoin" || name == "str":
+			if len(node.Args) > 0 {
+				return flow.stringValues(node.Args[0], depth)
+			}
+		}
+		// "...".format(...), url.strip(): the receiver's literal text.
+		if attribute, ok := node.Func.(*pyparser.Attribute); ok {
+			switch attribute.Attr {
+			case "format", "strip", "rstrip", "lstrip":
+				return flow.stringValues(attribute.Value, depth)
+			}
+		}
+	}
+	return []string{"\x00"}
+}
+
+// credentialNameMatchesHost reports whether a word of the variable name
+// that names a service (UNSPLASH in UNSPLASH_ACCESS_KEY) appears in a
+// destination host, both compared without punctuation.
+func credentialNameMatchesHost(name string, hosts []string) bool {
+	for _, word := range nameWordSeparator.Split(strings.ToLower(name), -1) {
+		if len(word) < 3 || genericCredentialWord[word] {
+			continue
+		}
+		for _, host := range hosts {
+			if strings.Contains(nonAlphanumeric.ReplaceAllString(strings.ToLower(host), ""), word) {
 				return true
 			}
 		}
@@ -433,7 +656,8 @@ var (
 	// scriptWholeEnvironment serializes every environment variable.
 	scriptWholeEnvironment = regexp.MustCompile(`JSON\.stringify\(\s*process\.env\s*[,)]|Object\.(?:entries|values)\(\s*process\.env\s*\)`)
 	scriptConstantString   = regexp.MustCompile("(?m)^\\s*(?:export\\s+)?(?:const|let|var)\\s+([A-Za-z_$][\\w$]*)\\s*=\\s*[\"'`]([^\"'`\\n]*)[\"'`]")
-	scriptEnvironmentValue = regexp.MustCompile(`(?m)^\s*(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*process\.env(?:\.[A-Za-z_$][\w$]*|\[\s*["'][^"']+["']\s*\])\s*(?:;|$)`)
+	scriptEnvironmentValue = regexp.MustCompile(`(?m)^\s*(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*process\.env(?:\.([A-Za-z_$][\w$]*)|\[\s*["']([^"']+)["']\s*\])\s*(?:;|$)`)
+	scriptCallDestination  = regexp.MustCompile("^\\(\\s*(?:[\"'`]([^\"'`]*)[\"'`]|([A-Za-z_$][\\w$]*)\\s*[,)])")
 	scriptIdentifier       = regexp.MustCompile(`[A-Za-z_$][\w$]*`)
 	scriptBodyValue        = regexp.MustCompile(`\b(?:body|data)\s*:\s*(?:JSON\.stringify\(\s*)?([A-Za-z_$][\w$]*)\s*[,})\n]`)
 )
@@ -460,14 +684,17 @@ func analyzeScriptCredentialFlow(item component) []model.Finding {
 		}
 	}
 	collectionNames := map[string]bool{}
+	constants := map[string]string{}
 	for _, match := range scriptConstantString.FindAllStringSubmatch(content, -1) {
+		constants[match[1]] = match[2]
 		if collectionHost.MatchString(match[2]) {
 			collectionNames[match[1]] = true
 		}
 	}
-	environmentValues := map[string]bool{}
+	// environmentValues maps a variable to the environment variable it holds.
+	environmentValues := map[string]string{}
 	for _, match := range scriptEnvironmentValue.FindAllStringSubmatch(content, -1) {
-		environmentValues[match[1]] = true
+		environmentValues[match[1]] = match[2] + match[3]
 	}
 	wholeEnvironment := scriptWholeEnvironment.MatchString(content)
 
@@ -475,6 +702,8 @@ func analyzeScriptCredentialFlow(item component) []model.Finding {
 	for _, match := range scriptNetworkSend.FindAllStringIndex(content, -1) {
 		call := balancedCallText(content, match[1]-1)
 		message := ""
+		properties := taintRuleProperties["TT3"]
+		headerLeak := scriptHeaderLeak(call, environmentValues, constants)
 		switch {
 		case scriptWholeEnvironment.MatchString(call):
 			message = "The request sends the whole environment (process.env)"
@@ -482,12 +711,16 @@ func analyzeScriptCredentialFlow(item component) []model.Finding {
 			message = "An environment value is the request body"
 		case (readsCredentialFile || wholeEnvironment) && scriptTargetsCollectionHost(call, collectionNames):
 			message = "The file reads a credential file or the whole environment and sends a request to a collection host"
+		case headerLeak == "CRITICAL":
+			message = "The request sends a cloud secret, or more than one credential, in its headers"
+		case headerLeak == "HIGH":
+			message = "The request sends a credential in an auth header to a fixed host that does not name its service"
+			properties.severity, properties.confidence = "HIGH", .8
 		default:
 			continue
 		}
 		line := 1 + strings.Count(content[:match[0]], "\n")
 		endLine := line + strings.Count(call, "\n")
-		properties := taintRuleProperties["TT3"]
 		if finding, ok := pythonAnalyzerFinding(item, "TT3", message, properties.severity, properties.confidence, line, endLine, "Data Flow"); ok {
 			findings = append(findings, finding)
 		}
@@ -495,9 +728,52 @@ func analyzeScriptCredentialFlow(item component) []model.Finding {
 	return findings
 }
 
-func scriptSendsEnvironmentValue(call string, environmentValues map[string]bool) bool {
+// scriptHeaderLeak applies the Python header rule (sinkLeak) to the
+// environment credentials a send call names: CRITICAL for a cloud secret or
+// more than one credential, HIGH for one credential to a literal host that
+// does not name its service, "" otherwise.
+func scriptHeaderLeak(call string, environmentValues, constants map[string]string) string {
+	seen := map[string]bool{}
+	var names []string
+	for _, word := range scriptIdentifier.FindAllString(call, -1) {
+		if name := environmentValues[word]; name != "" && !seen[name] && secretEnvironmentName.MatchString(name) {
+			seen[name] = true
+			names = append(names, name)
+		}
+	}
+	if len(names) == 0 {
+		return ""
+	}
+	for _, name := range names {
+		if cloudSecretName.MatchString(name) {
+			return "CRITICAL"
+		}
+	}
+	if len(names) > 1 {
+		return "CRITICAL"
+	}
+	destination := scriptCallDestination.FindStringSubmatch(call)
+	if destination == nil {
+		return ""
+	}
+	url := destination[1]
+	if destination[2] != "" {
+		value, ok := constants[destination[2]]
+		if !ok {
+			return ""
+		}
+		url = value
+	}
+	host := urlLiteralHost.FindStringSubmatch(strings.ReplaceAll(url, "${", "\x00"))
+	if host == nil || credentialNameMatchesHost(names[0], host[1:2]) {
+		return ""
+	}
+	return "HIGH"
+}
+
+func scriptSendsEnvironmentValue(call string, environmentValues map[string]string) bool {
 	for _, match := range scriptBodyValue.FindAllStringSubmatch(call, -1) {
-		if environmentValues[match[1]] {
+		if environmentValues[match[1]] != "" {
 			return true
 		}
 	}
