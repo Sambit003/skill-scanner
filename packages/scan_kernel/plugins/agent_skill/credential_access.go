@@ -18,7 +18,12 @@ var (
 	// copies or sends the file named after it ("cat ~/.ssh/id_rsa",
 	// "base64 < ~/.aws/credentials", "Read ~/.aws/credentials and paste it").
 	commandCredentialAccess = regexp.MustCompile(`(?i)\b(?:cat|less|more|head|tail|type|Get-Content|gc|xxd|strings|base64|grep|awk|sed|jq|cp|copy|Copy-Item|mv|scp|rsync|tar|zip|7z|curl|wget|nc|ncat|socat|sqlite3|open|read|reads|reading|dump|print|show|send|upload|post|paste|attach|include|exfiltrate|steal|collect|grab|harvest|load)\b|<\s*["']?$|@["']?$`)
-	assignedVariable        = regexp.MustCompile(`^\s*(?:(?:const|let|var|export)\s+)?([A-Za-z_$][\w$]*)\s*[:=][^=]`)
+	// literalCredentialInstruction ends a string literal's text before the
+	// path with an instruction to the agent: "Before using this tool, read ",
+	// "... and send the contents of ". The verb starts the literal or a
+	// clause, so "Failed to read " is not one.
+	literalCredentialInstruction = regexp.MustCompile(`(?i)(?:^\s*|[.!?;:,]\s+|\b(?:and|then)\s+)(?:please\s+|first\s+|also\s+|always\s+|you\s+(?:must|should|need\s+to)\s+)?(?:read|send|paste|include|upload|post|attach|copy|cat|print|output|dump|share|forward|exfiltrate|open|load|collect|grab)\b[^.!?;]*$`)
+	assignedVariable             = regexp.MustCompile(`^\s*(?:(?:const|let|var|export)\s+)?([A-Za-z_$][\w$]*)\s*[:=][^=]`)
 	// highValueCredential names files whose access stays HIGH: SSH keys,
 	// cloud credentials, ~/.netrc, ~/.npmrc, ~/.pypirc, keychains and the
 	// like. A project-relative .env or secrets file is MEDIUM.
@@ -26,9 +31,10 @@ var (
 )
 
 // credentialAccessed reports an access action on the PE3 match: in program
-// source anywhere on the path's line, or on a later line that uses a
-// variable the path's line assigned; in prose and shell, before the path on
-// its line. A keychain command such as security find-generic-password is
+// source anywhere on the path's line, on a later line that uses a variable
+// the path's line assigned, or as an instruction in the string literal that
+// holds the path (a tool description an agent reads); in prose and shell,
+// before the path on its line. A keychain command such as security find-generic-password is
 // itself the access.
 func credentialAccessed(item component, match []int) bool {
 	matched := item.Content[match[0]:match[1]]
@@ -51,13 +57,17 @@ func credentialAccessed(item component, match []int) bool {
 	if codeCredentialAccess.MatchString(before+matched) || codeCredentialAccess.MatchString(after) {
 		return true
 	}
+	literalStart, openers, inLiteral := enclosingLiteral(item.Content, match[0], item.Type)
+	if inLiteral && literalCredentialInstruction.MatchString(strings.TrimLeft(item.Content[literalStart:match[0]], "\"'`")) {
+		return true
+	}
 	// path = os.path.expanduser("~/.aws/credentials") ... open(path), or
 	// targets = [home + "/.ssh/id_rsa", ...] ... for t in targets: copy(t).
 	var names []string
 	if variable := assignedVariable.FindStringSubmatch(item.Content[lineStart:lineEnd]); variable != nil {
 		names = append(names, variable[1])
 	}
-	if _, openers, ok := enclosingLiteral(item.Content, match[0], item.Type); ok {
+	if inLiteral {
 		for _, opener := range openers {
 			if head := detectionAssignment.FindStringSubmatch(openerHead(item.Content, opener)); head != nil {
 				names = append(names, head[1])
