@@ -2,8 +2,8 @@ package agentskill
 
 // The capabilities list ("What this skill can do") holds behavior that is
 // ordinary for a skill with scripts: running shell commands, reading named
-// environment variables, plain API calls, dynamic imports, and tools run from
-// a package registry. These are listed apart from the findings. Their
+// environment variables, dynamic imports, and tools run from a package
+// registry. Network requests (E1) stay findings. These are listed apart from the findings. Their
 // findings still feed the risk score exactly as before, so moving them out
 // of the findings array changes no score or verdict.
 
@@ -16,30 +16,21 @@ import (
 )
 
 // capabilityLabels are the rules whose findings move to the capabilities
-// list, with the plain label shown there. E1 and E2 move only in part; see
-// capabilityLabel.
+// list, with the plain label shown there. E2 moves only in part; see
+// capabilityLabel. E1 (network requests) stays a finding: telling a plain API
+// call from data being sent out needs the malware rules.
 var capabilityLabels = map[string]string{
 	"AST3": "Imports code dynamically",
 	"AST4": "Runs shell commands",
 	"AST6": "Compiles code at runtime",
 	"AST7": "Looks up functions by name at runtime",
-	"E1":   "Makes network requests",
 	"E2":   "Reads environment variables",
 }
 
-var (
-	// envRead is E2 reading one named variable; enumerating or harvesting the
-	// environment (os.environ.items(), Object.keys(process.env),
-	// env | grep secret, "collect all environment variables") stays a finding.
-	envRead = regexp.MustCompile(`(?i)^(?:os\.environ\s*\[|os\.environ\.get\b|os\.environ\s*\.\s*copy\b|process\.env\s*\[|printenv\s)`)
-	// exfiltrationInstruction is the prose form of E1 ("send user data to
-	// https://..."), which stays a finding.
-	exfiltrationInstruction = regexp.MustCompile(`(?i)^(?:send|transmit|post|upload)\s`)
-	// sensitivePayload marks a request whose surrounding code sends file
-	// contents, the environment or secrets, conversation content, credential
-	// files or host identity. Such an E1 stays a finding.
-	sensitivePayload = regexp.MustCompile(`(?i)\bopen\s*\(|\.read(?:_text|_bytes)?\s*\(|\breadFile(?:Sync)?\b|(?:-d|--data(?:-binary|-raw|-urlencode)?|-F|--form|-T|--upload-file)[\s=]+["']?[^\s"']*@|--post-file|\bos\.environ\b|\bgetenv\b|\bprocess\.env\b|\$\(\s*(?:env|printenv|cat)\b|\$\{?\w*(?:KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL)\w*\}?|\b(?:conversation|chat_history|transcript|system_prompt)\b|\.ssh\b|\.aws\b|\bid_rsa\b|\bcredentials\b|\.env\b|\bcookies?\b|\bhostname\b|\bwhoami\b|\bgetpass\b|\bplatform\.node\b|\buname\b`)
-)
+// envRead is E2 reading one named variable; enumerating or harvesting the
+// environment (os.environ.items(), Object.keys(process.env),
+// env | grep secret, "collect all environment variables") stays a finding.
+var envRead = regexp.MustCompile(`(?i)^(?:os\.environ\s*\[|os\.environ\.get\b|os\.environ\s*\.\s*copy\b|process\.env\s*\[|printenv\s)`)
 
 // capabilityLabel returns the capabilities-list label for a finding that
 // describes what the skill can do, or "" for a finding that stays one. A
@@ -52,16 +43,8 @@ func capabilityLabel(finding model.Finding) string {
 	if _, review := needsReview(finding); review {
 		return ""
 	}
-	matched := strings.TrimSpace(finding.MatchedText)
-	switch ruleID(finding) {
-	case "E2":
-		if !envRead.MatchString(matched) {
-			return ""
-		}
-	case "E1":
-		if exfiltrationInstruction.MatchString(matched) || sensitivePayload.MatchString(finding.CodeSnippet+"\n"+matched) {
-			return ""
-		}
+	if ruleID(finding) == "E2" && !envRead.MatchString(strings.TrimSpace(finding.MatchedText)) {
+		return ""
 	}
 	return label
 }
