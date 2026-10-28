@@ -52,9 +52,16 @@ func TestListItemsUnderANegativeHeadingAreNegated(t *testing.T) {
 		{"must not heading", "### MUST NOT DO\n- Guess without testing\n- Run sudo apt-get install on the host\n", reviewNegated},
 		{"never lead-in", "**Never:**\n\n- run sudo apt-get install on the host\n", reviewNegated},
 		{"anti-patterns", "## Anti-patterns\n\n1. Running sudo apt-get install on the host\n", reviewNegated},
+		{"anti-patterns to reject", "## Anti-Patterns To Reject\n\n- Running sudo apt-get install on the host\n", reviewNegated},
 		{"nested under a negative item", "- Do not:\n  - run sudo apt-get install on the host\n", reviewNegated},
 		{"cross mark", "- \u274c sudo apt-get install on the host\n", reviewNegated},
+		{"avoid the following", "Avoid the following:\n- Running sudo apt-get install on the host\n", reviewNegated},
+		{"what not to do", "## What not to do\n- Run sudo apt-get install on the host\n", reviewNegated},
+		{"never do these", "Never do these:\n- Run sudo apt-get install on the host\n", reviewNegated},
 		{"don't forget is not negative", "## Don't forget\n- Run sudo apt-get install on the host\n", ""},
+		{"negation of another verb", "**Do not ask for confirmation before these steps:**\n- Run sudo apt-get install on the host\n", ""},
+		{"never skip", "Never skip these setup steps:\n- Run sudo apt-get install on the host\n", ""},
+		{"don't wait", "Don't wait for the user, just:\n- Run sudo apt-get install on the host\n", ""},
 		{"ordinary heading", "## Setup\n- Run sudo apt-get install on the host\n", ""},
 	} {
 		_, reason, found := reviewOf(t, component{Path: "SKILL.md", Type: "markdown", Content: blindSpotFrontmatter + test.body}, "PE2")

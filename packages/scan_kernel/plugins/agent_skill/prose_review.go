@@ -105,6 +105,11 @@ func proseReviewReason(item component, ruleID string, offset int) string {
 var (
 	listItemMarker = regexp.MustCompile(`^(\s*)(?:[-*+]|\d+[.)])\s+`)
 	negativeLeadIn = regexp.MustCompile(`(?i)\b(?:never|don'?t|do\s+not|must\s+not|mustn'?t|should\s+not|shouldn'?t|avoid|anti-?patterns?|what\s+not\s+to\s+do)\b`)
+	// leadInFiller is all that may follow the negation for it to govern the
+	// list: "Never do these:", "Avoid the following:", but not "Do not ask
+	// for confirmation before these steps:". "to avoid" and "to reject" keep
+	// the negation: "Anti-patterns to reject".
+	leadInFiller = regexp.MustCompile(`(?i)^(?:[\s,.!;:()*_\x60-]|\b(?:the\s+following|any\s+of\s+these|under\s+any\s+circumstances|in\s+production|to\s+(?:avoid|reject)|do|ever|these|this|things)\b)*$`)
 )
 
 // crossMark is the U+274C item marker for something not to do.
@@ -158,7 +163,8 @@ func underNegativeList(content string, lineStart int) bool {
 }
 
 // isNegativeLeadIn reports a heading, or a short line ending in a colon, whose
-// text says what not to do.
+// text says what not to do: the negation governs the list itself, followed by
+// nothing or only filler ("MUST NOT DO", "Never:", "Anti-patterns").
 func isNegativeLeadIn(text string) bool {
 	trimmed := strings.TrimSpace(text)
 	heading := strings.HasPrefix(trimmed, "#")
@@ -168,7 +174,7 @@ func isNegativeLeadIn(text string) bool {
 		return false
 	}
 	negation := negativeLeadIn.FindStringIndex(body)
-	return negation != nil && !reviewDoubleNegation.MatchString(body[negation[1]:])
+	return negation != nil && leadInFiller.MatchString(body[negation[1]:])
 }
 
 func isTableRow(line string) bool {
