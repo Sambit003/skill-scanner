@@ -206,7 +206,11 @@ var staticPatterns = []staticPattern{
 	newStaticPattern("AR2", "Anti-Refusal Statement", "Anti-Refusal", "HIGH", .8, `\b(?:answer|respond|reply|write|comply|help|proceed|output|continue|explain)\b[^.\n]{0,40}?\bwithout\s+(?:any\s+(?:warnings?|disclaimers?|caveats?)|warnings|disclaimers?|caveats?|moralizing|moralising|judg(?:e?ment|ing)|safety\s+notes?|lectures?)\b`),
 	newStaticPattern("AR2", "Anti-Refusal Statement", "Anti-Refusal", "HIGH", .85, `\b(?:do\s+not|don'?t|never)\s+(?:lecture|moralize|moralise|preach)\b`),
 	newStaticPattern("AR2", "Anti-Refusal Statement", "Anti-Refusal", "HIGH", .85, `\b(?:do\s+not|don'?t|never)\s+(?:warn|judge)\s+(?:the\s+)?(?:users?|them|me|people|anyone|requests?|about)\b`),
-	newStaticPattern("AR2", "Anti-Refusal Statement", "Anti-Refusal", "HIGH", .8, `\b(?:skip|omit|leave\s+out|drop)\s+(?:the\s+|any\s+|all\s+)?(?:disclaimers?|warnings?|ethics|safety\s+(?:notes?|warnings?|caveats?|disclaimers?|information))\b`),
+	newStaticPattern("AR2", "Anti-Refusal Statement", "Anti-Refusal", "HIGH", .8, `\b(?:skip|omit|leave\s+out|drop)\s+(?:the\s+|any\s+|all\s+)?(?:caveats?|disclaimers?|warnings?|ethics|safety\s+(?:notes?|warnings?|caveats?|disclaimers?|information))\b`),
+	// strip/remove name editing as often as suppression ("remove compiler
+	// warnings"), so bare warnings need "from the output/answer".
+	newStaticPattern("AR2", "Anti-Refusal Statement", "Anti-Refusal", "HIGH", .8, `\b(?:strip|remove)\s+(?:the\s+|any\s+|all\s+)?(?:caveats?|disclaimers?|safety\s+(?:notes?|warnings?|caveats?|disclaimers?)|warnings?\s+from\s+(?:the\s+|your\s+|any\s+)?(?:output|answers?|responses?|replies|reply|text))\b`),
+	newStaticPattern("AR2", "Anti-Refusal Statement", "Anti-Refusal", "HIGH", .8, `\b(?:do\s+not|don'?t|never)\s+(?:mention|disclose|tell\s+(?:the\s+)?(?:users?|them|anyone)(?:\s+about)?)\s+(?:(?:any|the|possible|potential|known)\s+)?(?:risks?|side[\s-]effects?|dangers?|limitations?|warnings?)\b`),
 	newStaticPattern("AR2", "Anti-Refusal Statement", "Anti-Refusal", "HIGH", .8, `\b(?:answer|respond|reply|write|comply|help|proceed|give|provide)\b[^.\n]{0,40}?\b(?:with\s+no|without)\s+(?:any\s+)?(?:ethical|moral)\s+(?:judg(?:e?ment)|considerations?|commentary|objections?)\b`),
 	newStaticPattern("AR2", "Anti-Refusal Statement", "Anti-Refusal", "HIGH", .55, `\b(?:do\s+not|don'?t)\s+(?:apologize|apologise|say\s+sorry)\b`),
 	newStaticPattern("AR3", "Anti-Refusal Statement", "Anti-Refusal", "HIGH", .9, `\byou\s+have\s+no\s+(?:restrictions?|limitations?|filters?|rules?|guidelines?|boundaries|limits)\b`),
