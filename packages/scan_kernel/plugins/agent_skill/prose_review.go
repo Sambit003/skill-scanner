@@ -66,6 +66,11 @@ func isTestFixturePath(filePath string) bool {
 // code, inline code spans (in a skill they usually mark a command to run) or
 // script files, and never to reviewExemptRules.
 func proseReviewReason(item component, ruleID string, offset int) string {
+	// Detection data in code and config files describes what a tool looks
+	// for, whatever the rule.
+	if reason := detectionDataReason(item, offset); reason != "" {
+		return reason
+	}
 	if reviewExemptRules[ruleID] || (item.Type != "markdown" && item.Type != "text") {
 		return ""
 	}
@@ -91,10 +96,79 @@ func proseReviewReason(item component, ruleID string, offset int) string {
 		return reviewTable
 	case insideDoubleQuotes(before, after):
 		return reviewQuoted
-	case negatedBefore(before):
+	case negatedBefore(before), underNegativeList(item.Content, lineStart):
 		return reviewNegated
 	}
 	return ""
+}
+
+var (
+	listItemMarker = regexp.MustCompile(`^(\s*)(?:[-*+]|\d+[.)])\s+`)
+	negativeLeadIn = regexp.MustCompile(`(?i)\b(?:never|don'?t|do\s+not|must\s+not|mustn'?t|should\s+not|shouldn'?t|avoid|anti-?patterns?|what\s+not\s+to\s+do)\b`)
+)
+
+// crossMark is the U+274C item marker for something not to do.
+const crossMark = "\u274c"
+
+// underNegativeList reports a list item that sits under a negative heading or
+// lead-in ("### MUST NOT DO", "**Never:**", "Avoid the following:",
+// "## Anti-patterns"), under a negative parent item, or that starts with a
+// cross mark. "## Don't forget" is not negative.
+func underNegativeList(content string, lineStart int) bool {
+	lineEnd := len(content)
+	if index := strings.IndexByte(content[lineStart:], '\n'); index >= 0 {
+		lineEnd = lineStart + index
+	}
+	line := content[lineStart:lineEnd]
+	if strings.HasPrefix(strings.TrimSpace(line), crossMark) {
+		return true
+	}
+	marker := listItemMarker.FindStringSubmatch(line)
+	if marker == nil {
+		return false
+	}
+	if strings.HasPrefix(strings.TrimSpace(line[len(marker[0]):]), crossMark) {
+		return true
+	}
+	indent, blanks := len(marker[1]), 0
+	for cursor := lineStart; cursor > 0; {
+		previousStart := strings.LastIndexByte(content[:cursor-1], '\n') + 1
+		previous := content[previousStart : cursor-1]
+		cursor = previousStart
+		trimmed := strings.TrimSpace(previous)
+		if trimmed == "" {
+			if blanks++; blanks > 2 {
+				return false
+			}
+			continue
+		}
+		if item := listItemMarker.FindStringSubmatch(previous); item != nil {
+			if len(item[1]) < indent {
+				return isNegativeLeadIn(previous[len(item[0]):])
+			}
+			blanks = 0
+			continue
+		}
+		if len(previous)-len(strings.TrimLeft(previous, " \t")) > indent {
+			continue
+		}
+		return isNegativeLeadIn(previous)
+	}
+	return false
+}
+
+// isNegativeLeadIn reports a heading, or a short line ending in a colon, whose
+// text says what not to do.
+func isNegativeLeadIn(text string) bool {
+	trimmed := strings.TrimSpace(text)
+	heading := strings.HasPrefix(trimmed, "#")
+	leadIn := strings.HasSuffix(strings.TrimRight(trimmed, " *_"), ":")
+	body := strings.Trim(strings.TrimLeft(trimmed, "#"), " *_:")
+	if (!heading && !leadIn) || len(body) > 80 {
+		return false
+	}
+	negation := negativeLeadIn.FindStringIndex(body)
+	return negation != nil && !reviewDoubleNegation.MatchString(body[negation[1]:])
 }
 
 func isTableRow(line string) bool {
