@@ -77,6 +77,11 @@ type taintedVariable struct {
 	name       string
 	sourceCall string
 	line       int
+	// role and credentialFile describe a credential (credential_flow.go):
+	// where it sits in the value, and whether it is a credential file's
+	// content.
+	role           credentialRole
+	credentialFile bool
 }
 
 func analyzePythonBehavior(item component) []model.Finding {
@@ -186,6 +191,13 @@ func analyzePythonTaint(item component, module *pyparser.Module, aliases, types 
 	tainted := map[string]taintedVariable{}
 	seen := map[string]bool{}
 	writeHandles := pythonWriteHandles(module, aliases)
+	flow := newPythonCredentialFlow(module, aliases, types, tainted)
+	moduleReadsCredentialFile := false
+	pythonWalk(module, func(raw any) {
+		if call, ok := raw.(*pyparser.Call); ok && !moduleReadsCredentialFile {
+			moduleReadsCredentialFile = flow.readsCredentialFile(call)
+		}
+	})
 	pythonWalk(module, func(raw any) {
 		if assignment, ok := raw.(*pyparser.Assign); ok {
 			source := findPythonSourceInExpression(assignment.Value, types, aliases)
@@ -206,7 +218,13 @@ func analyzePythonTaint(item component, module *pyparser.Module, aliases, types 
 				}
 			}
 			if source != "" {
-				markPythonTargets(assignment.Targets, tainted, source, assignment.P.Line)
+				flow.markTargets(assignment.Targets, assignment.Value, source, assignment.P.Line)
+			} else if role, ok := flow.role(assignment.Value); ok && role == credentialData {
+				for _, target := range assignment.Targets {
+					if name, ok := target.(*pyparser.Name); ok {
+						flow.environment[name.Id] = true
+					}
+				}
 			}
 			return
 		}
@@ -237,17 +255,37 @@ func analyzePythonTaint(item component, module *pyparser.Module, aliases, types 
 				findings = append(findings, finding)
 			}
 		}
+		// A credential sent only to authenticate the request is not TT3;
+		// see credential_flow.go.
+		leaks := taintNetworkOutputSinks[sink] && flow.sinkLeaks(call, sink, moduleReadsCredentialFile)
 		for _, source := range findNestedPythonSources(call, types, aliases) {
 			if source.name == "open" && source.call != nil && pythonOpenForWrite(source.call) {
 				continue
 			}
 			rule := pickTaintRule(source.name, sink, true)
-			emit(rule, fmt.Sprintf("Direct flow: %s (%s) → %s (%s)", source.name, taintSourceCategory(source.name), sink, taintSinkCategory(sink)))
+			if rule == "TT3" && !leaks {
+				continue
+			}
+			message := fmt.Sprintf("Direct flow: %s (%s) → %s (%s)", source.name, taintSourceCategory(source.name), sink, taintSinkCategory(sink))
+			emit(rule, message)
+			if rule == "TT4" && leaks && flow.readsCredentialFile(source.call) {
+				emit("TT3", "Credential file content: "+message)
+			}
 		}
 		for _, variable := range findTaintedPythonArguments(call, tainted) {
 			rule := pickTaintRule(variable.sourceCall, sink, false)
-			emit(rule, fmt.Sprintf("Tainted flow: '%s' from %s (line %d, %s) → %s (%s)",
-				variable.name, variable.sourceCall, variable.line, taintSourceCategory(variable.sourceCall), sink, taintSinkCategory(sink)))
+			if rule == "TT3" && !leaks {
+				continue
+			}
+			message := fmt.Sprintf("Tainted flow: '%s' from %s (line %d, %s) → %s (%s)",
+				variable.name, variable.sourceCall, variable.line, taintSourceCategory(variable.sourceCall), sink, taintSinkCategory(sink))
+			emit(rule, message)
+			if rule == "TT4" && leaks && variable.credentialFile {
+				emit("TT3", "Credential file content: "+message)
+			}
+		}
+		if leaks {
+			emit("TT3", fmt.Sprintf("Credential flow → %s (%s): the whole environment, a credential file or a collection host", sink, taintSinkCategory(sink)))
 		}
 	})
 	return findings
@@ -327,19 +365,48 @@ func findTaintedPythonArguments(call *pyparser.Call, tainted map[string]taintedV
 	return results
 }
 
-func markPythonTargets(targets []pyparser.Expr, tainted map[string]taintedVariable, source string, line int) {
+// markTargets taints the names an assignment binds. A tuple assigned from a
+// tuple of the same length takes its roles element by element.
+func (flow *pythonCredentialFlow) markTargets(targets []pyparser.Expr, value pyparser.Expr, source string, line int) {
 	for _, target := range targets {
-		switch value := target.(type) {
+		switch node := target.(type) {
 		case *pyparser.Name:
-			tainted[value.Id] = taintedVariable{name: value.Id, sourceCall: source, line: line}
+			flow.mark(node.Id, value, source, line)
 		case *pyparser.Tuple:
-			for _, element := range value.Elts {
-				if name, ok := element.(*pyparser.Name); ok {
-					tainted[name.Id] = taintedVariable{name: name.Id, sourceCall: source, line: line}
+			values, paired := value.(*pyparser.Tuple)
+			for index, element := range node.Elts {
+				name, ok := element.(*pyparser.Name)
+				if !ok {
+					continue
+				}
+				if paired && len(values.Elts) == len(node.Elts) {
+					flow.mark(name.Id, values.Elts[index], source, line)
+				} else {
+					flow.mark(name.Id, value, source, line)
 				}
 			}
 		}
 	}
+}
+
+// mark records one tainted name. Taint is not flow-sensitive, so a name
+// that once held a leaking credential keeps the data role when another
+// assignment gives it a harmless one.
+func (flow *pythonCredentialFlow) mark(name string, value pyparser.Expr, source string, line int) {
+	variable := taintedVariable{name: name, sourceCall: source, line: line}
+	variable.role, _ = flow.role(value)
+	pythonWalk(value, func(raw any) {
+		switch node := raw.(type) {
+		case *pyparser.Call:
+			variable.credentialFile = variable.credentialFile || flow.readsCredentialFile(node)
+		case *pyparser.Name:
+			variable.credentialFile = variable.credentialFile || flow.tainted[node.Id].credentialFile
+		}
+	})
+	if existing, ok := flow.tainted[name]; ok && isCredentialTaint(existing) && existing.role == credentialData && isCredentialTaint(variable) {
+		variable.role = credentialData
+	}
+	flow.tainted[name] = variable
 }
 
 func pickTaintRule(source, sink string, direct bool) string {
