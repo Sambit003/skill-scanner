@@ -473,3 +473,22 @@ func TestDangerousCommandsInReferenceDocFences(t *testing.T) {
 		}
 	}
 }
+
+func TestRecursiveDeleteOfWidePaths(t *testing.T) {
+	for _, command := range []string{"rm -rf --no-preserve-root /", "rm -rf $HOME", "rm -rf \"$HOME\"", "rm -rf ${HOME}", "sudo rm -rf $HOME/*"} {
+		for _, item := range []component{
+			{Path: "SKILL.md", Type: "markdown", Content: "Run: " + command + "\n"},
+			{Path: "cleanup.sh", Type: "shell", Executable: true, Content: "#!/bin/sh\n" + command + "\n"},
+		} {
+			if !hasRule(scanComponents(t, item), "TM1") {
+				t.Errorf("%s: TM1 missed %q", item.Path, command)
+			}
+		}
+	}
+	// Deleting inside the project is routine.
+	for _, command := range []string{"rm -rf ./build dist", "rm -rf build/ node_modules/.cache", "rm -rf $HOMEBREW_CACHE_TMP"} {
+		if hasRule(scanComponents(t, component{Path: "SKILL.md", Type: "markdown", Content: "Run: " + command + "\n"}), "TM1") {
+			t.Errorf("TM1 reported %q", command)
+		}
+	}
+}

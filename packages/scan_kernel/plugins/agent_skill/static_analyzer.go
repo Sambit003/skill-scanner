@@ -325,11 +325,15 @@ var staticPatterns = []staticPattern{
 	newStaticPattern("TM1", "Tool Parameter Abuse", "Tool Misuse", "HIGH", .8, `subprocess\.\w+\s*\([^)]*shell\s*=\s*True`),
 	newStaticPattern("TM1", "Tool Parameter Abuse", "Tool Misuse", "HIGH", .8, `Popen\s*\([^)]*shell\s*=\s*True`),
 	newStaticPattern("TM1", "Tool Parameter Abuse", "Tool Misuse", "HIGH", .9, `\b(?:rm\b|del\b|erase\b)\s+[^|]*-(?:r|rf|fr)\s+[/~]`),
+	newStaticPattern("TM1", "Tool Parameter Abuse", "Tool Misuse", "HIGH", .9, `\brm\s+[^|\n]*--no-preserve-root\b`),
+	newStaticPattern("TM1", "Tool Parameter Abuse", "Tool Misuse", "HIGH", .9, `\brm\s+(?:-[A-Za-z]+\s+|--[a-z-]+\s+)*?(?:-[A-Za-z]*[rR][A-Za-z]*|--recursive)\s+(?:-[A-Za-z]+\s+|--[a-z-]+\s+)*["']?\$\{?HOME\}?["']?/?\*?(?:\s|$|[;&|])`),
 	newStaticPattern("TM1", "Tool Parameter Abuse", "Tool Misuse", "HIGH", .7, `--force\s+(?:delete|remove|push|reset|clean)`),
 	newStaticPattern("TM1", "Tool Parameter Abuse", "Tool Misuse", "HIGH", .75, `--no-?(?:check|validate|confirm|protect|safe)\b`),
 	newStaticPattern("TM1", "Tool Parameter Abuse", "Tool Misuse", "HIGH", .7, `--skip-?(?:validation|verification|checks?|auth|tests?)`),
 	newStaticPattern("TM1", "Tool Parameter Abuse", "Tool Misuse", "HIGH", .65, `--allow-?(?:root|unrelated|unsafe)\b`),
-	newStaticPattern("TM1", "Tool Parameter Abuse", "Tool Misuse", "HIGH", .85, `\brm\b\s+(?:-[A-Za-z]+\s+)*(?:--\s+)?(?:['\"][^'\"]*/[^'\"]*['\"]|[^\s|;&>]*/[^\s|;&>]*)`),
+	// rm of a path outside the working directory: absolute, home, a variable
+	// or a parent directory. rm -rf ./build or dist/ stays in the project.
+	newStaticPattern("TM1", "Tool Parameter Abuse", "Tool Misuse", "HIGH", .85, `\brm\b\s+(?:-[A-Za-z]+\s+)*(?:--\s+)?(?:['\"](?:/|~/|\$\{?\w+\}?/|\.\./)[^'\"]*['\"]|(?:/|~/|\$\{?\w+\}?/|\.\./)[^\s|;&>]*)`),
 	newStaticPattern("TM1", "Tool Parameter Abuse", "Tool Misuse", "HIGH", .85, `\bshutil\.rmtree\s*\(\s*['\"]\s*/`),
 	newStaticPattern("TM1", "Tool Parameter Abuse", "Tool Misuse", "HIGH", .8, `(?:chmod|chown)\s+[^|]*(?:777|666|a\+rwx)`),
 	newStaticPattern("TM1", "Tool Parameter Abuse", "Tool Misuse", "HIGH", .7, `git\s+push\s+[^|]*--force`),
