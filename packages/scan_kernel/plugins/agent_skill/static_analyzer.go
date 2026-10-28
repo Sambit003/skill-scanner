@@ -589,6 +589,9 @@ func findingFromStaticMatchWithContext(item component, pattern staticPattern, ma
 			return model.Finding{}, false
 		}
 	}
+	if agentPhraseDropped(item, pattern, match) {
+		return model.Finding{}, false
+	}
 	context := contextAtOffset(item.Content, match[0], contextWindow)
 	confidence := pattern.Confidence
 	if pattern.ID == "PE3" && (isEnvironmentFileDocumentationReference(item, context) || isAttributeEnvMatch(item.Content, match) ||
