@@ -109,7 +109,7 @@ func insideDoubleQuotes(before, after string) bool {
 	if strings.Count(before, `"`)%2 == 1 && strings.Contains(after, `"`) {
 		return true
 	}
-	return strings.Count(before, "“") > strings.Count(before, "”") && strings.Contains(after, "”")
+	return strings.Count(before, "\u201c") > strings.Count(before, "\u201d") && strings.Contains(after, "\u201d")
 }
 
 // negatedBefore reports a negation shortly before the match in the same

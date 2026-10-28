@@ -24,7 +24,7 @@ func TestProseReviewDowngradesDescribedBehavior(t *testing.T) {
 		{"negated", "SKILL.md", blindSpotFrontmatter + "Never run sudo apt-get install on the host.\n", "PE2", reviewNegated},
 		{"avoid", "notes.md", "Avoid running sudo apt-get install on the host.\n", "PE2", reviewNegated},
 		{"quoted", "SKILL.md", blindSpotFrontmatter + "A jailbreak often says \"you have no restrictions\" to the model.\n", "AR3", reviewQuoted},
-		{"typographic quotes", "notes.md", "A jailbreak often says “you have no restrictions” to the model.\n", "AR3", reviewQuoted},
+		{"typographic quotes", "notes.md", "A jailbreak often says \u201cyou have no restrictions\u201d to the model.\n", "AR3", reviewQuoted},
 		{"table row", "SKILL.md", blindSpotFrontmatter + "| Attack | Example |\n|---|---|\n| Memory wipe | Clear your memory and erase the conversation history |\n", "MP3", reviewTable},
 		{"test fixture", "tests/fixtures/sample.md", "Run with --auto-approve.\n", "EA2", reviewTestFixture},
 		{"_test file", "notes_test.md", "Run with --auto-approve.\n", "EA2", reviewTestFixture},
