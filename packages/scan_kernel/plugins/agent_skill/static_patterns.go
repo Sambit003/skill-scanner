@@ -120,7 +120,6 @@ var portedStaticPatterns = []staticPattern{
 	newStaticPattern("PE3", "Credential Access", "Privilege Escalation", "HIGH", 0.7, "~?/?\\.azure/"),
 	newStaticPattern("PE3", "Credential Access", "Privilege Escalation", "HIGH", 0.8, "accessTokens\\.json"),
 	newStaticPattern("PE3", "Credential Access", "Privilege Escalation", "HIGH", 0.8, "~?/?\\.kube/config"),
-	newStaticPattern("PE3", "Credential Access", "Privilege Escalation", "HIGH", 0.6, "kubeconfig"),
 	newStaticPattern("PE3", "Credential Access", "Privilege Escalation", "HIGH", 0.7, "~?/?\\.docker/config\\.json"),
 	newStaticPattern("PE3", "Credential Access", "Privilege Escalation", "HIGH", 0.7, "~?/?\\.npmrc"),
 	newStaticPattern("PE3", "Credential Access", "Privilege Escalation", "HIGH", 0.9, "~?/?\\.git-credentials"),
@@ -129,12 +128,13 @@ var portedStaticPatterns = []staticPattern{
 	newStaticPattern("PE3", "Credential Access", "Privilege Escalation", "HIGH", 0.95, "/etc/shadow"),
 	newStaticPattern("PE3", "Credential Access", "Privilege Escalation", "HIGH", 0.7, "(?:password|credentials?|secrets?)\\.(?:txt|json|yaml|yml|env)"),
 	newStaticPattern("PE3", "Credential Access", "Privilege Escalation", "HIGH", 0.8, "(?:access_token|refresh_token|bearer_token|api_token)\\.txt"),
+	// .env as a file name; isAttributeEnvMatch skips process.env and args.env.
 	newStaticPattern("PE3", "Credential Access", "Privilege Escalation", "HIGH", 0.6, "\\.env(?:\\.local|\\.production|\\.development)?(?:\\s|$|['\\\"])"),
-	newStaticPattern("PE3", "Credential Access", "Privilege Escalation", "HIGH", 0.7, "(?:keychain|keyring|gnome-keyring)"),
+	// Keychains and keyrings by path or by the macOS command that reads them;
+	// the words "keychain" and "keyring" alone name no file.
+	newStaticPattern("PE3", "Credential Access", "Privilege Escalation", "HIGH", 0.8, "Library/Keychains/|\\.keychain(?:-db)?\\b|\\.local/share/keyrings/"),
+	newStaticPattern("PE3", "Credential Access", "Privilege Escalation", "HIGH", 0.8, "\\bsecurity\\s+(?:find-(?:generic|internet)-password|dump-keychain)\\b"),
 	newStaticPattern("PE3", "Credential Access", "Privilege Escalation", "HIGH", 0.8, "(?:Chrome|Firefox|Safari)/.*?(?:Cookies|Login Data|key4\\.db)"),
-	newStaticPattern("PE3", "Credential Access", "Privilege Escalation", "HIGH", 0.8, "read\\s+(?:the\\s+)?(?:ssh|private)\\s+key"),
-	newStaticPattern("PE3", "Credential Access", "Privilege Escalation", "HIGH", 0.7, "access\\s+(?:the\\s+)?(?:credentials?|secrets?|tokens?)"),
-	newStaticPattern("PE3", "Credential Access", "Privilege Escalation", "HIGH", 0.7, "(?:extract|copy|get)\\s+(?:api\\s+)?keys?\\s+from"),
 	newStaticPattern("PE4", "Docker Socket Access", "Privilege Escalation", "HIGH", 0.9, "/var/run/docker\\.sock"),
 	newStaticPattern("PE4", "Docker Socket Access", "Privilege Escalation", "HIGH", 0.85, "docker\\.from_env\\(\\)"),
 	newStaticPattern("PE4", "Docker Socket Access", "Privilege Escalation", "HIGH", 0.85, "\\bDockerClient\\s*\\("),

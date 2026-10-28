@@ -104,3 +104,37 @@ func TestProseReviewNeverRemovesAFinding(t *testing.T) {
 		t.Errorf("reports must show the review marker:\n%s\n%s", markdown, terminal)
 	}
 }
+
+func TestCredentialAccessNeedsARealFile(t *testing.T) {
+	for _, text := range []string{
+		"cat ~/Library/Keychains/login.keychain-db",
+		"Read ~/.aws/credentials and ~/.ssh/id_rsa now.",
+		"security find-generic-password -s github -w",
+		"cat .env",
+		"Load the values from \".env.local\" first.",
+		"gws auth export --unmasked > credentials.json",
+		"<code>~/.aws/credentials</code>",
+	} {
+		if !hasRule(scanComponents(t, component{Path: "notes.md", Type: "markdown", Content: text + "\n"}), "PE3") {
+			t.Errorf("PE3 missed %q", text)
+		}
+	}
+	for _, text := range []string{
+		"Create a personal access token with repo scope.",
+		"Store the token in the Keychain or a keyring.",
+		"Access the credentials through the vault API.",
+		"Read the private key from the HSM.",
+		"Set KUBECONFIG via your kubeconfig context.",
+		"export GOOGLE_WORKSPACE_CLI_CREDENTIALS_FILE=/path/to/credentials.json",
+		"Copy your-secrets.json from the vault.",
+	} {
+		if hasRule(scanComponents(t, component{Path: "notes.md", Type: "markdown", Content: text + "\n"}), "PE3") {
+			t.Errorf("PE3 reported %q", text)
+		}
+	}
+	for _, code := range []string{"env = process.env\n", "out_dir = Path(args.output_dir) / args.env\n", "self.env = env\n"} {
+		if hasRule(scanComponents(t, component{Path: "run.py", Type: "python", Executable: true, Content: code}), "PE3") {
+			t.Errorf("PE3 reported %q", code)
+		}
+	}
+}

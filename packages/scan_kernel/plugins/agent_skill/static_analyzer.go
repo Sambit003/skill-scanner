@@ -578,7 +578,7 @@ func findingFromStaticMatchWithContext(item component, pattern staticPattern, ma
 	}
 	context := contextAtOffset(item.Content, match[0], contextWindow)
 	confidence := pattern.Confidence
-	if pattern.ID == "PE3" && isEnvironmentFileDocumentationReference(item, context) {
+	if pattern.ID == "PE3" && (isEnvironmentFileDocumentationReference(item, context) || isAttributeEnvMatch(item.Content, match) || isPlaceholderPath(item.Content, match)) {
 		return model.Finding{}, false
 	}
 
@@ -936,6 +936,32 @@ func isSourceCodeType(fileType string) bool {
 	default:
 		return false
 	}
+}
+
+// isAttributeEnvMatch reports ".env" ending an expression such as process.env,
+// args.env or self.env rather than naming a file.
+func isAttributeEnvMatch(content string, match []int) bool {
+	if match[0] == 0 || !strings.HasPrefix(strings.ToLower(content[match[0]:match[1]]), ".env") {
+		return false
+	}
+	previous, _ := utf8.DecodeLastRuneInString(content[:match[0]])
+	return previous == '_' || previous == ')' || previous == ']' || unicode.IsLetter(previous) || unicode.IsNumber(previous)
+}
+
+// placeholderPathMarkers mark a documented placeholder rather than a real
+// path: /path/to/credentials.json, your-secrets.json, credentials.example.json.
+var placeholderPathMarkers = []string{"path/to/", "/to/your", "your-", "your_", "example", "placeholder", "xxx"}
+
+// isPlaceholderPath reports a match inside a whitespace- or quote-delimited
+// token that carries a placeholderPathMarkers marker.
+func isPlaceholderPath(content string, match []int) bool {
+	const delimiters = " \t\n\"'`()[]{},;="
+	start := strings.LastIndexAny(content[:match[0]], delimiters) + 1
+	end := len(content)
+	if index := strings.IndexAny(content[match[1]:], delimiters); index >= 0 {
+		end = match[1] + index
+	}
+	return containsAny(strings.ToLower(content[start:end]), placeholderPathMarkers...)
 }
 
 var environmentFileDocumentationAction = regexp.MustCompile(`(?i)(?:create|copy|rename|add|set up|configure|make)\s+.*\.env`)
