@@ -46,7 +46,8 @@ func splitAllowedTools(text string) []string {
 }
 
 // toolPreApprovalSeverity rates one allowed-tools entry. Shell access with no
-// scope (Bash, Bash(*), Bash(**), or "*" for every tool) is MEDIUM; unscoped
+// real scope (Bash, Bash(*), Bash(**), Bash(python3:*) and other interpreter
+// scopes, or "*" for every tool) is MEDIUM; unscoped
 // file writes and edits, web fetches, and whole MCP servers or MCP wildcards
 // are LOW. Scoped entries such as Bash(gh *) and read-only tools return "".
 func toolPreApprovalSeverity(entry string) string {
@@ -57,7 +58,7 @@ func toolPreApprovalSeverity(entry string) string {
 	unscoped := strings.Trim(scope, " \t*") == ""
 	lower := strings.ToLower(name)
 	switch {
-	case name == "*", lower == "bash" && unscoped:
+	case name == "*", lower == "bash" && (unscoped || interpreterScope(scope)):
 		return "MEDIUM"
 	case unscoped && (lower == "write" || lower == "edit" || lower == "multiedit" || lower == "notebookedit" || lower == "webfetch"):
 		return "LOW"
@@ -69,6 +70,38 @@ func toolPreApprovalSeverity(entry string) string {
 		}
 	}
 	return ""
+}
+
+// shellInterpreters run whatever code they are given, so Bash(python3:*) is
+// as broad as unscoped Bash.
+var (
+	shellInterpreters = map[string]bool{"sh": true, "bash": true, "zsh": true, "dash": true, "ksh": true, "fish": true,
+		"node": true, "deno": true, "bun": true, "perl": true, "ruby": true, "php": true, "pwsh": true, "powershell": true,
+		"env": true, "xargs": true, "eval": true, "exec": true}
+	pythonInterpreter = regexp.MustCompile(`^python[0-9.]*$`)
+)
+
+// interpreterScope reports a Bash scope that names an interpreter followed by
+// only a wildcard, optionally after flags: "python3:*", "python3 *",
+// "bash -c:*". "python3 -m pytest:*" names a program and stays scoped.
+func interpreterScope(scope string) bool {
+	fields := strings.FieldsFunc(scope, func(char rune) bool { return char == ' ' || char == '\t' || char == ':' })
+	if len(fields) < 2 {
+		return false
+	}
+	program := strings.ToLower(fields[0])
+	if !shellInterpreters[program] && !pythonInterpreter.MatchString(program) {
+		return false
+	}
+	if strings.Trim(fields[len(fields)-1], "*") != "" {
+		return false
+	}
+	for _, field := range fields[1 : len(fields)-1] {
+		if !strings.HasPrefix(field, "-") {
+			return false
+		}
+	}
+	return true
 }
 
 // analyzeToolPreApproval reports (EA5) allowed-tools entries that pre-approve

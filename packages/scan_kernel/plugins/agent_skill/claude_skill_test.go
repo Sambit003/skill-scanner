@@ -77,6 +77,21 @@ func ruleIDs(findings []model.Finding) []string {
 	return ids
 }
 
+func TestInterpreterScopedBashIsBroad(t *testing.T) {
+	for _, entry := range []string{"Bash(python3:*)", "Bash(python:*)", "Bash(node:*)", "Bash(sh:*)", "Bash(bash:*)", "Bash(zsh:*)",
+		"Bash(env:*)", "Bash(xargs:*)", "Bash(eval:*)", "Bash(perl:*)", "Bash(ruby:*)", "Bash(deno:*)", "Bash(bun:*)",
+		"Bash(python3 *)", "Bash(python3.12:*)", "Bash(bash -c:*)"} {
+		if got := toolPreApprovalSeverity(entry); got != "MEDIUM" {
+			t.Errorf("%s: severity=%q, want MEDIUM", entry, got)
+		}
+	}
+	for _, entry := range []string{"Bash(python3 -m pytest:*)", "Bash(node scripts/build.js:*)", "Bash(python3)", "Bash(git add:*)", "Bash(npm run test:*)"} {
+		if got := toolPreApprovalSeverity(entry); got != "" {
+			t.Errorf("%s: severity=%q, want none", entry, got)
+		}
+	}
+}
+
 func TestSplitAllowedToolsKeepsScopedEntriesWhole(t *testing.T) {
 	got := splitAllowedTools("Read Grep Bash(git add:*), Bash(gh pr view *),Write")
 	want := []string{"Read", "Grep", "Bash(git add:*)", "Bash(gh pr view *)", "Write"}
@@ -105,6 +120,7 @@ func TestBroadToolPreApproval(t *testing.T) {
 		{"allowed-tools: mcp__github__*\n", "LOW", 4},
 		{"allowed-tools: mcp__github\n", "LOW", 4},
 		{"allowed-tools: Bash(gh *) Bash(git add:*)\n", "", 0},
+		{"allowed-tools: Bash(python3 -m pytest:*), Bash(python3 scripts/check.py:*), Bash(node scripts/build.js)\n", "", 0},
 		{"allowed-tools: Read, Grep, Glob, WebSearch\n", "", 0},
 		{"allowed-tools: mcp__github__get_issue\n", "", 0},
 		{"", "", 0},
