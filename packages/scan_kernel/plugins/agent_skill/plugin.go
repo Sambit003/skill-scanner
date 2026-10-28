@@ -62,7 +62,7 @@ func (Plugin) Scan(ctx context.Context, request model.ScanRequest) (model.ScanRe
 	if err != nil {
 		return model.ScanResult{}, fmt.Errorf("YARA scan: %w", err)
 	}
-	findings = applyFrameworkMappings(orderFindingsByAnalyzer(sanitizeFindings(append(findings, yaraFindings...))))
+	findings = keepOneFindingPerLine(applyFrameworkMappings(orderFindingsByAnalyzer(sanitizeFindings(append(findings, yaraFindings...)))))
 	baseline, err := loadBaseline(request.BaselinePath)
 	if err != nil {
 		return model.ScanResult{}, err

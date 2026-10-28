@@ -628,7 +628,13 @@ func findingFromStaticMatchWithContext(item component, pattern staticPattern, ma
 	}
 
 	matched := item.Content[match[0]:match[1]]
+	if (pattern.ID == "TM1" || pattern.ID == "TM2") && harmlessDestructiveMatch(pattern.ID, matched) {
+		return model.Finding{}, false
+	}
 	severity := pattern.Severity
+	if pattern.ID == "TM1" {
+		severity = shellTrueSeverity(matched, severity)
+	}
 	if pattern.ID == "PE3" {
 		severity = credentialSeverity(item.Content, match)
 	}
