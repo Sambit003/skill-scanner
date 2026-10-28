@@ -591,7 +591,8 @@ func findingFromStaticMatchWithContext(item component, pattern staticPattern, ma
 	}
 	context := contextAtOffset(item.Content, match[0], contextWindow)
 	confidence := pattern.Confidence
-	if pattern.ID == "PE3" && (isEnvironmentFileDocumentationReference(item, context) || isAttributeEnvMatch(item.Content, match) || isPlaceholderPath(item.Content, match)) {
+	if pattern.ID == "PE3" && (isEnvironmentFileDocumentationReference(item, context) || isAttributeEnvMatch(item.Content, match) ||
+		isEnvLoadOrTemplateCopy(item.Content, match) || isPlaceholderPath(item.Content, match)) {
 		return model.Finding{}, false
 	}
 
@@ -959,6 +960,26 @@ func isAttributeEnvMatch(content string, match []int) bool {
 	}
 	previous, _ := utf8.DecodeLastRuneInString(content[:match[0]])
 	return previous == '_' || previous == ')' || previous == ']' || unicode.IsLetter(previous) || unicode.IsNumber(previous)
+}
+
+var (
+	envSourceCommand = regexp.MustCompile(`(?:^|[\s;&|(])(?:source|\.)\s+["'\x60]?$`)
+	envTemplateCopy  = regexp.MustCompile(`(?i)\b(?:cp|copy|mv|Copy-Item)\b[^\n]*\.env\.(?:example|sample|template|dist)\b`)
+)
+
+// isEnvLoadOrTemplateCopy reports a ".env" match that loads the file into the
+// shell (source .env, . .env) or is the target of copying a template
+// (cp .env.example .env); neither reads its values out.
+func isEnvLoadOrTemplateCopy(content string, match []int) bool {
+	if !strings.HasPrefix(strings.ToLower(content[match[0]:match[1]]), ".env") {
+		return false
+	}
+	lineStart := strings.LastIndexByte(content[:match[0]], '\n') + 1
+	lineEnd := len(content)
+	if index := strings.IndexByte(content[match[0]:], '\n'); index >= 0 {
+		lineEnd = match[0] + index
+	}
+	return envSourceCommand.MatchString(content[lineStart:match[0]]) || envTemplateCopy.MatchString(content[lineStart:lineEnd])
 }
 
 // placeholderPathMarkers mark a documented placeholder rather than a real

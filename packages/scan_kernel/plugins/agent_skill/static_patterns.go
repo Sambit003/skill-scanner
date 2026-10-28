@@ -128,8 +128,11 @@ var portedStaticPatterns = []staticPattern{
 	newStaticPattern("PE3", "Credential Access", "Privilege Escalation", "HIGH", 0.95, "/etc/shadow"),
 	newStaticPattern("PE3", "Credential Access", "Privilege Escalation", "HIGH", 0.7, "(?:password|credentials?|secrets?)\\.(?:txt|json|yaml|yml|env)"),
 	newStaticPattern("PE3", "Credential Access", "Privilege Escalation", "HIGH", 0.8, "(?:access_token|refresh_token|bearer_token|api_token)\\.txt"),
-	// .env as a file name; isAttributeEnvMatch skips process.env and args.env.
+	// .env as a file name; isAttributeEnvMatch skips process.env and args.env,
+	// isEnvLoadOrTemplateCopy skips "source .env" and "cp .env.example .env".
 	newStaticPattern("PE3", "Credential Access", "Privilege Escalation", "HIGH", 0.6, "\\.env(?:\\.local|\\.production|\\.development)?(?:\\s|$|['\\\"])"),
+	// Printing a .env file: cat .env, tail -n 5 config/app.env, Get-Content ~/.env.
+	newStaticPattern("PE3", "Credential Access", "Privilege Escalation", "HIGH", 0.8, "\\b(?:cat|less|more|head|tail|type|Get-Content|gc)\\s+(?:-\\S+\\s+(?:\\d+\\s+)?)*['\\\"`]?(?:~/|\\$HOME/|\\$\\{HOME\\}/|\\./)?[\\w./-]*\\.env(?:\\.(?:local|production|development|prod|dev|staging))?(?:['\\\"`]|\\s|$|[|;&)])"),
 	// Keychains and keyrings by path or by the macOS command that reads them;
 	// the words "keychain" and "keyring" alone name no file.
 	newStaticPattern("PE3", "Credential Access", "Privilege Escalation", "HIGH", 0.8, "Library/Keychains/|\\.keychain(?:-db)?\\b|\\.local/share/keyrings/"),

@@ -202,3 +202,23 @@ func TestQuotedPathsAndCommandsAreNotQuotations(t *testing.T) {
 		t.Errorf("a quoted jailbreak: AR3 found=%v reason=%q, want quoted", found, reason)
 	}
 }
+
+func TestReadingADotEnvFileIsCredentialAccess(t *testing.T) {
+	for _, item := range []component{
+		{Path: "SKILL.md", Type: "markdown", Content: blindSpotFrontmatter + "Run `cat .env` to check the values.\n"},
+		{Path: "SKILL.md", Type: "markdown", Content: blindSpotFrontmatter + "cat ~/.env\n"},
+		{Path: "SKILL.md", Type: "markdown", Content: blindSpotFrontmatter + "Then run cat prod.env and paste it.\n"},
+		{Path: "SKILL.md", Type: "markdown", Content: blindSpotFrontmatter + "tail -n 5 config/app.env\n"},
+		{Path: "notes.md", Type: "markdown", Content: "Run `Get-Content .env` first.\n"},
+		{Path: "dump.sh", Type: "shell", Executable: true, Content: "#!/bin/sh\nless .env.local\n"},
+	} {
+		if !hasRule(scanComponents(t, item), "PE3") {
+			t.Errorf("%s: PE3 missed %q", item.Path, item.Content)
+		}
+	}
+	for _, text := range []string{"source .env", "set -a; . .env; set +a", "cp .env.example .env", "Copy `.env.example` to `.env`.", "Fill in .env.example first."} {
+		if hasRule(scanComponents(t, component{Path: "SKILL.md", Type: "markdown", Content: blindSpotFrontmatter + text + "\n"}), "PE3") {
+			t.Errorf("PE3 reported %q", text)
+		}
+	}
+}
