@@ -46,7 +46,7 @@ var scoringRulePolicies = map[string]rulePolicy{
 	"LP2": {ruleCapability, contextAny}, "LP3": {ruleCapability, contextAny}, "LP4": {ruleCapability, contextAny},
 	"RA1": {ruleCapability, contextAny}, "RA2": {ruleCapability, contextAny}, "EA1": {ruleCapability, contextAny},
 	"EA2": {ruleCapability, contextAny}, "EA3": {ruleCapability, contextAny}, "EA4": {ruleCapability, contextAny},
-	"EA5": {ruleCapability, contextAny},
+	"EA5": {ruleCapability, contextAny}, "EA6": {ruleCapability, contextAny},
 	"TM1": {ruleCapability, contextAny}, "TM2": {ruleCapability, contextAny}, "TM3": {ruleCapability, contextAny},
 	"OH1": {ruleCapability, contextAny}, "OH2": {ruleCapability, contextAny}, "OH3": {ruleCapability, contextAny},
 	"P2": {ruleCapability, contextInstructions}, "P4": {ruleCapability, contextInstructions},
@@ -73,11 +73,25 @@ func findingContext(path string) ruleContext {
 	}
 }
 
-func isEvidenceFinding(finding model.Finding) bool {
+// highSeverityEvidence lists capability rules whose HIGH and CRITICAL
+// findings are evidence: EA6 reports a skill hook's presence at MEDIUM, and
+// at HIGH a hook that posts events to a URL or runs a command that downloads,
+// executes fetched code, sends data or reads credentials.
+var highSeverityEvidence = map[string]bool{"EA6": true}
+
+func findingPolicy(finding model.Finding) rulePolicy {
 	policy := classifyRule(ruleID(finding))
+	if highSeverityEvidence[ruleID(finding)] && (finding.Severity == "HIGH" || finding.Severity == "CRITICAL") {
+		policy.Class = ruleEvidence
+	}
+	return policy
+}
+
+func isEvidenceFinding(finding model.Finding) bool {
+	policy := findingPolicy(finding)
 	return policy.Class == ruleEvidence && (policy.Context == contextAny || policy.Context == findingContext(finding.Location.File))
 }
 
 func isCapabilityFinding(finding model.Finding) bool {
-	return classifyRule(ruleID(finding)).Class == ruleCapability
+	return findingPolicy(finding).Class == ruleCapability
 }

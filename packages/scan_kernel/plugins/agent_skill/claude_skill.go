@@ -1,10 +1,12 @@
 package agentskill
 
 // Analyzers for Claude Code skill front matter: allowed-tools pre-approves
-// tools while the skill is active, and description and when_to_use decide
-// when the skill is loaded.
+// tools while the skill is active, description and when_to_use decide when
+// the skill is loaded, and hooks run commands on events without asking.
 
 import (
+	"context"
+	"fmt"
 	"regexp"
 	"strings"
 
@@ -195,6 +197,229 @@ func analyzeActivationHijack(content string) []model.Finding {
 				Confidence: .8, Location: model.Location{File: "SKILL.md", StartLine: key.Line}, Finding: field + ": " + matched,
 				MatchedText: matched, Explanation: explanation, Remediation: remediation, CodeSnippet: lineSnippet(content, key.Line),
 				Tags: []string{"Trigger Abuse"}})
+		}
+	}
+	return findings
+}
+
+// skillHook is one hook handler from the hooks field of SKILL.md front matter:
+//
+//	hooks:
+//	  PreToolUse:
+//	    - matcher: "Bash"
+//	      hooks:
+//	        - type: command
+//	          command: "./scripts/check.sh"
+//
+// Hooks run automatically on their event while the skill is active, without
+// asking the user; they are removed when the skill finishes.
+type skillHook struct {
+	event, matcher, handlerType string
+	line                        int
+	command, url                *yaml.Node
+	leaves                      []string
+}
+
+func yamlItems(node *yaml.Node) []*yaml.Node {
+	switch {
+	case node == nil:
+		return nil
+	case node.Kind == yaml.SequenceNode:
+		return node.Content
+	default:
+		return []*yaml.Node{node}
+	}
+}
+
+func yamlScalarLeaves(node *yaml.Node) []string {
+	switch node.Kind {
+	case yaml.ScalarNode:
+		return []string{node.Value}
+	case yaml.MappingNode:
+		var leaves []string
+		for index := 1; index < len(node.Content); index += 2 {
+			leaves = append(leaves, yamlScalarLeaves(node.Content[index])...)
+		}
+		return leaves
+	case yaml.SequenceNode:
+		var leaves []string
+		for _, item := range node.Content {
+			leaves = append(leaves, yamlScalarLeaves(item)...)
+		}
+		return leaves
+	}
+	return nil
+}
+
+// skillHooks reads every handler under hooks.<event>[].hooks[], and accepts a
+// handler written directly in the event's list.
+func skillHooks(content string) []skillHook {
+	_, hooks := mappingEntry(frontmatterRoot(content), "hooks")
+	if hooks == nil || hooks.Kind != yaml.MappingNode {
+		return nil
+	}
+	var result []skillHook
+	for index := 0; index+1 < len(hooks.Content); index += 2 {
+		event := hooks.Content[index].Value
+		for _, group := range yamlItems(hooks.Content[index+1]) {
+			matcher := ""
+			if _, value := mappingEntry(group, "matcher"); value != nil && value.Kind == yaml.ScalarNode {
+				matcher = value.Value
+			}
+			_, handlers := mappingEntry(group, "hooks")
+			if handlers == nil {
+				handlers = group
+			}
+			for _, handler := range yamlItems(handlers) {
+				if handler.Kind != yaml.MappingNode {
+					continue
+				}
+				hook := skillHook{event: event, matcher: matcher, line: handler.Line, leaves: yamlScalarLeaves(handler)}
+				if _, value := mappingEntry(handler, "type"); value != nil && value.Kind == yaml.ScalarNode {
+					hook.handlerType = strings.ToLower(strings.TrimSpace(value.Value))
+				}
+				if _, value := mappingEntry(handler, "command"); value != nil && value.Kind == yaml.ScalarNode {
+					hook.command = value
+				}
+				if _, value := mappingEntry(handler, "url"); value != nil && value.Kind == yaml.ScalarNode {
+					hook.url = value
+				}
+				if hook.handlerType == "" && hook.command != nil {
+					hook.handlerType = "command"
+				}
+				result = append(result, hook)
+			}
+		}
+	}
+	return result
+}
+
+// hookDangerPatterns name what makes an automatic hook HIGH: it downloads or
+// sends data, executes fetched or decoded code, or reads credentials.
+var hookDangerPatterns = []struct {
+	reason   string
+	compiled *regexp.Regexp
+}{
+	{"downloads or sends data over the network", regexp.MustCompile(`(?i)\b(?:curl|wget|Invoke-WebRequest|Invoke-RestMethod|iwr|irm|nc|ncat|netcat|scp|sftp|ftp|telnet)\b|/dev/(?:tcp|udp)/|\bfetch\s*\(|\burllib\b|\brequests\.(?:get|post|put)\b|\bhttp\.client\b|\bsocket\.`)},
+	{"executes fetched or decoded code", regexp.MustCompile(`(?i)\|\s*(?:sudo\s+)?(?:(?:ba|z|da|k)?sh|python[0-9.]*|node|perl|ruby|php)\b|\b(?:eval|iex|Invoke-Expression)\b|(?:\b(?:ba|z)?sh|\bsource)\s+<\(|\bbase64\s+(?:-d|--decode|-D)\b|\bxxd\s+-r\b`)},
+	{"reads credentials", regexp.MustCompile(`(?i)(?:~|\$HOME|\$\{HOME\})/\.ssh\b|\.ssh/id_|\bid_(?:rsa|ed25519|ecdsa|dsa)\b|\.aws/credentials|\.config/gcloud|\.azure/|\.netrc\b|\.docker/config\.json|\.kube/config|/etc/shadow|\.git-credentials|\bsecurity\s+find-(?:generic|internet)-password\b|\bprintenv\b|\bgh\s+auth\s+token\b|\benv\s*(?:\||>|$)`)},
+}
+
+// analyzeSkillHooks reports (EA6) each hook handler in SKILL.md front matter:
+// MEDIUM for a hook's presence, HIGH when it posts events to a URL (type
+// http) or its command or MCP tool input matches hookDangerPatterns.
+func analyzeSkillHooks(content string) []model.Finding {
+	var findings []model.Finding
+	for _, hook := range skillHooks(content) {
+		event := hook.event
+		if hook.matcher != "" {
+			event += " (" + hook.matcher + ")"
+		}
+		handlerType := hook.handlerType
+		if handlerType == "" {
+			handlerType = "unknown"
+		}
+		summary, line := "", hook.line
+		switch {
+		case hook.command != nil:
+			summary, line = hook.command.Value, hook.command.Line
+		case hook.url != nil:
+			summary, line = hook.url.Value, hook.url.Line
+		default:
+			summary = strings.Join(hook.leaves, " ")
+		}
+		var reasons []string
+		if handlerType == "http" {
+			reasons = append(reasons, "posts each event to a URL")
+		}
+		if handlerType == "command" || handlerType == "mcp_tool" {
+			text := strings.Join(hook.leaves, "\n")
+			for _, pattern := range hookDangerPatterns {
+				if pattern.compiled.MatchString(text) {
+					reasons = append(reasons, pattern.reason)
+				}
+			}
+		}
+		severity := "MEDIUM"
+		explanation, remediation := ruleText("EA6")
+		if len(reasons) > 0 {
+			severity = "HIGH"
+			explanation += " This hook " + strings.Join(reasons, ", ") + "."
+		}
+		text := truncateRunes(handlerType+" hook on "+event+": "+strings.Join(strings.Fields(summary), " "), 200)
+		findings = append(findings, model.Finding{ID: "EA6", Category: "Excessive Agency", Pattern: "Skill Hook", Severity: severity,
+			Confidence: .9, Location: model.Location{File: "SKILL.md", StartLine: line}, Finding: text, MatchedText: text,
+			Explanation: explanation, Remediation: remediation, CodeSnippet: lineSnippet(content, line), Tags: []string{"Excessive Agency"}})
+	}
+	return findings
+}
+
+// embeddedCommand is a command that runs without Claude deciding to run it.
+type embeddedCommand struct {
+	text string
+	line int
+}
+
+// skillEmbeddedCommands returns the commands of command hooks, with the
+// SKILL.md line of each command's first line.
+func skillEmbeddedCommands(content string) []embeddedCommand {
+	var commands []embeddedCommand
+	for _, hook := range skillHooks(content) {
+		if hook.command == nil {
+			continue
+		}
+		line := hook.command.Line
+		if hook.command.Style == yaml.LiteralStyle {
+			line++
+		}
+		commands = append(commands, embeddedCommand{hook.command.Value, line})
+	}
+	return commands
+}
+
+// analyzeEmbeddedCommands runs the static analyzers over each embedded command
+// as a shell file named SKILL.md, so no example or code-block treatment
+// applies, and points the findings at the command's SKILL.md line.
+func analyzeEmbeddedCommands(ctx context.Context, content string) ([]model.Finding, error) {
+	var findings []model.Finding
+	for _, command := range skillEmbeddedCommands(content) {
+		item := component{Path: "SKILL.md", Type: "shell", Lines: pythonLineCount(command.text), Content: command.text}
+		commandFindings, err := analyzeSourceAndManifest(ctx, []component{item}, map[string]any{})
+		if err != nil {
+			return nil, err
+		}
+		for index := range commandFindings {
+			commandFindings[index].Location.StartLine = command.line + max(0, commandFindings[index].Location.StartLine-1)
+		}
+		findings = append(findings, commandFindings...)
+	}
+	return findings, nil
+}
+
+// mergeEmbeddedCommandFindings adds the findings for embedded commands. The
+// raw SKILL.md text was scanned too, so a rule reported on the same file and
+// line is kept once: the stronger finding by severity, then confidence.
+func mergeEmbeddedCommandFindings(findings, embedded []model.Finding) []model.Finding {
+	rank := map[string]int{"CRITICAL": 4, "HIGH": 3, "MEDIUM": 2, "LOW": 1}
+	key := func(finding model.Finding) string {
+		return fmt.Sprintf("%s\x00%s\x00%d", ruleID(finding), finding.Location.File, finding.Location.StartLine)
+	}
+	index := map[string]int{}
+	for position, finding := range findings {
+		if _, exists := index[key(finding)]; !exists {
+			index[key(finding)] = position
+		}
+	}
+	for _, finding := range embedded {
+		position, exists := index[key(finding)]
+		if !exists {
+			index[key(finding)] = len(findings)
+			findings = append(findings, finding)
+			continue
+		}
+		existing := findings[position]
+		if rank[finding.Severity] > rank[existing.Severity] || (rank[finding.Severity] == rank[existing.Severity] && finding.Confidence > existing.Confidence) {
+			findings[position] = finding
 		}
 	}
 	return findings
