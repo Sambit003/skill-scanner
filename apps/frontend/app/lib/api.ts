@@ -83,6 +83,8 @@ export interface ScanStatusResponse {
   scan_mode: string | null;
   scan_scope: ScanScope;
   include_readme: boolean;
+  /** What the skill can do; null for scans recorded before capabilities were listed. */
+  capabilities?: CapabilityResponse[] | null;
 }
 
 export interface ScanListResponse {
@@ -182,6 +184,15 @@ export async function listScans(params?: {
 
 export async function getScan(scanId: string): Promise<ScanStatusResponse> {
   return requestJson<ScanStatusResponse>(`/v1/scans/${scanId}`);
+}
+
+/** Something the skill is able to do. Not a problem, and not counted in the risk score. */
+export interface CapabilityResponse {
+  rule_id: string;
+  label: string;
+  location: FindingLocation;
+  snippet: string | null;
+  documentation_url: string | null;
 }
 
 export interface FrameworkRefs {

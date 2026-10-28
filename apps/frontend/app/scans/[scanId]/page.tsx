@@ -43,6 +43,7 @@ import {
 } from "@/app/lib/framework";
 import { SiteHeader } from "@/app/components/site-header";
 import { CodeViewer } from "@/app/components/code-viewer";
+import { CapabilitiesCard } from "@/app/components/capabilities-card";
 import { CategoryFilterMenu } from "@/app/components/category-filter-menu";
 import { InfoPopover } from "@/app/components/info-popover";
 import { ReportDownloadMenu } from "@/app/components/report-download-menu";
@@ -399,6 +400,8 @@ export default function ScanDashboardPage() {
               />
             </div>
           </section>
+
+          <CapabilitiesCard capabilities={scan.capabilities} />
 
           <section className="mt-4 flex flex-1 flex-col">
             <div className="sticky top-[65px] z-10 mb-4 grid gap-3 rounded-card border border-border bg-background/95 px-4 py-3 backdrop-blur-md lg:grid-cols-[minmax(13rem,1fr)_auto] lg:items-center">

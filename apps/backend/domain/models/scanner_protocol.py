@@ -30,12 +30,34 @@ class ScannerReport(BaseModel):
     content_type: str
 
 
+class ScannerCapabilityLocation(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    file: str
+    start_line: int = Field(ge=1)
+    end_line: int | None = Field(default=None, ge=1)
+
+
+class ScannerCapability(BaseModel):
+    """Something the skill can do, listed apart from findings and not counted
+    in the risk score. Present only when the scan request opted in."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    rule_id: str
+    label: str
+    location: ScannerCapabilityLocation
+    snippet: str | None = None
+
+
 class ScannerResult(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     kind: Literal["scan"]
     summary: ScannerSummary
     findings: List[Dict[str, Any]]
+    # The scanner omits the list when it is empty or was not requested.
+    capabilities: List[ScannerCapability] | None = None
     reports: Dict[str, ScannerReport]
 
 

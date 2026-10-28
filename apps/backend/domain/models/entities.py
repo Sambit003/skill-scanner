@@ -45,6 +45,9 @@ class ScanModel(Base):
     findings_by_severity = Column(JSON, default=dict)
     findings_by_category = Column(JSON, default=dict)
     reports_blob = Column(JSON, default=dict)
+    # "What this skill can do" entries from the scanner. NULL for scans
+    # recorded before the scanner listed capabilities.
+    capabilities = Column(JSON, nullable=True)
     
     # Timing & errors
     error_message = Column(Text, nullable=True)

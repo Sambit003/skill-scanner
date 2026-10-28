@@ -1,5 +1,8 @@
 from typing import List, Optional
+
+from pydantic import ValidationError
 from backend.domain.models.schemas import (
+    CapabilityResponse,
     FindingResponse,
     ScanCreateRequest,
     ScanDetailResponse,
@@ -10,6 +13,19 @@ from backend.repositories.scan_repository import ScanRepository
 from backend.domain.repository_identity import repository_key as normalize_repository_key
 from backend.services.score_visibility import redact_report_content, visible_risk_score
 from backend.workers.scan_worker import run_asset_scan_task
+
+def capability_responses(stored: Optional[List[dict]]) -> Optional[List[CapabilityResponse]]:
+    """Return the stored capability entries, or None for a scan recorded before
+    capabilities were listed. Entries that no longer validate are skipped."""
+    if stored is None:
+        return None
+    responses = []
+    for entry in stored:
+        try:
+            responses.append(CapabilityResponse.model_validate(entry))
+        except ValidationError:
+            continue
+    return responses
 
 class ScanService:
     """Service layer orchestrating scan lifecycles and business workflows."""
@@ -73,6 +89,7 @@ class ScanService:
 
         findings_models = await self.repo.get_findings_for_scan(scan_id)
         findings = [FindingResponse.model_validate(f) for f in findings_models]
+        capabilities = capability_responses(scan.capabilities)
 
         summary = None
         available_reports: List[str] = []
@@ -154,6 +171,7 @@ class ScanService:
             severity_breakdown=severity_breakdown,
             category_breakdown=category_breakdown,
             findings=findings,
+            capabilities=capabilities,
             available_reports=available_reports,
             report_downloads=report_downloads,
             links=links,
