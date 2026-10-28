@@ -208,3 +208,57 @@ func TestActivationHijackWording(t *testing.T) {
 	}
 	t.Fatalf("scan did not report TR2 for a folded description; findings=%v", ruleIDs(result.Findings))
 }
+
+func TestRugPullOnlyForMCPServers(t *testing.T) {
+	servers := []struct{ name, path, kind, content, severity string }{
+		{"scoped MCP package", "SKILL.md", "markdown", "Run `npx -y @modelcontextprotocol/server-filesystem` first.\n", "MEDIUM"},
+		{"-mcp package", "SKILL.md", "markdown", "npx -y @acme/github-mcp\n", "MEDIUM"},
+		{"mcp-server- package", "SKILL.md", "markdown", "uvx mcp-server-fetch\n", "MEDIUM"},
+		{"bunx", "SKILL.md", "markdown", "bunx acme-mcp-server\n", "MEDIUM"},
+		{"pip MCP server", "SKILL.md", "markdown", "pip install mcp-atlassian\n", "LOW"},
+		{"docker mcp namespace", "SKILL.md", "markdown", "docker run -i --rm mcp/github\n", "MEDIUM"},
+		{"claude mcp add", "SKILL.md", "markdown", "claude mcp add tools -- npx -y @acme/tools\n", "MEDIUM"},
+		{"fenced mcpServers JSON", "references/setup.md", "markdown",
+			"Add this:\n\n```json\n{\"mcpServers\": {\"tools\": {\"command\": \"npx\", \"args\": [\"-y\", \"@acme/tools\"]}}}\n```\n", "MEDIUM"},
+		{"docker in mcpServers JSON", "references/setup.md", "markdown",
+			"```json\n{\n  \"mcpServers\": {\n    \"tools\": {\n      \"command\": \"docker\",\n      \"args\": [\"run\", \"-i\", \"--rm\", \"-e\", \"TOKEN\", \"ghcr.io/acme/tools\"]\n    }\n  }\n}\n```\n", "MEDIUM"},
+		{".mcp.json", ".mcp.json", "other", "{\"mcpServers\": {\"tools\": {\"command\": \"bunx\", \"args\": [\"acme-tools\"]}}}\n", "MEDIUM"},
+		{"TOML mcp_servers", "config.toml", "other", "[mcp_servers.tools]\ncommand = \"npx\"\nargs = [\"-y\", \"acme-tools\"]\n", "MEDIUM"},
+		{"YAML mcpServers", "config.yaml", "other", "mcpServers:\n  tools:\n    command: uvx\n    args:\n      - acme-tools\n", "MEDIUM"},
+	}
+	for _, test := range servers {
+		item := component{Path: test.path, Type: test.kind, Content: test.content}
+		findings := rp1CommandFindings(item)
+		if len(findings) != 1 || findings[0].Severity != test.severity {
+			t.Errorf("%s: got %#v, want one RP1 %s", test.name, findings, test.severity)
+		}
+	}
+
+	tools := []struct{ name, path, kind, content string }{
+		{"playwright", "SKILL.md", "markdown", "npx playwright test --ui\n"},
+		{"prisma", "references/orm.md", "markdown", "```bash\nnpx prisma migrate deploy\n```\n"},
+		{"docker app", "SKILL.md", "markdown", "docker run --rm myapp pytest\n"},
+		{"uvx tool", "SKILL.md", "markdown", "uvx ruff check .\n"},
+		{"python SDK", "SKILL.md", "markdown", "pip install mcp\n"},
+		{"pinned package", "SKILL.md", "markdown", "npx -y @modelcontextprotocol/server-filesystem@1.2.3\n"},
+		{"pinned JSON entry", "references/setup.md", "markdown",
+			"```json\n{\"mcpServers\": {\"tools\": {\"command\": \"npx\", \"args\": [\"-y\", \"@acme/tools@1.0.0\"]}}}\n```\n"},
+		{"pinned docker entry", ".mcp.json", "other",
+			"{\"mcpServers\": {\"tools\": {\"command\": \"docker\", \"args\": [\"run\", \"-i\", \"ghcr.io/acme/tools:1.2.3\"]}}}\n"},
+		{"npx outside an MCP block", "package.json", "other", "{\"scripts\": {\"command\": \"npx\", \"args\": [\"playwright\"]}}\n"},
+		{"mcpServers in a different fence", "references/setup.md", "markdown",
+			"```json\n{\"mcpServers\": {}}\n```\n\n```bash\nnpx playwright test\n```\n"},
+	}
+	for _, test := range tools {
+		item := component{Path: test.path, Type: test.kind, Content: test.content}
+		if findings := rp1CommandFindings(item); len(findings) != 0 {
+			t.Errorf("%s: unexpected %#v", test.name, findings)
+		}
+	}
+
+	manifest := parseFrontmatter("---\nname: report-helper\ndescription: Formats reports with npx playwright test and npx -y @acme/report-mcp.\n---\n")
+	findings := analyzeMCPRugPull(nil, manifest)
+	if countRule(findings, "RP1") != 1 {
+		t.Errorf("manifest RP1 count=%d, want 1 (the MCP server only); findings=%#v", countRule(findings, "RP1"), findings)
+	}
+}

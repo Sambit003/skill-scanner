@@ -39,7 +39,7 @@ var ruleExplanations = map[string]string{
 	"TM4":   "A deployment command imperatively enables a privileged Kubernetes workload or overrides its isolation settings at runtime.",
 	"RA1":   "Skill modifies its own code, configuration, or behavior at runtime. Self-modification enables an agent to escalate privileges, disable safety constraints, or install persistent backdoors.",
 	"RA2":   "Skill establishes unauthorized persistence across sessions via cron jobs, startup scripts, or state files. Session persistence allows an attacker to maintain access beyond the current interaction.",
-	"RP1":   "The skill references an external MCP server, package, or image without version pinning, creating a supply-chain rug-pull risk.",
+	"RP1":   "The skill starts or configures an MCP server without pinning its version: a package or image named as an MCP server, a command registered with \"mcp add\", or an entry in an mcpServers configuration. Its next start runs whatever version the registry serves. Ordinary unpinned tools such as \"npx playwright test\" are not MCP servers and are not reported.",
 	"RP2":   "The manifest suggests future permission or trigger expansion that could materially change behavior in later versions.",
 	"RP3":   "The skill version or parameter schema is too broad or changed in a way that increases upgrade risk.",
 	"SC4":   "Dependency has known vulnerabilities (CVEs). Using packages with unpatched security flaws exposes the environment to known exploits.",

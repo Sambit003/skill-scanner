@@ -8,20 +8,6 @@ EA2	MEDIUM	Excessive Agency	skills/engineering/setup-matt-pocock-skills/SKILL.md
 EA2	MEDIUM	Excessive Agency	skills/in-progress/loop-me/SKILL.md	27	Autonomous Decision Making	0.75
 EA2	MEDIUM	Excessive Agency	skills/productivity/grilling/SKILL.md	20	Autonomous Decision Making	0.8
 MP3	HIGH	Memory Poisoning	docs/engineering/implement.md	41	Memory Manipulation	0.24
-RP1	MEDIUM	MCP Rug Pull	.agents/adr/0002-ship-as-a-claude-code-plugin.md	3		0.7
-RP1	MEDIUM	MCP Rug Pull	.agents/install-block.md	32		0.7
-RP1	MEDIUM	MCP Rug Pull	.agents/install-block.md	44		0.7
-RP1	MEDIUM	MCP Rug Pull	.agents/install-block.md	48		0.7
-RP1	MEDIUM	MCP Rug Pull	.github/workflows/release.yml	33		0.7
-RP1	MEDIUM	MCP Rug Pull	README.md	52		0.7
-RP1	MEDIUM	MCP Rug Pull	README.md	67		0.7
-RP1	MEDIUM	MCP Rug Pull	README.md	70		0.7
-RP1	MEDIUM	MCP Rug Pull	docs/engineering/ask-matt.md	72		0.7
-RP1	MEDIUM	MCP Rug Pull	docs/engineering/code-review.md	52		0.7
-RP1	MEDIUM	MCP Rug Pull	skills/in-progress/README.md	8		0.7
-RP1	MEDIUM	MCP Rug Pull	skills/misc/setup-pre-commit/SKILL.md	32		0.7
-RP1	MEDIUM	MCP Rug Pull	skills/misc/setup-pre-commit/SKILL.md	42		0.7
-RP1	MEDIUM	MCP Rug Pull	skills/misc/setup-pre-commit/SKILL.md	79		0.7
 SC1	LOW	Supply Chain	package.json	17	Unpinned Dependencies	0.4
 SC1	LOW	Supply Chain	package.json	18	Unpinned Dependencies	0.4
 TM1	HIGH	Tool Misuse	skills/misc/git-guardrails-claude-code/SKILL.md	13	Tool Parameter Abuse	0.65
