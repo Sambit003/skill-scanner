@@ -75,18 +75,19 @@ func (Plugin) Scan(ctx context.Context, request model.ScanRequest) (model.ScanRe
 	for index := range formats {
 		formats[index] = strings.ToLower(formats[index])
 	}
-	summary := summarize(kept, prepared.Components)
+	summary, kept, capabilities := scoreAndListCapabilities(kept, prepared.Components)
 	// Secret values are masked only in output, after scoring (which
 	// de-duplicates on matched text) and baseline filtering.
 	kept = maskFindingSecrets(kept)
+	capabilities = maskCapabilitySnippets(capabilities)
 	summary.ScanScope = scanScope
 	includeReadme := request.IncludeReadme
 	summary.IncludeReadme = &includeReadme
-	reports, err := renderReports(formats, summary, kept)
+	reports, err := renderReports(formats, summary, kept, capabilities)
 	if err != nil {
 		return model.ScanResult{}, err
 	}
-	return model.ScanResult{Kind: "scan", Summary: summary, Findings: kept, Reports: reports}, nil
+	return model.ScanResult{Kind: "scan", Summary: summary, Findings: kept, Capabilities: capabilities, Reports: reports}, nil
 }
 
 func rebaseSkillFindings(findings []model.Finding, root string) []model.Finding {

@@ -91,4 +91,4 @@ run_scanner "${MALICIOUS_FIXTURE}" "${REGRESSION_TMP}/malicious-actual.json"
 jq -S '{summary,findings}' "${REGRESSION_TMP}/malicious-actual.json" > "${REGRESSION_TMP}/malicious-actual-canonical.json"
 jq -S '{summary,findings}' "${FIXTURE_GOLDEN}" > "${REGRESSION_TMP}/malicious-expected-canonical.json"
 diff -u "${REGRESSION_TMP}/malicious-expected-canonical.json" "${REGRESSION_TMP}/malicious-actual-canonical.json"
-printf 'Native-YARA regression verified: exact 13-finding malicious fixture payload.\n'
+printf 'Native-YARA regression verified: exact 11-finding malicious fixture payload.\n'

@@ -139,3 +139,44 @@ def test_canonical_v2_rules_response_is_valid() -> None:
         _schema("response.schema.json", "v2"),
     )
 
+
+
+def test_scan_response_capabilities_are_optional_and_validated() -> None:
+    for version in ("v1", "v2"):
+        schema = _schema("response.schema.json", version)
+        summary = {
+            "risk_score": 0,
+            "severity": "LOW",
+            "recommendation": "SAFE",
+            "safe_to_install": True,
+            "findings_count": 0,
+            "findings_by_severity": {},
+            "findings_by_category": {},
+            "scanner_version": "test",
+            "scan_mode": "deterministic",
+        }
+        if version == "v2":
+            summary.update({"scan_scope": "skill_folders", "include_readme": False})
+        result = {
+            "kind": "scan",
+            "summary": summary,
+            "findings": [],
+            "reports": {"json": {"content": "{}", "content_type": "application/json"}},
+        }
+        response = {"protocol_version": version[1:], "ok": True, "result": result}
+        jsonschema.validate(response, schema)
+        result["capabilities"] = [
+            {
+                "rule_id": "AST4",
+                "label": "Runs shell commands",
+                "location": {"file": "scripts/run.py", "start_line": 3, "end_line": None},
+                "snippet": "subprocess.run(['ls'])",
+            }
+        ]
+        jsonschema.validate(response, schema)
+        result["capabilities"][0]["severity"] = "MEDIUM"
+        try:
+            jsonschema.validate(response, schema)
+        except jsonschema.ValidationError:
+            continue
+        raise AssertionError(f"{version}: a capability entry must not carry finding fields")

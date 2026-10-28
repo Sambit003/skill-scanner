@@ -98,8 +98,8 @@ func TestProseReviewNeverRemovesAFinding(t *testing.T) {
 	if result.Summary.RiskScore != 0 && result.Summary.VulnerabilityScore != 0 {
 		t.Errorf("risk=%d vulnerability=%d, want no score from a finding marked for review", result.Summary.RiskScore, result.Summary.VulnerabilityScore)
 	}
-	markdown = renderMarkdown(result.Summary, result.Findings)
-	terminal = renderTerminal(result.Summary, result.Findings)
+	markdown = renderMarkdown(result.Summary, result.Findings, result.Capabilities)
+	terminal = renderTerminal(result.Summary, result.Findings, result.Capabilities)
 	if !strings.Contains(markdown, "Needs review: table") || !strings.Contains(terminal, "[needs review: table]") {
 		t.Errorf("reports must show the review marker:\n%s\n%s", markdown, terminal)
 	}

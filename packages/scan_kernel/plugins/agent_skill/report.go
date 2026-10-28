@@ -177,7 +177,7 @@ func scoringMatchedText(finding model.Finding) string {
 	return finding.MatchedText
 }
 
-func renderReports(formats []string, summary model.Summary, findings []model.Finding) (map[string]model.Report, error) {
+func renderReports(formats []string, summary model.Summary, findings []model.Finding, capabilities []model.Capability) (map[string]model.Report, error) {
 	reports := map[string]model.Report{}
 	for _, format := range formats {
 		if _, exists := reports[format]; exists {
@@ -187,11 +187,11 @@ func renderReports(formats []string, summary model.Summary, findings []model.Fin
 		var err error
 		switch format {
 		case "json":
-			content, contentType, err = renderJSON(summary, findings), "application/json", nil
+			content, contentType, err = renderJSON(summary, findings, capabilities), "application/json", nil
 		case "markdown":
-			content, contentType = renderMarkdown(summary, findings), "text/markdown; charset=utf-8"
+			content, contentType = renderMarkdown(summary, findings, capabilities), "text/markdown; charset=utf-8"
 		case "terminal":
-			content, contentType = renderTerminal(summary, findings), "text/plain; charset=utf-8"
+			content, contentType = renderTerminal(summary, findings, capabilities), "text/plain; charset=utf-8"
 		case "sarif":
 			content, err = renderSARIF(summary, findings)
 			contentType = "application/sarif+json"
@@ -206,10 +206,17 @@ func renderReports(formats []string, summary model.Summary, findings []model.Fin
 	return reports, nil
 }
 
-func renderJSON(summary model.Summary, findings []model.Finding) string {
-	raw, _ := json.MarshalIndent(map[string]any{"summary": summary, "findings": findings}, "", "  ")
+func renderJSON(summary model.Summary, findings []model.Finding, capabilities []model.Capability) string {
+	document := map[string]any{"summary": summary, "findings": findings}
+	if len(capabilities) > 0 {
+		document["capabilities"] = capabilities
+	}
+	raw, _ := json.MarshalIndent(document, "", "  ")
 	return string(raw)
 }
+
+// capabilitiesIntro heads the capabilities section of the text reports.
+const capabilitiesIntro = "What this skill can do. These are not findings and do not change the risk score; review them against what the skill says it does."
 
 var astTaxaNames = map[string]string{
 	"AST01": "Malicious Skills",
@@ -245,7 +252,7 @@ var rmfTaxaNames = map[string]string{
 	"MEASURE 2.10": "AI Privacy Risk Evaluation",
 }
 
-func renderMarkdown(summary model.Summary, findings []model.Finding) string {
+func renderMarkdown(summary model.Summary, findings []model.Finding, capabilities []model.Capability) string {
 	var output strings.Builder
 	fmt.Fprintf(&output, "# ScanKernel report\n\n**Risk:** %d/100 (%s)  \n**Recommendation:** %s  \n**Scope:** %s  \n**README files:** %s  \n**Findings:** %d\n", summary.RiskScore, summary.Severity, summary.Recommendation, summary.ScanScope, readmeStatus(summary.IncludeReadme), len(findings))
 
@@ -322,10 +329,16 @@ func renderMarkdown(summary model.Summary, findings []model.Finding) string {
 
 		fmt.Fprintf(&output, "\n%s\n\nRemediation: %s\n", cleanText(finding.Explanation), cleanText(finding.Remediation))
 	}
+	if len(capabilities) > 0 {
+		fmt.Fprintf(&output, "\n## What this skill can do\n\n%s\n\n", capabilitiesIntro)
+		for _, capability := range capabilities {
+			fmt.Fprintf(&output, "- %s (%s) at `%s:%d`\n", cleanText(capability.Label), capability.RuleID, capability.Location.File, capability.Location.StartLine)
+		}
+	}
 	return output.String()
 }
 
-func renderTerminal(summary model.Summary, findings []model.Finding) string {
+func renderTerminal(summary model.Summary, findings []model.Finding, capabilities []model.Capability) string {
 	var output strings.Builder
 	fmt.Fprintf(&output, "ScanKernel: risk %d/100 %s — %s [%s, README %s]\n", summary.RiskScore, summary.Severity, summary.Recommendation, summary.ScanScope, readmeStatus(summary.IncludeReadme))
 	for _, finding := range findings {
@@ -334,6 +347,12 @@ func renderTerminal(summary model.Summary, findings []model.Finding) string {
 			review = " [needs review: " + reason + "]"
 		}
 		fmt.Fprintf(&output, "%s %-8s %s:%d %s%s\n", ruleID(finding), finding.Severity, finding.Location.File, finding.Location.StartLine, cleanText(finding.Pattern), review)
+	}
+	if len(capabilities) > 0 {
+		fmt.Fprintf(&output, "\nWhat this skill can do (not findings; no effect on the risk score):\n")
+		for _, capability := range capabilities {
+			fmt.Fprintf(&output, "  %-5s %s:%d %s\n", capability.RuleID, capability.Location.File, capability.Location.StartLine, cleanText(capability.Label))
+		}
 	}
 	return output.String()
 }

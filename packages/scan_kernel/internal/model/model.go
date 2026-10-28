@@ -137,11 +137,23 @@ type Report struct {
 	ContentType string `json:"content_type"`
 }
 
+// Capability is something the scanned skill can do, such as running shell
+// commands or reading environment variables. Capabilities are listed apart
+// from findings: they are not counted as findings, and the risk score is the
+// same with or without the list.
+type Capability struct {
+	RuleID   string   `json:"rule_id"`
+	Label    string   `json:"label"`
+	Location Location `json:"location"`
+	Snippet  string   `json:"snippet,omitempty"`
+}
+
 type ScanResult struct {
-	Kind     string            `json:"kind"`
-	Summary  Summary           `json:"summary"`
-	Findings []Finding         `json:"findings"`
-	Reports  map[string]Report `json:"reports"`
+	Kind         string            `json:"kind"`
+	Summary      Summary           `json:"summary"`
+	Findings     []Finding         `json:"findings"`
+	Capabilities []Capability      `json:"capabilities,omitempty"`
+	Reports      map[string]Report `json:"reports"`
 }
 
 type RuleDocument struct {

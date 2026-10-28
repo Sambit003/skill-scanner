@@ -189,7 +189,7 @@ func TestFrameworksReportRendering(t *testing.T) {
 	}
 
 	// Markdown report test
-	md := renderMarkdown(summary, findings)
+	md := renderMarkdown(summary, findings, nil)
 	if !strings.Contains(md, "## Compliance summary") {
 		t.Error("Markdown report missing '## Compliance summary'")
 	}
