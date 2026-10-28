@@ -303,6 +303,9 @@ func renderMarkdown(summary model.Summary, findings []model.Finding) string {
 	for _, finding := range findings {
 		fmt.Fprintf(&output, "\n## %s — %s\n\n- Severity: %s\n- Location: `%s:%d`\n- Category: %s\n",
 			ruleID(finding), cleanText(finding.Pattern), finding.Severity, finding.Location.File, finding.Location.StartLine, finding.Category)
+		if reason, review := needsReview(finding); review {
+			fmt.Fprintf(&output, "- Needs review: %s (not counted in the risk score)\n", reason)
+		}
 
 		if len(finding.Frameworks.OwaspAgentic) > 0 {
 			fmt.Fprintf(&output, "- OWASP Agentic Skills: %s\n", strings.Join(finding.Frameworks.OwaspAgentic, ", "))
@@ -326,7 +329,11 @@ func renderTerminal(summary model.Summary, findings []model.Finding) string {
 	var output strings.Builder
 	fmt.Fprintf(&output, "ScanKernel: risk %d/100 %s — %s [%s, README %s]\n", summary.RiskScore, summary.Severity, summary.Recommendation, summary.ScanScope, readmeStatus(summary.IncludeReadme))
 	for _, finding := range findings {
-		fmt.Fprintf(&output, "%s %-8s %s:%d %s\n", ruleID(finding), finding.Severity, finding.Location.File, finding.Location.StartLine, cleanText(finding.Pattern))
+		review := ""
+		if reason, ok := needsReview(finding); ok {
+			review = " [needs review: " + reason + "]"
+		}
+		fmt.Fprintf(&output, "%s %-8s %s:%d %s%s\n", ruleID(finding), finding.Severity, finding.Location.File, finding.Location.StartLine, cleanText(finding.Pattern), review)
 	}
 	return output.String()
 }
@@ -420,7 +427,7 @@ func renderSARIF(summary model.Summary, findings []model.Finding) (string, error
 		if finding.Location.EndLine != nil {
 			region["endLine"] = *finding.Location.EndLine
 		}
-		results = append(results, map[string]any{
+		result := map[string]any{
 			"ruleId": id, "level": level,
 			"message": map[string]string{"text": cleanText(finding.Explanation)},
 			"locations": []any{map[string]any{
@@ -429,7 +436,11 @@ func renderSARIF(summary model.Summary, findings []model.Finding) (string, error
 					"region":           region,
 				},
 			}},
-		})
+		}
+		if reason, review := needsReview(finding); review {
+			result["properties"] = map[string]any{"needs_review": reason}
+		}
+		results = append(results, result)
 	}
 
 	ruleList := make([]map[string]any, 0, len(rules))

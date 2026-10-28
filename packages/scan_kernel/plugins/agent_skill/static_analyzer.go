@@ -462,7 +462,7 @@ func analysisCacheKey(item component) analysisKey {
 	for index, enabled := range []bool{
 		isEvalDataset(item.Path), isBinaryScannerPath(item.Path), strings.EqualFold(item.Path, "LICENSE"),
 		isDependencyFile(item.Path), isDocumentationMarkdown(item.Path), strings.HasSuffix(normalized, "skill.md"),
-		strings.HasSuffix(normalized, ".py"), isSkillManifestPath(item.Path), isReadmePath(item.Path),
+		strings.HasSuffix(normalized, ".py"), isSkillManifestPath(item.Path), isReadmePath(item.Path), isTestFixturePath(item.Path),
 	} {
 		if enabled {
 			flags |= 1 << index
@@ -645,10 +645,16 @@ func findingFromStaticMatchWithContext(item component, pattern staticPattern, ma
 
 	matched = truncateRunes(matched, 200)
 	explanation, remediation := ruleText(pattern.ID)
-	return model.Finding{ID: pattern.ID, Category: pattern.Category, Pattern: pattern.Title,
+	finding := model.Finding{ID: pattern.ID, Category: pattern.Category, Pattern: pattern.Title,
 		Severity: severity, Confidence: confidence, Location: model.Location{File: item.Path, StartLine: line},
 		Finding: matched, MatchedText: matched, Explanation: explanation, Remediation: remediation, CodeSnippet: context,
-		Tags: []string{pattern.Category}}, true
+		Tags: []string{pattern.Category}}
+	// The drop above used the confidence before review, so a downgraded
+	// finding is never silently removed.
+	if reason := proseReviewReason(item, pattern.ID, match[0]); reason != "" {
+		finding = markForReview(finding, reason)
+	}
+	return finding, true
 }
 
 func isSafeSupplyChainPattern(text string) bool {

@@ -87,11 +87,19 @@ func findingPolicy(finding model.Finding) rulePolicy {
 	return policy
 }
 
+// Findings marked for review (see prose_review.go) stay in the report but
+// count as neither evidence nor capability.
 func isEvidenceFinding(finding model.Finding) bool {
+	if _, review := needsReview(finding); review {
+		return false
+	}
 	policy := findingPolicy(finding)
 	return policy.Class == ruleEvidence && (policy.Context == contextAny || policy.Context == findingContext(finding.Location.File))
 }
 
 func isCapabilityFinding(finding model.Finding) bool {
+	if _, review := needsReview(finding); review {
+		return false
+	}
 	return findingPolicy(finding).Class == ruleCapability
 }
