@@ -12,7 +12,8 @@ import (
 )
 
 // htmlCommentPattern reports HTML comments whose body carries
-// hiddenCommentKeyword. Comments are tokenized by htmlComments rather than a
+// hiddenCommentKeyword in an instruction aimed at the agent
+// (commentInstructsAgent). Comments are tokenized by htmlComments rather than a
 // regular expression so a match can never run past "-->" into visible text.
 // Keywords are whole words (with their verb forms); POST and GET count only
 // in upper case, as HTTP methods are written, so "wp:post-title", "BUDGET"
@@ -83,7 +84,7 @@ func analyzeSpecialStatic(item component) []model.Finding {
 	}
 	if fileType == "markdown" || fileType == "other" {
 		for _, comment := range htmlComments(item.Content) {
-			if !hiddenCommentKeyword.MatchString(item.Content[comment.bodyStart:comment.bodyEnd]) {
+			if !commentInstructsAgent(item.Content[comment.bodyStart:comment.bodyEnd], hiddenCommentKeyword) {
 				continue
 			}
 			if finding, ok := findingFromStaticMatch(item, htmlCommentPattern, []int{comment.start, comment.end}); ok {
