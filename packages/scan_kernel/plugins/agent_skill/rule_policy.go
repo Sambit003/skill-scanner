@@ -35,9 +35,9 @@ var scoringRulePolicies = map[string]rulePolicy{
 
 	"P1": {ruleEvidence, contextInstructions}, "P3": {ruleEvidence, contextInstructions}, "P5": {ruleEvidence, contextInstructions},
 	"P6": {ruleEvidence, contextInstructions}, "P8": {ruleEvidence, contextInstructions}, "MP1": {ruleEvidence, contextInstructions},
-	"MP3": {ruleEvidence, contextInstructions}, "AR1": {ruleEvidence, contextInstructions}, "TR2": {ruleEvidence, contextInstructions},
-	"TR3": {ruleEvidence, contextInstructions}, "TP1": {ruleEvidence, contextInstructions}, "TP3": {ruleEvidence, contextInstructions},
-	"YR5": {ruleEvidence, contextInstructions},
+	"MP3": {ruleEvidence, contextInstructions}, "AR1": {ruleEvidence, contextInstructions}, "TR1": {ruleEvidence, contextInstructions},
+	"TR2": {ruleEvidence, contextInstructions}, "TR3": {ruleEvidence, contextInstructions}, "TP1": {ruleEvidence, contextInstructions},
+	"TP3": {ruleEvidence, contextInstructions}, "YR5": {ruleEvidence, contextInstructions},
 
 	"PE1": {ruleCapability, contextAny}, "PE2": {ruleCapability, contextAny}, "PE3": {ruleCapability, contextAny},
 	"E1": {ruleCapability, contextAny}, "E2": {ruleCapability, contextAny}, "E3": {ruleCapability, contextAny},
@@ -51,7 +51,6 @@ var scoringRulePolicies = map[string]rulePolicy{
 	"OH1": {ruleCapability, contextAny}, "OH2": {ruleCapability, contextAny}, "OH3": {ruleCapability, contextAny},
 	"P2": {ruleCapability, contextInstructions}, "P4": {ruleCapability, contextInstructions},
 	"P7": {ruleCapability, contextInstructions}, "MP2": {ruleCapability, contextInstructions}, "AR2": {ruleCapability, contextInstructions},
-	"TR1": {ruleCapability, contextInstructions},
 
 	"SC1": {ruleHygiene, contextAny}, "RP1": {ruleHygiene, contextAny}, "RP2": {ruleHygiene, contextAny},
 	"RP3": {ruleHygiene, contextAny}, "SC5": {ruleHygiene, contextAny}, "SC6": {ruleHygiene, contextAny},
