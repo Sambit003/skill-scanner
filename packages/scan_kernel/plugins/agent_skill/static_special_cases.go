@@ -127,8 +127,8 @@ func analyzeUnsupportedRegexSemantics(item component) []model.Finding {
 // written as a Markdown link, or as inline code holding only the path, outside
 // program source. Such a path cross-references a sibling skill in the same
 // repository. Absolute paths, paths under an agent's skill directory
-// (~/.claude/skills/...) and commands in a code span (`cat .../SKILL.md`)
-// are still reported.
+// (~/.claude/skills/...), commands in a code span (`cat .../SKILL.md`) and
+// preprocessing commands (!`...`) are still reported.
 func isDocumentationSkillLink(item component, match []int) bool {
 	if isSourceCodeType(item.Type) {
 		return false
@@ -143,7 +143,9 @@ func isDocumentationSkillLink(item component, match []int) bool {
 	if strings.HasPrefix(prefix, "/") || strings.ContainsAny(prefix, "~$") || containsAny(strings.ToLower(prefix), ".claude/", ".codex/", ".gemini/", ".agents/") {
 		return false
 	}
-	inCode := strings.HasSuffix(before, "`"+prefix) && strings.HasPrefix(after, "`")
+	// "!`...`" is a preprocessing command that runs on invocation, not a
+	// reference to the path.
+	inCode := strings.HasSuffix(before, "`"+prefix) && !strings.HasSuffix(before, "!`"+prefix) && strings.HasPrefix(after, "`")
 	inLinkTarget := strings.LastIndex(before, "](") > strings.LastIndex(before, ")")
 	inLinkText := strings.LastIndex(before, "[") > strings.LastIndex(before, "]") && strings.Contains(after, "](")
 	return inCode || inLinkTarget || inLinkText

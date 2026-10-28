@@ -50,6 +50,7 @@ func (Plugin) Scan(ctx context.Context, request model.ScanRequest) (model.ScanRe
 		manifestFindings = append(manifestFindings, analyzeActivationHijack(skill.ManifestContent)...)
 		manifestFindings = append(manifestFindings, analyzeToolPreApproval(skill.ManifestContent)...)
 		manifestFindings = append(manifestFindings, analyzeSkillHooks(skill.ManifestContent)...)
+		manifestFindings = append(manifestFindings, analyzeSkillPreprocessing(skill.ManifestContent)...)
 		findings = append(findings, rebaseSkillFindings(manifestFindings, skill.Root)...)
 		embedded, err := analyzeEmbeddedCommands(ctx, skill.ManifestContent)
 		if err != nil {

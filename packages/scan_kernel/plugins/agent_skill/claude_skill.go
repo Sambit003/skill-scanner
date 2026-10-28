@@ -1,8 +1,9 @@
 package agentskill
 
-// Analyzers for Claude Code skill front matter: allowed-tools pre-approves
-// tools while the skill is active, description and when_to_use decide when
-// the skill is loaded, and hooks run commands on events without asking.
+// Analyzers for Claude Code skill features that decide what runs without the
+// user being asked: allowed-tools pre-approves tools while the skill is
+// active, description and when_to_use decide when the skill is loaded, hooks
+// run on events, and inline !`command` preprocessing runs on invocation.
 
 import (
 	"context"
@@ -360,10 +361,51 @@ type embeddedCommand struct {
 	line int
 }
 
-// skillEmbeddedCommands returns the commands of command hooks, with the
-// SKILL.md line of each command's first line.
-func skillEmbeddedCommands(content string) []embeddedCommand {
+// preprocessingCommand matches inline preprocessing in SKILL.md, as in
+// "- PR diff: !`gh pr diff`": the command runs when the skill is invoked,
+// before Claude sees the text, and its output replaces the placeholder.
+var preprocessingCommand = regexp.MustCompile("!`([^`\n]+)`")
+
+// preprocessingCommands returns the inline preprocessing commands in the
+// SKILL.md body. A "!" that closes an inline code span ("`#VALUE!` then
+// `x`") is not a command: it follows an odd number of backticks on its line.
+func preprocessingCommands(content string) []embeddedCommand {
+	body := 0
+	if block, ok := frontmatterYAML(content); ok {
+		if end := frontmatterEnd.FindStringIndex(content[3+len(block):]); end != nil {
+			body = 3 + len(block) + end[1]
+		}
+	}
 	var commands []embeddedCommand
+	for _, match := range preprocessingCommand.FindAllStringSubmatchIndex(content[body:], -1) {
+		start := body + match[0]
+		lineStart := strings.LastIndexByte(content[:start], '\n') + 1
+		if strings.Count(content[lineStart:start], "`")%2 == 1 {
+			continue
+		}
+		commands = append(commands, embeddedCommand{content[body+match[2] : body+match[3]], 1 + strings.Count(content[:start], "\n")})
+	}
+	return commands
+}
+
+// analyzeSkillPreprocessing reports (EA7) each inline preprocessing command.
+func analyzeSkillPreprocessing(content string) []model.Finding {
+	var findings []model.Finding
+	for _, command := range preprocessingCommands(content) {
+		text := truncateRunes("!`"+command.text+"`", 200)
+		explanation, remediation := ruleText("EA7")
+		findings = append(findings, model.Finding{ID: "EA7", Category: "Excessive Agency", Pattern: "Preprocessing Command", Severity: "LOW",
+			Confidence: .9, Location: model.Location{File: "SKILL.md", StartLine: command.line}, Finding: text, MatchedText: text,
+			Explanation: explanation, Remediation: remediation, CodeSnippet: lineSnippet(content, command.line), Tags: []string{"Excessive Agency"}})
+	}
+	return findings
+}
+
+// skillEmbeddedCommands returns the commands of command hooks, with the
+// SKILL.md line of each command's first line, and the inline preprocessing
+// commands.
+func skillEmbeddedCommands(content string) []embeddedCommand {
+	commands := preprocessingCommands(content)
 	for _, hook := range skillHooks(content) {
 		if hook.command == nil {
 			continue
