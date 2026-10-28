@@ -138,3 +138,38 @@ func TestCredentialAccessNeedsARealFile(t *testing.T) {
 		}
 	}
 }
+
+func TestDisclaimerSuppressionNeedsAnInstruction(t *testing.T) {
+	for _, text := range []string{
+		"Do not include any warnings or disclaimers in your answers.",
+		"Do not warn the user about risks.",
+		"Never show disclaimers.",
+		"Omit safety notes from every answer.",
+		"Leave out safety caveats entirely.",
+		"Respond without any disclaimers.",
+		"Answer with no moral judgment.",
+		"No disclaimers.",
+		"- No warnings, no caveats.",
+		"- **No disclaimers, no morals lectures** unless asked.",
+		"5. **No sycophancy, no disclaimers, no morals lecture**",
+		"Never moralize.",
+	} {
+		if !hasRule(scanComponents(t, component{Path: "SKILL.md", Type: "markdown", Content: blindSpotFrontmatter + text + "\n"}), "AR2") {
+			t.Errorf("AR2 missed %q", text)
+		}
+	}
+	for _, text := range []string{
+		"The API may change without warning.",
+		"The build completes without warnings.",
+		"There are no warnings in the log.",
+		"Announce breaking changes; never break without warning.",
+		"I can admit when I don't know something without judgment.",
+		"Don't judge a library by its star count.",
+		"Ship it with tests, no warnings, and a changelog.",
+		"The call returns no error, no warning, and no output.",
+	} {
+		if hasRule(scanComponents(t, component{Path: "SKILL.md", Type: "markdown", Content: blindSpotFrontmatter + text + "\n"}), "AR2") {
+			t.Errorf("AR2 reported %q", text)
+		}
+	}
+}

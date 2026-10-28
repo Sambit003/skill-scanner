@@ -1,6 +1,5 @@
 AR1	HIGH	Anti-Refusal	docs/productivity/to-questionnaire.md	5	Anti-Refusal Statement	0.21
 AR1	HIGH	Anti-Refusal	skills/productivity/to-questionnaire/SKILL.md	9	Anti-Refusal Statement	0.7
-AR2	HIGH	Anti-Refusal	skills/in-progress/README.md	3	Anti-Refusal Statement	0.8
 AS1	HIGH	Agent Snooping	skills/misc/git-guardrails-claude-code/SKILL.md	24	Agent Config Directory Access	0.9
 AS1	HIGH	Agent Snooping	skills/misc/git-guardrails-claude-code/SKILL.md	61	Agent Config Directory Access	0.9
 EA2	MEDIUM	Excessive Agency	CHANGELOG.md	119	Autonomous Decision Making	0.75

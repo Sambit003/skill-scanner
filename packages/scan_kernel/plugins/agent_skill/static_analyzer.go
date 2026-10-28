@@ -194,11 +194,20 @@ var staticPatterns = []staticPattern{
 	newStaticPattern("AR1", "Anti-Refusal Statement", "Anti-Refusal", "HIGH", .8, `\b(?:you\s+)?must\s+(?:always\s+)?(?:answer|comply\s+with|respond\s+to|fulfill)\s+(?:every|all|any|each)\b`),
 	newStaticPattern("AR1", "Anti-Refusal Statement", "Anti-Refusal", "HIGH", .6, `\brespond\s+to\s+(?:every|all|any)\s+(?:request|question|prompt|query|command)\b`),
 	newStaticPattern("AR1", "Anti-Refusal Statement", "Anti-Refusal", "HIGH", .85, `\bno\s+request\s+is\s+(?:off[- ]limits|forbidden|too)\b`),
-	newStaticPattern("AR2", "Anti-Refusal Statement", "Anti-Refusal", "HIGH", .8, `\b(?:do\s+not|don'?t|never|no)\s+(?:include|add|give|provide|use|append)?\s*(?:any\s+)?(?:warnings?|disclaimers?|caveats?)\b`),
-	newStaticPattern("AR2", "Anti-Refusal Statement", "Anti-Refusal", "HIGH", .8, `\bwithout\s+(?:any\s+)?(?:warnings?|disclaimers?|caveats?|moralizing|moralising|judg(?:e?ment|ing))\b`),
-	newStaticPattern("AR2", "Anti-Refusal Statement", "Anti-Refusal", "HIGH", .85, `\b(?:do\s+not|don'?t|never)\s+(?:lecture|moralize|moralise|preach|judge|warn)\b`),
-	newStaticPattern("AR2", "Anti-Refusal Statement", "Anti-Refusal", "HIGH", .8, `\b(?:skip|omit|leave\s+out|drop)\s+(?:the\s+)?(?:disclaimer|warning|ethics|safety)\b`),
-	newStaticPattern("AR2", "Anti-Refusal Statement", "Anti-Refusal", "HIGH", .8, `\b(?:no|without)\s+(?:ethical|moral)\s+(?:judg(?:e?ment)|considerations?|commentary|objections?)\b`),
+	// AR2 needs an instruction aimed at the agent ("do not warn the user",
+	// "never show disclaimers", "omit safety notes"); "the API may change
+	// without warning" or "the build has no warnings" describe something else.
+	newStaticPattern("AR2", "Anti-Refusal Statement", "Anti-Refusal", "HIGH", .8, `\b(?:do\s+not|don'?t|never)\s+(?:include|add|give|provide|use|append|show|display|print|output|write|mention|issue|attach|insert)\s+(?:any\s+)?(?:(?:safety|legal|ethical|medical|content)\s+)?(?:warnings?|disclaimers?|caveats?|safety\s+notes?)\b`),
+	// A terse style rule: "No disclaimers." or "- **No disclaimers**, ...", or
+	// one item of a list such as "no hedging, no disclaimers, no praise"
+	// ("no error, no warning" describes a result, so not warnings there).
+	newStaticPattern("AR2", "Anti-Refusal Statement", "Anti-Refusal", "HIGH", .7, `(?:^[ \t]*(?:(?:[-*+]|\d+[.)])[ \t]+)?(?:\*\*|__)?|[.!:;][ \t]+)no\s+(?:disclaimers?|caveats?|warnings?)\b(?:\*\*|__)?[ \t]*(?:[.!,;)]|$)`),
+	newStaticPattern("AR2", "Anti-Refusal Statement", "Anti-Refusal", "HIGH", .7, `\bno\s+[\w/-]+,[ \t]+no\s+(?:disclaimers?|caveats?)\b(?:\*\*|__)?[ \t]*(?:[.!,;)]|$)`),
+	newStaticPattern("AR2", "Anti-Refusal Statement", "Anti-Refusal", "HIGH", .8, `\b(?:answer|respond|reply|write|comply|help|proceed|output|continue|explain)\b[^.\n]{0,40}?\bwithout\s+(?:any\s+(?:warnings?|disclaimers?|caveats?)|warnings|disclaimers?|caveats?|moralizing|moralising|judg(?:e?ment|ing)|safety\s+notes?|lectures?)\b`),
+	newStaticPattern("AR2", "Anti-Refusal Statement", "Anti-Refusal", "HIGH", .85, `\b(?:do\s+not|don'?t|never)\s+(?:lecture|moralize|moralise|preach)\b`),
+	newStaticPattern("AR2", "Anti-Refusal Statement", "Anti-Refusal", "HIGH", .85, `\b(?:do\s+not|don'?t|never)\s+(?:warn|judge)\s+(?:the\s+)?(?:users?|them|me|people|anyone|requests?|about)\b`),
+	newStaticPattern("AR2", "Anti-Refusal Statement", "Anti-Refusal", "HIGH", .8, `\b(?:skip|omit|leave\s+out|drop)\s+(?:the\s+|any\s+|all\s+)?(?:disclaimers?|warnings?|ethics|safety\s+(?:notes?|warnings?|caveats?|disclaimers?|information))\b`),
+	newStaticPattern("AR2", "Anti-Refusal Statement", "Anti-Refusal", "HIGH", .8, `\b(?:answer|respond|reply|write|comply|help|proceed|give|provide)\b[^.\n]{0,40}?\b(?:with\s+no|without)\s+(?:any\s+)?(?:ethical|moral)\s+(?:judg(?:e?ment)|considerations?|commentary|objections?)\b`),
 	newStaticPattern("AR2", "Anti-Refusal Statement", "Anti-Refusal", "HIGH", .55, `\b(?:do\s+not|don'?t)\s+(?:apologize|apologise|say\s+sorry)\b`),
 	newStaticPattern("AR3", "Anti-Refusal Statement", "Anti-Refusal", "HIGH", .9, `\byou\s+have\s+no\s+(?:restrictions?|limitations?|filters?|rules?|guidelines?|boundaries|limits)\b`),
 	newStaticPattern("AR3", "Anti-Refusal Statement", "Anti-Refusal", "HIGH", .85, `\b(?:you\s+are|act\s+as|pretend\s+(?:to\s+be|you'?re))[^.\n]{0,30}(?:unrestricted|unfiltered|uncensored|no\s+filter)\b`),
