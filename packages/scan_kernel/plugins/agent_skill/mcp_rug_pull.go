@@ -43,17 +43,21 @@ var dockerValueFlags = map[string]bool{
 // isMCPServerPackage reports a package or image named as an MCP server:
 // @modelcontextprotocol/*, mcp-*, *-mcp or *-mcp-server (with "_" read as
 // "-"), or an image in Docker Hub's mcp/ namespace. The bare "mcp" package is
-// the Python SDK, a library.
+// the Python SDK, a library; the inspector is a development tool and create-*
+// packages scaffold a new server rather than run one.
 func isMCPServerPackage(name string) bool {
-	lower := strings.ToLower(strings.Trim(name, `"'`))
-	if strings.HasPrefix(lower, "@modelcontextprotocol/") || strings.HasPrefix(lower, "mcp/") || strings.HasPrefix(lower, "docker.io/mcp/") {
-		return true
-	}
+	lower := strings.ToLower(strings.TrimRight(strings.Trim(name, "\"'`"), ".,;:)]}"))
 	base := lower[strings.LastIndexByte(lower, '/')+1:]
 	if at := strings.IndexAny(base, "@:="); at > 0 {
 		base = base[:at]
 	}
 	base = strings.TrimRight(strings.ReplaceAll(base, "_", "-"), ".-")
+	if base == "inspector" || base == "mcp-inspector" || strings.HasPrefix(base, "create-") {
+		return false
+	}
+	if strings.HasPrefix(lower, "@modelcontextprotocol/") || strings.HasPrefix(lower, "mcp/") || strings.HasPrefix(lower, "docker.io/mcp/") {
+		return true
+	}
 	return strings.HasPrefix(base, "mcp-") || strings.HasSuffix(base, "-mcp") || strings.HasSuffix(base, "-mcp-server")
 }
 
@@ -104,7 +108,7 @@ func dockerImage(arguments []string) (string, int) {
 			}
 			continue
 		}
-		return strings.Trim(argument, `"'`), index
+		return strings.TrimRight(strings.Trim(argument, "\"'`"), ".,;:)]}"), index
 	}
 	return "", -1
 }
@@ -165,7 +169,9 @@ func rp1CommandFindings(item component) []model.Finding {
 		}
 	}
 	for _, match := range rp1Docker.FindAllStringSubmatchIndex(item.Content, -1) {
-		arguments := strings.Fields(item.Content[match[2]:match[3]])
+		// A command in an inline code span ends at its closing backtick.
+		command, _, _ := strings.Cut(item.Content[match[2]:match[3]], "`")
+		arguments := strings.Fields(command)
 		image, index := dockerImage(arguments)
 		if image == "" || versionPin.MatchString(image) {
 			continue
