@@ -123,9 +123,10 @@ type ruleTier int
 const (
 	tierNone ruleTier = iota
 	// tierCaution: an instruction attack in an instruction file, a file only
-	// partly scanned, a hook that sends data or runs fetched code, or an
-	// instruction to manipulate the user or hide something from them. The
-	// verdict is at least CAUTION.
+	// partly scanned, a hook that sends data or runs fetched code, an
+	// instruction to manipulate the user or hide something from them, or a
+	// write to the agent's memory or instruction files. The verdict is at
+	// least CAUTION.
 	tierCaution
 	// tierCritical: confirmed malicious behaviour. The verdict is
 	// DO_NOT_INSTALL.
@@ -177,6 +178,9 @@ func findingTier(finding model.Finding) ruleTier {
 		return tierCritical
 	}
 	if minimum, ok := cautionRules[id]; ok && severityAtLeast(finding.Severity, minimum) {
+		return tierCaution
+	}
+	if id == "RA2" && slices.Contains(finding.Tags, memoryPersistenceTag) {
 		return tierCaution
 	}
 	instructions := findingContext(finding.Location.File) == contextInstructions

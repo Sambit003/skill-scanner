@@ -5,6 +5,9 @@ package agentskill
 // crontab entries, shell startup files, and the agent's own memory and
 // instruction files. RA2 reports these at HIGH without a behaviour tag; when
 // the persisted command is itself malicious, its own finding carries the tag.
+// A HIGH write to the agent's memory or instruction files or its global
+// configuration carries memoryPersistenceTag, which sets a CAUTION floor on
+// the verdict (see findingTier).
 
 import (
 	"regexp"
@@ -12,6 +15,8 @@ import (
 
 	"gitlab.com/superalign/labs/asset-scan-demo/packages/scan_kernel/internal/model"
 )
+
+const memoryPersistenceTag = "Persists into agent memory"
 
 const homeDir = `(?:~|\$HOME|\$\{HOME\}|%USERPROFILE%|/Users/[^/\s"']+|/home/[^/\s"']+|/root)`
 
@@ -117,6 +122,10 @@ func analyzePersistence(item component) []model.Finding {
 		lead := len(trimmed) - len(strings.TrimLeft(trimmed, " \t"))
 		if finding, ok := findingFromStaticMatch(item, pattern, []int{start + lead, start + len(trimmed)}); ok {
 			finding.Explanation += " The skill writes a " + kind + ", which keeps running or applying after this session."
+			if _, review := needsReview(finding); !review && finding.Severity == "HIGH" &&
+				(kind == "agent memory or instruction file" || kind == "global agent configuration") {
+				finding.Tags = append(finding.Tags, memoryPersistenceTag)
+			}
 			findings = append(findings, finding)
 		}
 	}

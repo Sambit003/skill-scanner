@@ -107,6 +107,7 @@ var floorRuleReasons = map[string]string{
 	"YR5": "prompt-injection signature",
 	"SC8": "file only partly scanned because it is over the size limit",
 	"EA6": "hook that sends data or runs fetched code",
+	"RA2": "writes to the agent's memory or instruction files",
 }
 
 // verdictReason names what set the recommendation. A floor names its finding
