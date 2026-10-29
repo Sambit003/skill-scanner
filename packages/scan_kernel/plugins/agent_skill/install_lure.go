@@ -7,8 +7,8 @@ package agentskill
 //   - an archive extracted with a literal password given in the text (which
 //     keeps it from being scanned on the way in), then an executable run;
 //   - a file from a GitHub releases URL, when the text also gives an archive
-//     password, holds a paste-site lure, or makes it a precondition ("before
-//     using the skill").
+//     password, holds a paste-site lure, or has the user run a downloaded
+//     executable as a precondition ("before using the skill").
 // A vendor release ("download ripgrep from its releases page, extract it and
 // run rg.exe"), sharing text to a paste site, and running a script that
 // ships with the skill are not lures.
@@ -126,9 +126,11 @@ func analyzeInstallLures(skill skillInput) []model.Finding {
 		mandatory = mandatory || lureMandatory.MatchString(line.text)
 	}
 	// A release download is a lure with an archive password, a paste-site
-	// lure, or a "before using the skill" precondition. An executable to run
-	// alone is not enough: vendor releases say the same.
-	releaseLure := len(release) > 0 && (len(password) > 0 || len(paste) > 0 || mandatory)
+	// lure, or a downloaded executable the user must run before using the
+	// skill. An executable to run alone is not enough (vendor releases say
+	// the same), nor is a precondition alone (a skill installing its own
+	// CLI).
+	releaseLure := len(release) > 0 && (len(password) > 0 || len(paste) > 0 || (mandatory && len(run) > 0))
 	reported := paste
 	if releaseLure {
 		reported = append(append(append(reported, password...), run...), release...)
