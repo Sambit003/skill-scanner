@@ -39,6 +39,9 @@ type component struct {
 	Executable bool   `json:"executable"`
 	SizeBytes  int    `json:"size_bytes"`
 	Content    string `json:"-"`
+	// LinkTarget is set when the file is a symbolic link to another file
+	// inside the scanned root: the target's path, read at the link's path.
+	LinkTarget string `json:"-"`
 	// fencedBlocks caches fencedCodeBlocks(Content) for one analysis pass.
 	fencedBlocks   []textSpan
 	fencesComputed bool
@@ -53,6 +56,8 @@ type preparedInput struct {
 	// NoManifest is set when the target has no SKILL.md in any letter case;
 	// every file was then selected and the scan reports SC9.
 	NoManifest bool
+	// Links are the symbolic links in scope that leave the root or dangle.
+	Links []symlinkEntry
 }
 
 type skillInput struct {
@@ -86,7 +91,7 @@ func prepare(ctx context.Context, target string, offline bool, scanScope string,
 		return nil, err
 	}
 	prepared := &preparedInput{Root: root, SourceType: sourceType, TempDir: tempDir}
-	allComponents, _, readErr := readComponents(root)
+	allComponents, links, readErr := readComponents(root)
 	if readErr != nil {
 		prepared.cleanup()
 		return nil, readErr
@@ -96,6 +101,7 @@ func prepare(ctx context.Context, target string, offline bool, scanScope string,
 		prepared.cleanup()
 		return nil, err
 	}
+	prepared.Links = selectLinks(links, prepared.Skills, scanScope)
 	prepared.NoManifest = !hasSkillManifest(allComponents)
 	return prepared, nil
 }
@@ -526,7 +532,10 @@ func copyFile(source, destination string) error {
 	return errors.Join(copyErr, output.Close())
 }
 
-func readComponents(root string) ([]component, map[string]any, error) {
+// readComponents reads every file under root. A symbolic link to a file
+// inside root is read at the link's path, with LinkTarget set; links that
+// leave root or dangle are returned apart and never followed.
+func readComponents(root string) ([]component, []symlinkEntry, error) {
 	allowed := map[string]string{
 		".py": "python", ".sh": "shell", ".bash": "shell", ".zsh": "shell",
 		".md": "markdown", ".markdown": "markdown", ".json": "json",
@@ -534,6 +543,7 @@ func readComponents(root string) ([]component, map[string]any, error) {
 		".ts": "typescript", ".txt": "text", ".rb": "ruby", ".go": "go", ".rs": "rust",
 	}
 	var components []component
+	var links []symlinkEntry
 	err := filepath.WalkDir(root, func(path string, entry os.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
@@ -554,19 +564,27 @@ func readComponents(root string) ([]component, map[string]any, error) {
 			kind = "other"
 		}
 		info, err := entry.Info()
+		linkTarget := ""
 		if entry.Type()&os.ModeSymlink != 0 {
+			// A link is never followed outside the scanned root: a link that
+			// leaves it, or dangles, is recorded and reported (SC11).
+			relativePath, _ := filepath.Rel(root, path)
+			raw, _ := os.Readlink(path)
 			resolved, resolveErr := filepath.EvalSymlinks(path)
 			if resolveErr != nil {
+				links = append(links, symlinkEntry{Path: filepath.ToSlash(relativePath), Target: raw, Secret: secretLinkTarget(raw, path), Dangling: true})
 				return nil
 			}
 			relativeTarget, relativeErr := filepath.Rel(root, resolved)
 			if relativeErr != nil || relativeTarget == ".." || strings.HasPrefix(relativeTarget, ".."+string(os.PathSeparator)) {
+				links = append(links, symlinkEntry{Path: filepath.ToSlash(relativePath), Target: raw, Secret: secretLinkTarget(raw, resolved)})
 				return nil
 			}
 			info, err = os.Stat(resolved)
 			if err == nil && info.IsDir() {
 				return nil
 			}
+			linkTarget = filepath.ToSlash(relativeTarget)
 		}
 		if err != nil {
 			return err
@@ -587,7 +605,7 @@ func readComponents(root string) ([]component, map[string]any, error) {
 			Path: filepath.ToSlash(relative), Type: kind, Lines: pythonLineCount(content),
 			Executable: ext == ".py" || ext == ".sh" || ext == ".bash" || ext == ".zsh" ||
 				ext == ".js" || ext == ".ts" || ext == ".rb" || ext == ".go" || ext == ".rs" || ext == ".pl",
-			SizeBytes: len(raw), Content: content,
+			SizeBytes: len(raw), Content: content, LinkTarget: linkTarget,
 		})
 		return nil
 	})
@@ -595,16 +613,8 @@ func readComponents(root string) ([]component, map[string]any, error) {
 		return nil, nil, err
 	}
 	sort.Slice(components, func(i, j int) bool { return components[i].Path < components[j].Path })
-	manifest := map[string]any{}
-	for _, manifestName := range []string{"SKILL.md", "skill.md"} {
-		for _, item := range components {
-			if item.Path == manifestName {
-				manifest = parseFrontmatter(item.Content)
-				return components, manifest, nil
-			}
-		}
-	}
-	return components, manifest, nil
+	sort.Slice(links, func(i, j int) bool { return links[i].Path < links[j].Path })
+	return components, links, nil
 }
 
 // pythonDecodeUTF8 mirrors bytes.decode("utf-8", errors="replace"). Unlike

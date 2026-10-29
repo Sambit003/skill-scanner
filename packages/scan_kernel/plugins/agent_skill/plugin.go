@@ -39,6 +39,7 @@ func (Plugin) Scan(ctx context.Context, request model.ScanRequest) (model.ScanRe
 		return model.ScanResult{}, err
 	}
 	findings = append(findings, analyzeDependencies(ctx, prepared.Components, request.Offline)...)
+	findings = append(findings, analyzeSymlinks(prepared.Links, prepared.Components, prepared.Skills)...)
 	if prepared.NoManifest && len(prepared.Components) > 0 {
 		findings = append(findings, noManifestFinding(prepared.Components))
 	}
