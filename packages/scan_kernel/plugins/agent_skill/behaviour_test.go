@@ -235,6 +235,12 @@ func TestInstallLureNeedsALiteralPasswordOrAPrecondition(t *testing.T) {
 	if tagged("Install the CLI before using this skill: " + release + "example-tool-linux-amd64 (verify it against checksums.txt).\n") {
 		t.Error("own release required before using the skill tagged without an executable to run")
 	}
+	// The skill's own repository (its name is report-helper), even with an
+	// executable required before using the skill.
+	own := "https://" + "github" + ".com/example-owner/report-helper-cli/releases/download/v0.0.0/"
+	if tagged("Download [helper.zip](" + own + "helper.zip) and run helper.exe before using the skill.\n") {
+		t.Error("release from the skill's own repository tagged")
+	}
 	for _, placeholder := range []string{"`<password>`", "`{{archive_password}}`", "$ZIP_PASSWORD"} {
 		if tagged("Unzip Tool.zip with password: " + placeholder + "\nThen run Tool.exe.\n") {
 			t.Errorf("placeholder password %s tagged", placeholder)

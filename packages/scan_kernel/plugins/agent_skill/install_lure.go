@@ -10,8 +10,8 @@ package agentskill
 //     password, holds a paste-site lure, or has the user run a downloaded
 //     executable as a precondition ("before using the skill").
 // A vendor release ("download ripgrep from its releases page, extract it and
-// run rg.exe"), sharing text to a paste site, and running a script that
-// ships with the skill are not lures.
+// run rg.exe"), a release from the skill's own repository, sharing text to a
+// paste site, and running a script that ships with the skill are not lures.
 
 import (
 	"path"
@@ -40,11 +40,33 @@ var (
 	// lureRunExecutable tells the user to run a Windows executable.
 	lureRunExecutable = regexp.MustCompile(`(?i)\b(?:run|launch|execute|open|start|double[- ]?click)\b[^\n]{0,80}?\b([\w./-]+\.(?:exe|msi|bat|scr|ps1|vbs|jar))\b`)
 	// lureReleaseAsset is a file downloaded from a GitHub release.
-	lureReleaseAsset = regexp.MustCompile(`(?i)\bgithub\.com/[\w.-]+/[\w.-]+/releases/(?:latest/)?download/[^\s'"` + "`" + `<>()\[\]]+`)
+	lureReleaseAsset = regexp.MustCompile(`(?i)\bgithub\.com/([\w.-]+)/([\w.-]+)/releases/(?:latest/)?download/[^\s'"` + "`" + `<>()\[\]]+`)
 	// lureMandatory makes a step a precondition of the skill.
 	lureMandatory = regexp.MustCompile(`(?i)\bbefore\s+(?:using|starting|running|launching|you\s+(?:use|start|run))\s+(?:the|this)\s+skill\b` +
 		`|\b(?:skill|it)\s+(?:will\s+not|won'?t|cannot|can'?t|does\s+not|doesn'?t)\s+work\b|\b(?:mandatory|required)\b[^\n]{0,40}\bskill\b`)
 )
+
+var lureNonAlphanumeric = regexp.MustCompile(`[^a-z0-9]+`)
+
+// releaseOwnedBySkill reports a release from the skill's own repository: the
+// repository name contains the skill's name, or the front matter homepage or
+// repository names the account and repository. Such a download is the
+// skill's own binary, never a lure.
+func releaseOwnedBySkill(skill skillInput, account, repository string) bool {
+	normalize := func(text string) string { return lureNonAlphanumeric.ReplaceAllString(strings.ToLower(text), "") }
+	account, repository = normalize(account), normalize(repository)
+	if name, ok := skill.Manifest["name"].(string); ok && len(normalize(name)) >= 3 && strings.Contains(repository, normalize(name)) {
+		return true
+	}
+	for _, key := range []string{"homepage", "repository", "repo", "source", "url"} {
+		if value, ok := skill.Manifest[key].(string); ok {
+			if normalized := normalize(value); strings.Contains(normalized, account) && strings.Contains(normalized, repository) {
+				return true
+			}
+		}
+	}
+	return false
+}
 
 // lureLine is one line of a lure, with the offset of the match on it.
 type lureLine struct {
@@ -120,7 +142,8 @@ func analyzeInstallLures(skill skillInput) []model.Finding {
 				run = append(run, lure{index, match[0], "tells the user to run a downloaded executable"})
 			}
 		}
-		if match := lureReleaseAsset.FindStringIndex(line.text); match != nil {
+		if match := lureReleaseAsset.FindStringSubmatchIndex(line.text); match != nil &&
+			!releaseOwnedBySkill(skill, line.text[match[2]:match[3]], line.text[match[4]:match[5]]) {
 			release = append(release, lure{index, match[0], "makes a file downloaded from a GitHub release a prerequisite"})
 		}
 		mandatory = mandatory || lureMandatory.MatchString(line.text)
