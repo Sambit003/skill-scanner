@@ -105,7 +105,11 @@
         "scanner_version": { "type": "string" },
         "scan_mode": { "type": "string" },
         "scan_scope": { "enum": ["skill_files", "skill_folders", "repository"] },
-        "include_readme": { "type": "boolean" }
+        "include_readme": { "type": "boolean" },
+        "verdict_reason": {
+          "description": "Optional. What set the recommendation: the finding behind a verdict floor, or the risk score and its evidence count.",
+          "type": "string"
+        }
       }
     },
     "counts": { "type": "object", "additionalProperties": { "type": "integer", "minimum": 0 } },

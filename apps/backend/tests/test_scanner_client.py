@@ -170,3 +170,12 @@ async def test_rule_registry_uses_the_same_process_boundary(tmp_path: Path) -> N
     rules = await ScannerClient(executable=executable, timeout_seconds=5).list_rules()
 
     assert [rule.rule_id for rule in rules] == ["P1"]
+
+
+def test_summary_accepts_optional_verdict_reason() -> None:
+    from backend.domain.models.scanner_protocol import ScannerResult
+
+    result = success_payload()["result"]
+    assert ScannerResult.model_validate(result).summary.verdict_reason is None
+    result["summary"]["verdict_reason"] = "DO_NOT_INSTALL: reverse shell (RA3, run.sh:2)"
+    assert ScannerResult.model_validate(result).summary.verdict_reason == "DO_NOT_INSTALL: reverse shell (RA3, run.sh:2)"

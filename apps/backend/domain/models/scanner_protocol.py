@@ -21,6 +21,8 @@ class ScannerSummary(BaseModel):
     scan_mode: str
     scan_scope: Literal["skill_files", "skill_folders", "repository"]
     include_readme: bool
+    # What set the recommendation; optional, not stored yet.
+    verdict_reason: str | None = None
 
 
 class ScannerReport(BaseModel):

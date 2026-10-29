@@ -20,6 +20,14 @@ var (
 	base64ToShell = regexp.MustCompile(`(?i)\bbase64\s+(?:-d|-D|--decode)\b[^\n|]*\|\s*(?:sudo\s+)?(?:/(?:usr/)?bin/)?(?:ba|z)?sh\b` +
 		`|\b(?:(?:ba|z)?sh\s+-c|eval)\s+["']?\$\([^)\n]*\bbase64\s+(?:-d|-D|--decode)\b`)
 	base64Literal = regexp.MustCompile(`[A-Za-z0-9+/]{16,}={0,2}`)
+	// decodeExecCall matches the SC3 code patterns that decode and run in one
+	// call: exec or eval of b64decode, codecs.decode(..., 'hex'),
+	// marshal.loads, compile(... base64), bytes.fromhex, bytearray.fromhex
+	// or zlib/gzip.decompress; eval(atob(...)); new Function(atob(...)); and
+	// (lambda _: exec(...)). A bare marshal.loads, an _0x name, a long hex or
+	// base64 string, __import__('os').system and a prose "decode this and
+	// run" are obfuscation, not a decoded payload run, and stay untagged.
+	decodeExecCall = regexp.MustCompile(`(?i)^(?:(?:exec|eval)\s*\(|new\s+Function\s*\(|\(lambda\s+_:\s*exec\s*\()`)
 )
 
 const decodeDepth = 3

@@ -59,9 +59,9 @@ func TestRiskScoreUsesDiminishingReturns(t *testing.T) {
 
 func TestRiskScorePreservesPythonEmptyMatchedTextDeduplication(t *testing.T) {
 	findings := []model.Finding{
-		{ID: "P1", Severity: "HIGH", Confidence: .5, Finding: "display one", Location: model.Location{File: "a.md", StartLine: 1}},
-		{ID: "P1", Severity: "HIGH", Confidence: .8, Finding: "display two", Location: model.Location{File: "a.md", StartLine: 2}},
-		{ID: "P1", Severity: "HIGH", Confidence: .6, Finding: "display three", Location: model.Location{File: "b.md", StartLine: 1}},
+		{ID: "MP1", Severity: "HIGH", Confidence: .5, Finding: "display one", Location: model.Location{File: "a.md", StartLine: 1}},
+		{ID: "MP1", Severity: "HIGH", Confidence: .8, Finding: "display two", Location: model.Location{File: "a.md", StartLine: 2}},
+		{ID: "MP1", Severity: "HIGH", Confidence: .6, Finding: "display three", Location: model.Location{File: "b.md", StartLine: 1}},
 	}
 	summary := summarize(findings, []component{{Path: "a.md"}, {Path: "b.md"}})
 	if summary.RiskScore != 28 {
@@ -76,8 +76,8 @@ func TestRiskSeverityBandBoundaries(t *testing.T) {
 		findings                       []model.Finding
 		score                          int
 	}{
-		{name: "20", score: 20, severity: "LOW", recommendation: "SAFE", safe: true, findings: []model.Finding{{ID: "P1", Severity: "HIGH", Confidence: .8, MatchedText: "a"}}},
-		{name: "21", score: 21, severity: "MEDIUM", recommendation: "CAUTION", findings: []model.Finding{{ID: "P1", Severity: "HIGH", Confidence: .84, MatchedText: "a"}}},
+		{name: "20", score: 20, severity: "LOW", recommendation: "SAFE", safe: true, findings: []model.Finding{{ID: "MP1", Severity: "HIGH", Confidence: .8, MatchedText: "a"}}},
+		{name: "21", score: 21, severity: "MEDIUM", recommendation: "CAUTION", findings: []model.Finding{{ID: "MP1", Severity: "HIGH", Confidence: .84, MatchedText: "a"}}},
 		{name: "50", score: 50, severity: "MEDIUM", recommendation: "CAUTION", findings: []model.Finding{{ID: "P1", Severity: "CRITICAL", Confidence: 1, MatchedText: "a"}}},
 		{name: "51", score: 51, severity: "HIGH", recommendation: "DO_NOT_INSTALL", findings: []model.Finding{{ID: "P1", Severity: "CRITICAL", Confidence: 1, MatchedText: "a"}, {ID: "P3", Severity: "LOW", Confidence: .2, MatchedText: "b"}}},
 		{name: "80", score: 80, severity: "HIGH", recommendation: "DO_NOT_INSTALL", findings: []model.Finding{{ID: "P1", Severity: "CRITICAL", Confidence: 1, MatchedText: "a"}, {ID: "P3", Severity: "HIGH", Confidence: 1, MatchedText: "b"}, {ID: "P5", Severity: "LOW", Confidence: 1, MatchedText: "c"}}},
@@ -109,8 +109,9 @@ func TestEvidenceGatedRiskScore(t *testing.T) {
 	if summary.ExposureScore != 20.4 {
 		t.Fatalf("exposure score=%v, want 20.4", summary.ExposureScore)
 	}
-	if summary.RiskScore != 29 {
-		t.Fatalf("combined risk score=%d, want 29", summary.RiskScore)
+	// The additive score is 29; the P1 in SKILL.md sets the CAUTION floor.
+	if summary.RiskScore != 30 {
+		t.Fatalf("combined risk score=%d, want the CAUTION floor 30", summary.RiskScore)
 	}
 }
 

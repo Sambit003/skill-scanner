@@ -191,3 +191,30 @@ def test_v2_capabilities_are_opt_in_and_validated() -> None:
     except jsonschema.ValidationError:
         return
     raise AssertionError("a capability entry must not carry finding fields")
+
+
+def test_v2_summary_accepts_optional_verdict_reason() -> None:
+    schema = _schema("response.schema.json", "v2")
+    summary = {
+        "risk_score": 85,
+        "severity": "CRITICAL",
+        "recommendation": "DO_NOT_INSTALL",
+        "safe_to_install": False,
+        "findings_count": 1,
+        "findings_by_severity": {"HIGH": 1},
+        "findings_by_category": {"Supply Chain": 1},
+        "scanner_version": "test",
+        "scan_mode": "deterministic",
+        "scan_scope": "skill_folders",
+        "include_readme": False,
+        "verdict_reason": "DO_NOT_INSTALL: remote code downloaded and run (SC2, SKILL.md:3)",
+    }
+    reports = {"json": {"content": "{}", "content_type": "application/json"}}
+    result = {"kind": "scan", "summary": summary, "findings": [], "reports": reports}
+    jsonschema.validate({"protocol_version": "2", "ok": True, "result": result}, schema)
+    summary["verdict_reason"] = 3
+    try:
+        jsonschema.validate({"protocol_version": "2", "ok": True, "result": result}, schema)
+    except jsonschema.ValidationError:
+        return
+    raise AssertionError("verdict_reason must be a string")

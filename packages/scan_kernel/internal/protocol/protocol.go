@@ -76,6 +76,7 @@ func Execute(parent context.Context, registry *engine.Registry, raw []byte) (Env
 			if request.ProtocolVersion == model.LegacyProtocolVersion {
 				result.Summary.ScanScope = ""
 				result.Summary.IncludeReadme = nil
+				result.Summary.VerdictReason = ""
 			}
 			return success(request.ProtocolVersion, result), 0
 		}

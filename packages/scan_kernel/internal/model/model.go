@@ -134,6 +134,9 @@ type Summary struct {
 	ScanMode           string         `json:"scan_mode"`
 	ScanScope          string         `json:"scan_scope,omitempty"`
 	IncludeReadme      *bool          `json:"include_readme,omitempty"`
+	// VerdictReason names what set the recommendation: the finding behind a
+	// verdict floor, or the risk score and its evidence count.
+	VerdictReason string `json:"verdict_reason,omitempty"`
 }
 
 type Report struct {

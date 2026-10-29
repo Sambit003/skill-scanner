@@ -21,7 +21,8 @@ const (
 	// behaviourDownloadAndRun: remote code fetched and run from an untrusted
 	// origin, or in a place that runs without review.
 	behaviourDownloadAndRun = "download-and-run"
-	// behaviourDecodeToExec: encoded text decoded and run by a shell.
+	// behaviourDecodeToExec: encoded text decoded and run by a shell, or by
+	// exec, eval or new Function in code.
 	behaviourDecodeToExec = "decode-to-exec"
 	// behaviourInstallLure: the user is told to run something fetched from
 	// outside the skill before the skill works.

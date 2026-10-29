@@ -25,7 +25,8 @@
     "scanner_version": "1.0.0",
     "scan_mode": "deterministic",
     "scan_scope": "repository",
-    "include_readme": true
+    "include_readme": true,
+    "verdict_reason": "DO_NOT_INSTALL: credentials sent off the machine (TT3, run.py:11)"
   },
   "findings": [
     {

@@ -701,6 +701,12 @@ func findingFromStaticMatchWithContext(item component, pattern staticPattern, ma
 			finding = markBehaviour(finding, kind)
 		}
 	}
+	if pattern.ID == "SC3" && treatment == exampleNone && !scriptCommentLine(item, match[0]) && decodeExecCall.MatchString(matched) {
+		finding = markBehaviour(finding, behaviourDecodeToExec)
+	}
+	if _, review := needsReview(finding); !review && pattern.ID == "P4" && concealsFromUser(item.Content, match) {
+		finding.Tags = append(finding.Tags, concealmentTag)
+	}
 	return finding, true
 }
 
