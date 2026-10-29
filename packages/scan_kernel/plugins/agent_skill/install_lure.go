@@ -3,15 +3,18 @@ package agentskill
 // Install lures: SKILL.md instructions that make the user run something from
 // outside the skill before the skill works. The code never ships with the
 // skill, so no scan of the skill can review it:
-//   - a script on a paste site, copied and run in a terminal;
-//   - an archive extracted with a password given in the text (which keeps
-//     it from being scanned on the way in), then an executable run;
-//   - a binary or archive from a GitHub releases URL, when the text also
-//     gives an archive password, tells the user to run an executable, or
-//     holds a paste-site lure.
-// A plain "install our CLI from our releases page" is not a lure.
+//   - a script taken from a paste site and run in a terminal;
+//   - an archive extracted with a literal password given in the text (which
+//     keeps it from being scanned on the way in), then an executable run;
+//   - a file from a GitHub releases URL, when the text also gives an archive
+//     password, holds a paste-site lure, or makes it a precondition ("before
+//     using the skill").
+// A vendor release ("download ripgrep from its releases page, extract it and
+// run rg.exe"), sharing text to a paste site, and running a script that
+// ships with the skill are not lures.
 
 import (
+	"path"
 	"regexp"
 	"strings"
 
@@ -20,18 +23,27 @@ import (
 
 var (
 	lureURL = regexp.MustCompile(`(?i)\b(?:https?|ftp)://[^\s'"` + "`" + `<>()\[\]{}]+`)
-	// lureTerminalRun is an instruction to run copied text in a terminal.
-	lureTerminalRun = regexp.MustCompile(`(?i)\b(?:paste|run|execute|enter|type)\b[^\n]{0,80}?\b(?:terminal|shell|command[- ]?line|console|powershell|cmd|command\s+prompt)\b` +
-		`|\bcopy\b[^\n]{0,60}?\b(?:script|command|code|installer|snippet)\b`)
+	// lureTerminalRun is an instruction to run text in a terminal.
+	lureTerminalRun = regexp.MustCompile(`(?i)\b(?:paste|run|execute|enter|type)\b[^\n]{0,80}?\b(?:terminal|shell|command[- ]?line|console|powershell|cmd|command\s+prompt)\b`)
+	// lureToPasteSite is text sent to the URL that follows: "paste it at",
+	// "upload the log to", "share it on a new note in".
+	lureToPasteSite = regexp.MustCompile(`(?i)\b(?:paste|upload|post|share|send|put|save|submit|publish|add)\b[^.!?\n]*\b(?:to|at|on|in|into)\b[^.!?\n]*$`)
 	// lureArchivePassword is a password given in the text: "password: 1234",
 	// "pass = x", "with password x".
-	lureArchivePassword = regexp.MustCompile(`(?i)\b(?:password|passcode|passphrase|pass|pwd)\s*(?:\bis\b|:|=)\s*[*_` + "`" + `'"]*[^\s*_` + "`" + `'"]{1,40}` +
-		`|\bwith\s+(?:the\s+)?(?:password|passcode|pass|pwd)\s+[*_` + "`" + `'"]*[^\s*_` + "`" + `'"]{1,40}`)
-	lureArchive = regexp.MustCompile(`(?i)\b(?:extract|unzip|unpack|unrar|decompress|archive|zip|rar|7z|7-zip)\b`)
+	lureArchivePassword = regexp.MustCompile(`(?i)\b(?:password|passcode|passphrase|pass|pwd)\s*(?:\bis\b|:|=)\s*[*_` + "`" + `'"]*([^\s*_` + "`" + `'"]{1,40})` +
+		`|\bwith\s+(?:the\s+)?(?:password|passcode|pass|pwd)\s+[*_` + "`" + `'"]*([^\s*_` + "`" + `'"]{1,40})`)
+	// lurePasswordPlaceholder is a password that is not given: a variable or
+	// a template placeholder.
+	lurePasswordPlaceholder = regexp.MustCompile(`^(?:\$|%|<|\{|\[)`)
+	// lureExtract is the step that uses the password.
+	lureExtract = regexp.MustCompile(`(?i)\b(?:extract|unzip|unpack|unrar|decompress|7z\s+x)\b`)
 	// lureRunExecutable tells the user to run a Windows executable.
-	lureRunExecutable = regexp.MustCompile(`(?i)\b(?:run|launch|execute|open|start|double[- ]?click)\b[^\n]{0,80}?[\w.-]+\.(?:exe|msi|bat|scr|ps1|vbs|jar)\b`)
+	lureRunExecutable = regexp.MustCompile(`(?i)\b(?:run|launch|execute|open|start|double[- ]?click)\b[^\n]{0,80}?\b([\w./-]+\.(?:exe|msi|bat|scr|ps1|vbs|jar))\b`)
 	// lureReleaseAsset is a file downloaded from a GitHub release.
 	lureReleaseAsset = regexp.MustCompile(`(?i)\bgithub\.com/[\w.-]+/[\w.-]+/releases/(?:latest/)?download/[^\s'"` + "`" + `<>()\[\]]+`)
+	// lureMandatory makes a step a precondition of the skill.
+	lureMandatory = regexp.MustCompile(`(?i)\bbefore\s+(?:using|starting|running|launching|you\s+(?:use|start|run))\s+(?:the|this)\s+skill\b` +
+		`|\b(?:skill|it)\s+(?:will\s+not|won'?t|cannot|can'?t|does\s+not|doesn'?t)\s+work\b|\b(?:mandatory|required)\b[^\n]{0,40}\bskill\b`)
 )
 
 // lureLine is one line of a lure, with the offset of the match on it.
@@ -40,10 +52,23 @@ type lureLine struct {
 	text   string
 }
 
-// analyzeInstallLures reports (SC2, HIGH) each line of an install lure in
-// SKILL.md, tagged install-lure unless it needs review.
-func analyzeInstallLures(item component) []model.Finding {
-	if !isSkillManifestPath(item.Path) {
+// analyzeInstallLures reports (SC2, HIGH) each line of an install lure in a
+// skill's instruction file, tagged install-lure unless it needs review.
+func analyzeInstallLures(skill skillInput) []model.Finding {
+	manifest := skill.ManifestPath
+	if skill.Root != "." {
+		manifest = strings.TrimPrefix(manifest, skill.Root+"/")
+	}
+	var item component
+	shipped := map[string]bool{}
+	for _, candidate := range skill.Components {
+		if candidate.Path == manifest {
+			item = candidate
+		}
+		shipped[strings.ToLower(candidate.Path)] = true
+		shipped[strings.ToLower(path.Base(candidate.Path))] = true
+	}
+	if item.Path == "" {
 		return nil
 	}
 	var lines []lureLine
@@ -69,31 +94,46 @@ func analyzeInstallLures(item component) []model.Finding {
 		reason string
 	}
 	var paste, password, run, release []lure
+	mandatory := false
 	for index, line := range lines {
 		for _, match := range lureURL.FindAllStringIndex(line.text, -1) {
-			if pasteSiteURL(line.text[match[0]:match[1]]) && near(index, 0, 1, lureTerminalRun) {
-				paste = append(paste, lure{index, match[0], "tells the user to copy a script from a paste site and run it in a terminal"})
+			if pasteSiteURL(line.text[match[0]:match[1]]) && !lureToPasteSite.MatchString(line.text[:match[0]]) && near(index, 0, 1, lureTerminalRun) {
+				paste = append(paste, lure{index, match[0], "tells the user to take a script from a paste site and run it in a terminal"})
 				break
 			}
 		}
-		if match := lureArchivePassword.FindStringIndex(line.text); match != nil && near(index, 2, 2, lureArchive) {
-			password = append(password, lure{index, match[0], "gives a password to extract a downloaded archive, which keeps its contents from being scanned"})
+		for _, match := range lureArchivePassword.FindAllStringSubmatchIndex(line.text, -1) {
+			value := ""
+			if match[2] >= 0 {
+				value = line.text[match[2]:match[3]]
+			} else {
+				value = line.text[match[4]:match[5]]
+			}
+			if !lurePasswordPlaceholder.MatchString(value) && !strings.Contains(value, "{{") && near(index, 2, 2, lureExtract) {
+				password = append(password, lure{index, match[0], "gives a password to extract a downloaded archive, which keeps its contents from being scanned"})
+				break
+			}
 		}
-		if match := lureRunExecutable.FindStringIndex(line.text); match != nil {
-			run = append(run, lure{index, match[0], "tells the user to run a downloaded executable"})
+		if match := lureRunExecutable.FindStringSubmatchIndex(line.text); match != nil {
+			file := strings.ToLower(strings.TrimPrefix(line.text[match[2]:match[3]], "./"))
+			if !shipped[file] && !shipped[path.Base(file)] {
+				run = append(run, lure{index, match[0], "tells the user to run a downloaded executable"})
+			}
 		}
 		if match := lureReleaseAsset.FindStringIndex(line.text); match != nil {
-			release = append(release, lure{index, match[0], "makes a binary downloaded from a GitHub release a prerequisite"})
+			release = append(release, lure{index, match[0], "makes a file downloaded from a GitHub release a prerequisite"})
 		}
+		mandatory = mandatory || lureMandatory.MatchString(line.text)
 	}
+	// A release download is a lure with an archive password, a paste-site
+	// lure, or a "before using the skill" precondition. An executable to run
+	// alone is not enough: vendor releases say the same.
+	releaseLure := len(release) > 0 && (len(password) > 0 || len(paste) > 0 || mandatory)
 	reported := paste
-	// A password archive or a release download is a lure together with an
-	// executable to run, or with each other. A release download is also part
-	// of a paste-site lure in the same file.
-	if (len(password) > 0 && (len(run) > 0 || len(release) > 0)) || (len(release) > 0 && len(run) > 0) {
+	if releaseLure {
 		reported = append(append(append(reported, password...), run...), release...)
-	} else if len(paste) > 0 {
-		reported = append(reported, release...)
+	} else if len(password) > 0 && len(run) > 0 {
+		reported = append(append(reported, password...), run...)
 	}
 	var findings []model.Finding
 	seen := map[int]bool{}
@@ -104,7 +144,7 @@ func analyzeInstallLures(item component) []model.Finding {
 		seen[lure.line] = true
 		offset := lines[lure.line].offset + lure.start
 		explanation, remediation := ruleText("SC2")
-		explanation += " This SKILL.md " + lure.reason + " before the skill works: the code is not part of the skill, so it cannot be reviewed."
+		explanation += " This skill " + lure.reason + " before the skill works: the code is not part of the skill, so it cannot be reviewed."
 		matched := truncateRunes(strings.TrimSpace(lines[lure.line].text), 200)
 		finding := model.Finding{ID: "SC2", Category: "Supply Chain", Pattern: "Install Lure", Severity: "HIGH", Confidence: .9,
 			Location: model.Location{File: item.Path, StartLine: lure.line + 1}, Finding: matched, MatchedText: matched,

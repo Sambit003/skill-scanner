@@ -71,7 +71,8 @@ var (
 )
 
 // untrustedOrigin reports a URL that no vendor installer is served from: plain
-// http or ftp, a raw IP address, or a paste site.
+// http or ftp, a raw IP address, or a paste site. Loopback origins are left
+// out by downloadAndRunOrigins.
 func untrustedOrigin(raw string) bool {
 	candidate := strings.TrimRight(raw, ".,:")
 	if !strings.Contains(candidate, "://") {
@@ -88,12 +89,55 @@ func untrustedOrigin(raw string) bool {
 	return !strings.EqualFold(parsed.Scheme, "https") || net.ParseIP(host) != nil || pasteSiteHost.MatchString(host)
 }
 
+// loopbackOrigin reports a URL on this machine: localhost, 127.0.0.0/8 or
+// ::1, a local development server rather than a remote origin.
+func loopbackOrigin(raw string) bool {
+	candidate := strings.TrimRight(raw, ".,:")
+	if !strings.Contains(candidate, "://") {
+		candidate = "http://" + candidate
+	}
+	parsed, err := url.Parse(candidate)
+	if err != nil {
+		return false
+	}
+	host := strings.ToLower(strings.TrimSuffix(parsed.Hostname(), "."))
+	if host == "localhost" || strings.HasSuffix(host, ".localhost") {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
+}
+
+// interpreterCodeFlag matches the flag that follows a piped-to interpreter
+// when the interpreter takes its code from that flag and reads the download
+// only as data: sh -c, python -c or -m, node -e, -p, --eval or --print,
+// perl -e or -E, ruby -e.
+var interpreterCodeFlag = regexp.MustCompile(`(?i)^(?:(?:ba|z|da|k)?sh\s+-c\b|python[0-9.]*\s+-[cm]\b|node\s+(?:-[ep]\b|--(?:eval|print)\b)|perl\s+-[a-z]*e\b|ruby\s+-[a-z]*e\b)`)
+
+// pipeTarget matches the interpreter at the end of a curl|wget pipe match.
+var pipeTarget = regexp.MustCompile(`(?i)\|\s*(?:sudo\s+)?(?:/(?:usr/)?bin/)?((?:ba|z|da|k)?sh|python[0-9.]*|node|perl|ruby)$`)
+
 // downloadAndRunOrigins returns the download-and-run commands in text and
-// whether any of them fetches from an untrusted origin.
+// whether any of them fetches from an untrusted origin. A command that only
+// fetches from this machine, or pipes the download to an interpreter whose
+// code comes from a flag, does not run the download and is left out.
 func downloadAndRunOrigins(text string) (commands []string, untrusted bool) {
-	for _, command := range downloadAndRunCommand.FindAllString(text, -1) {
+	for _, match := range downloadAndRunCommand.FindAllStringIndex(text, -1) {
+		command := text[match[0]:match[1]]
+		if target := pipeTarget.FindStringSubmatchIndex(command); target != nil &&
+			interpreterCodeFlag.MatchString(command[target[2]:target[3]]+text[match[1]:]) {
+			continue
+		}
+		origins := originURL.FindAllString(command, -1)
+		local := len(origins) > 0
+		for _, origin := range origins {
+			local = local && loopbackOrigin(origin)
+		}
+		if local {
+			continue
+		}
 		commands = append(commands, command)
-		for _, origin := range originURL.FindAllString(command, -1) {
+		for _, origin := range origins {
 			if untrustedOrigin(origin) {
 				untrusted = true
 			}
