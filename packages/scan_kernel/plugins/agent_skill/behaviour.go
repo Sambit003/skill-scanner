@@ -26,6 +26,9 @@ const (
 	// behaviourInstallLure: the user is told to run something fetched from
 	// outside the skill before the skill works.
 	behaviourInstallLure = "install-lure"
+	// behaviourReverseShell: an interactive shell wired to an outbound
+	// connection.
+	behaviourReverseShell = "reverse-shell"
 )
 
 // behaviourOf returns the behaviour kind a finding carries, if any.

@@ -93,6 +93,7 @@ var ruleExplanations = map[string]string{
 	"SC12":  "The file names offensive security tools: penetration-testing or exploit frameworks, credential dumpers, network scanners or cryptocurrency miners. Security skills often describe these tools, so the name alone is a note, not a sign of malware. What the skill actually runs is checked by the other rules.",
 	"SC13":  "The skill ships a compiled program (ELF, Mach-O or Windows PE) or an archive (zip, gzip, 7z, rar), recognised by its first bytes. The scanner never unpacks, parses or runs it, so what it does was not checked. When SKILL.md tells the agent or the user to run the program, or to extract the archive, the finding is HIGH.",
 	"SC14":  "The skill ships a PowerShell or batch script (MEDIUM), or a file uses a Windows technique common in droppers (HIGH): certutil -decode or -urlcache, bitsadmin /transfer, a process started with a hidden window, or a PowerShell -EncodedCommand that hides the command it runs. PowerShell download cradles are reported as SC2 and an encoded command that downloads and runs code as SC3.",
+	"RA3":   "A reverse shell connects out to a remote host and wires an interactive shell to the connection, so whoever listens there can run any command on this machine. Forms covered: bash /dev/tcp, nc or ncat -e, a shell piped to nc or openssl, socat exec, Python, Perl, Ruby, PHP and Node.js sockets wired to a shell, and a PowerShell TCPClient loop, including base64 or -EncodedCommand payloads that decode to one. A description in documentation, a table, or a lab example aimed at a placeholder or private address is reported but not marked as malicious behaviour.",
 }
 
 var ruleTitles = map[string]string{
@@ -188,6 +189,7 @@ var ruleTitles = map[string]string{
 	"SC12":  "Mentions Offensive Tooling",
 	"SC13":  "Bundled Program or Archive",
 	"SC14":  "Bundled Windows Script",
+	"RA3":   "Reverse Shell",
 }
 
 var ruleRemediations = map[string]string{
@@ -283,4 +285,5 @@ var ruleRemediations = map[string]string{
 	"SC12":  "Check that the skill's purpose explains why it names these tools, and that it does not run them against systems the user has not authorized.",
 	"SC13":  "Ship source code or scripts the reader can review instead of binaries, or name where the program comes from and how to verify it (a signed release with checksums). Never ask the agent to run a shipped binary.",
 	"SC14":  "Keep Windows scripts readable and plain: no encoded commands, hidden windows or download utilities. Prefer a documented installer from the vendor over a script that fetches and starts programs.",
+	"RA3":   "Remove the reverse shell. A skill never needs to hand an interactive shell to a remote host.",
 }

@@ -61,6 +61,7 @@ var scoringRulePolicies = map[string]rulePolicy{
 	"SC12": {ruleHygiene, contextAny},
 	"SC13": {ruleCapability, contextAny},
 	"SC14": {ruleCapability, contextAny},
+	"RA3":  {ruleEvidence, contextAny},
 }
 
 func classifyRule(id string) rulePolicy {

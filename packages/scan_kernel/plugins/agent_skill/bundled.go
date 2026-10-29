@@ -155,8 +155,9 @@ func decodeUTF16Base64(literal string) (string, bool) {
 
 // analyzeEncodedPowerShell reports a PowerShell -EncodedCommand. One whose
 // decoded text downloads and runs remote code is SC3 CRITICAL, tagged
-// decode-to-exec; any other is SC14 HIGH, since the command it runs is
-// hidden from a reader.
+// decode-to-exec, and one that opens a reverse shell is RA3 CRITICAL, tagged
+// reverse-shell; any other is SC14 HIGH, since the command it runs is hidden
+// from a reader.
 func analyzeEncodedPowerShell(item component) []model.Finding {
 	var findings []model.Finding
 	for _, match := range encodedPowerShell.FindAllStringSubmatchIndex(item.Content, -1) {
@@ -165,18 +166,24 @@ func analyzeEncodedPowerShell(item component) []model.Finding {
 		}
 		decoded, ok := decodeUTF16Base64(item.Content[match[2]:match[3]])
 		lineNumber := 1 + strings.Count(item.Content[:match[0]], "\n")
-		matched := truncateRunes(strings.TrimSpace(item.Content[match[0]:match[1]]), 200)
+		line := lineSnippet(item.Content, lineNumber)
 		context := contextAtOffset(item.Content, match[0], 3)
-		finding := model.Finding{Category: "Supply Chain", Confidence: .9, Location: model.Location{File: item.Path, StartLine: lineNumber},
-			Finding: matched, MatchedText: matched, CodeSnippet: context, Tags: []string{"Supply Chain"}}
-		commands, _ := downloadAndRunOrigins(decoded)
-		if ok && len(commands) > 0 {
-			finding.ID, finding.Pattern, finding.Severity, finding.Confidence = "SC3", "Encoded Download and Execute", "CRITICAL", .95
-			finding.Explanation, finding.Remediation = ruleText("SC3")
-			finding.Explanation += " The encoded PowerShell command decodes to a command that downloads and runs remote code: " +
-				truncateRunes(strings.Join(strings.Fields(decoded), " "), 200)
+		payload := ""
+		if ok {
+			if commands, _ := downloadAndRunOrigins(decoded); len(commands) > 0 {
+				payload = behaviourDownloadAndRun
+			} else if _, shell := reverseShellAt(decoded); shell != nil {
+				payload = behaviourReverseShell
+			}
+		}
+		var finding model.Finding
+		if payload != "" {
+			finding = decodedPayloadFinding(item, match[0], lineNumber, line, decoded, payload, "encoded PowerShell command")
 		} else {
-			finding.ID, finding.Pattern, finding.Severity = "SC14", "Encoded PowerShell Command", "HIGH"
+			matched := truncateRunes(strings.TrimSpace(item.Content[match[0]:match[1]]), 200)
+			finding = model.Finding{ID: "SC14", Category: "Supply Chain", Pattern: "Encoded PowerShell Command", Severity: "HIGH",
+				Confidence: .9, Location: model.Location{File: item.Path, StartLine: lineNumber}, Finding: matched, MatchedText: matched,
+				CodeSnippet: context, Tags: []string{"Supply Chain"}}
 			finding.Explanation, finding.Remediation = ruleText("SC14")
 			if ok {
 				finding.Explanation += " It decodes to: " + truncateRunes(strings.Join(strings.Fields(decoded), " "), 200)
@@ -185,8 +192,12 @@ func analyzeEncodedPowerShell(item component) []model.Finding {
 		if reason := proseReviewReason(item, finding.ID, match[0]); reason != "" {
 			finding = markForReview(finding, reason)
 		}
-		if finding.ID == "SC3" && exampleTreatmentAt(item, match[0], context, isCodeExample) == exampleNone {
-			finding = markBehaviour(finding, behaviourDecodeToExec)
+		if payload != "" && exampleTreatmentAt(item, match[0], context, isCodeExample) == exampleNone {
+			kind := behaviourDecodeToExec
+			if payload == behaviourReverseShell {
+				kind = behaviourReverseShell
+			}
+			finding = markBehaviour(finding, kind)
 		}
 		findings = append(findings, finding)
 	}
