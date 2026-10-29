@@ -5,6 +5,9 @@ package agentskill
 // crontab entries, shell startup files, and the agent's own memory and
 // instruction files. RA2 reports these at HIGH without a behaviour tag; when
 // the persisted command is itself malicious, its own finding carries the tag.
+// A HIGH write to the agent's memory or instruction files or its global
+// configuration carries memoryPersistenceTag, which sets a CAUTION floor on
+// the verdict (see findingTier).
 
 import (
 	"regexp"
@@ -12,6 +15,8 @@ import (
 
 	"gitlab.com/superalign/labs/asset-scan-demo/packages/scan_kernel/internal/model"
 )
+
+const memoryPersistenceTag = "Persists into agent memory"
 
 const homeDir = `(?:~|\$HOME|\$\{HOME\}|%USERPROFILE%|/Users/[^/\s"']+|/home/[^/\s"']+|/root)`
 
@@ -23,38 +28,43 @@ var persistenceTargets = []struct{ kind, location string }{
 	{"cron entry", `(?:/etc/cron(?:tab\b|\.d/|\.(?:hourly|daily|weekly|monthly)/)|/var/spool/cron/)[^\s"'` + "`" + `]*`},
 	{"shell startup file", `(?:` + homeDir + `/|\B)\.(?:bashrc|zshrc|profile|bash_profile|bash_login|zprofile|zshenv|zlogin)\b`},
 	{"global agent configuration", homeDir + `/\.(?:claude/(?:CLAUDE\.md|settings(?:\.local)?\.json|projects/[^\s"'` + "`" + `]*/memory/[^\s"'` + "`" + `]*)|claude\.json|codex/(?:AGENTS\.md|config\.toml)|gemini/(?:GEMINI\.md|settings\.json)|cursor/rules/[^\s"'` + "`" + `]*)`},
-	{"agent memory or instruction file", `(?:[^\s"'` + "`" + `(]*/)?(?:MEMORY|CLAUDE|AGENTS|GEMINI)\.md\b|\.cursorrules\b`},
+	{"agent memory or instruction file", `(?:[^\s"'` + "`" + `(]*/)?(?:MEMORY|CLAUDE|AGENTS|GEMINI|copilot-instructions)\.md\b|\.cursorrules\b`},
 }
 
-// persistenceWriteTo returns a pattern for a write whose destination is the
-// location: a shell redirect, tee, cp/mv/install/ln destination, a file
-// opened for writing or a file-write call naming it, or an instruction to
-// append, add, write, insert or save something to it.
-func persistenceWriteTo(location string) *regexp.Regexp {
+// persistenceWriteTo returns patterns for a write whose destination is the
+// location. In code: a shell redirect, tee, cp/mv/install/ln destination, a
+// file opened for writing or a file-write call naming it. In an instruction
+// file, also an instruction to append, add, write, insert, put, save or
+// update something to it; between the verb and the location it may quote the
+// text to write and name files (a dot ends the sentence only before a space),
+// within 80 characters, a quotation counting as one. A docstring or string in
+// code that says so is not a write.
+func persistenceWriteTo(location string) (code, instruction *regexp.Regexp) {
 	quote := `["'` + "`" + `]?`
-	return regexp.MustCompile(`(?i)(?:^|[^\d&>=-])>>?\s*` + quote + `(?:` + location + `)` +
+	sentence := `(?:[^."\n]|\.\S|"[^"\n]*"){0,80}?`
+	owner := `(?:the\s+|your\s+|a\s+|their\s+|this\s+)?(?:(?:project|user|repository|repo|workspace)'?s\s+|global\s+)?`
+	codeWrite := `(?:^|[^\d&>=-])>>?\s*` + quote + `(?:` + location + `)` +
 		`|\btee\s+(?:-a\s+)?` + quote + `(?:` + location + `)` +
 		`|\b(?:cp|mv|install|ln)\b[^\n;&|]*\s` + quote + `(?:` + location + `)` + quote + `\s*(?:$|[;&|)])` +
 		`|\bopen\s*\([^\n]*?(?:` + location + `)[^\n]*?,\s*["'](?:a|w)` +
 		`|\b(?:write_?(?:text|bytes)|writeFile(?:Sync)?|appendFile(?:Sync)?)\s*\(\s*[^,)\n]*(?:` + location + `)` +
-		`|\bPath\s*\([^)\n]*(?:` + location + `)[^)\n]*\)\.(?:write_text|write_bytes|open\s*\(\s*["'](?:a|w))` +
-		`|\b(?:append|add|write|insert|prepend|save|inject)\b[^.\n]{0,80}?\b(?:to|into|in)\s+(?:the\s+|your\s+|a\s+|their\s+)?(?:project'?s\s+|user'?s\s+|global\s+)?` + quote + `(?:` + location + `)`)
+		`|\bPath\s*\([^)\n]*(?:` + location + `)[^)\n]*\)\.(?:write_text|write_bytes|open\s*\(\s*["'](?:a|w))`
+	instructionWrite := `\b(?:append|add|write|insert|prepend|put|save|inject|update)\b` + sentence + `\b(?:to|into|in)\s+` + owner + quote + `(?:` + location + `)` +
+		`|\bupdate\s+` + owner + quote + `(?:` + location + `)`
+	return regexp.MustCompile(`(?i)` + codeWrite), regexp.MustCompile(`(?i)` + codeWrite + `|` + instructionWrite)
+}
+
+type persistenceWrite struct {
+	kind              string
+	code, instruction *regexp.Regexp
 }
 
 var (
-	persistenceWrites = func() []struct {
-		kind  string
-		write *regexp.Regexp
-	} {
-		var writes []struct {
-			kind  string
-			write *regexp.Regexp
-		}
+	persistenceWrites = func() []persistenceWrite {
+		var writes []persistenceWrite
 		for _, target := range persistenceTargets {
-			writes = append(writes, struct {
-				kind  string
-				write *regexp.Regexp
-			}{target.kind, persistenceWriteTo(target.location)})
+			code, instruction := persistenceWriteTo(target.location)
+			writes = append(writes, persistenceWrite{target.kind, code, instruction})
 		}
 		return writes
 	}()
@@ -70,8 +80,16 @@ var (
 	shellEnvironmentSetup = regexp.MustCompile(`(?i)\bexport\s+\w+=|\bPATH=|\balias\s+\w+=|\bcompletion\b|\beval\s+["']?\$\(\s*\S+\s+(?:init|shellenv|env|hook)\b|\bsource\s+\S+(?:env|\.sh)\b`)
 	// onUserRequest conditions a step on the user asking for it.
 	onUserRequest = regexp.MustCompile(`(?i)\b(?:if|when|only\s+if|once|after)\s+(?:the\s+)?user\s+(?:explicitly\s+)?(?:asks?|requests?|wants?|says|agrees?|approves?|confirms?|opts?\s+in)\b|\bon\s+(?:the\s+user'?s\s+)?(?:explicit\s+)?request\b|\b(?:ask|confirm\s+with)\s+the\s+user\b|\bwith\s+the\s+user'?s\s+(?:approval|permission|consent|confirmation)\b|\buser\s+(?:explicitly\s+)?(?:asks|requests)\b|\bwhen\s+asked\b`)
-	// persistenceStealth hides the step or makes it apply to all later work.
-	persistenceStealth = regexp.MustCompile(`(?i)\b(?:never|don'?t|do\s+not)\s+(?:mention|tell|reveal|show|disclose)\b|\bwithout\s+(?:telling|asking|informing|notifying)\b|\bsilently\b|\bquietly\b|\b(?:every|all)\s+(?:future|later|subsequent)\b|\bfrom\s+now\s+on\b`)
+	// persistenceHiding hides the step from the user, anywhere in its
+	// paragraph.
+	persistenceHiding = regexp.MustCompile(`(?i)\b(?:never|don'?t|do\s+not)\s+(?:mention|tell|reveal|show|disclose)\b|\bwithout\s+(?:telling|asking|informing|notifying|mentioning|alerting)\b`)
+	// persistenceSilentOrLasting makes the step silent or apply to all later
+	// work, in the sentence that asks for it ("run the tests quietly" in the
+	// sentence before does not).
+	persistenceSilentOrLasting = regexp.MustCompile(`(?i)\bsilently\b|\bquietly\b|\b(?:every|all)\s+(?:future|later|subsequent)\b|\bfrom\s+now\s+on\b`)
+	// blockStart begins a Markdown block: a list item, heading, quote, table
+	// row or code fence.
+	blockStart = regexp.MustCompile(`^[ \t]*(?:[-*+>#|]|\d+[.)]|` + "```" + `)`)
 )
 
 // analyzePersistence reports (RA2) each line of a file that writes a
@@ -88,10 +106,14 @@ func analyzePersistence(item component) []model.Finding {
 	for _, line := range strings.SplitAfter(item.Content, "\n") {
 		start := offset
 		offset += len(line)
-		kind := ""
+		kind, match := "", []int{0, len(line)}
 		for _, target := range persistenceWrites {
-			if target.write.MatchString(line) {
-				kind = target.kind
+			write := target.code
+			if item.Type == "markdown" || item.Type == "text" {
+				write = target.instruction
+			}
+			if found := write.FindStringIndex(line); found != nil {
+				kind, match = target.kind, found
 				break
 			}
 		}
@@ -108,7 +130,9 @@ func analyzePersistence(item component) []model.Finding {
 		if item.Type == "markdown" || item.Type == "text" {
 			paragraph := lineWindow(item.Content, start, 4)
 			ownFiles := kind == "agent memory or instruction file"
-			if (ownFiles || onUserRequest.MatchString(paragraph)) && !persistenceStealth.MatchString(paragraph) {
+			stealth := persistenceHiding.MatchString(paragraph) ||
+				persistenceSilentOrLasting.MatchString(sentenceAround(item.Content, start+match[0], start+match[1]))
+			if (ownFiles || onUserRequest.MatchString(paragraph)) && !stealth {
 				severity = "MEDIUM"
 			}
 		}
@@ -117,8 +141,49 @@ func analyzePersistence(item component) []model.Finding {
 		lead := len(trimmed) - len(strings.TrimLeft(trimmed, " \t"))
 		if finding, ok := findingFromStaticMatch(item, pattern, []int{start + lead, start + len(trimmed)}); ok {
 			finding.Explanation += " The skill writes a " + kind + ", which keeps running or applying after this session."
+			if _, review := needsReview(finding); !review && finding.Severity == "HIGH" && writeTakesEffect(item, start+lead) &&
+				(kind == "agent memory or instruction file" || kind == "global agent configuration") {
+				finding.Tags = append(finding.Tags, memoryPersistenceTag)
+			}
 			findings = append(findings, finding)
 		}
 	}
 	return findings
+}
+
+// writeTakesEffect reports a line whose write happens when the skill is used:
+// in an instruction file the agent follows, or in code that runs, apart from
+// a script comment line. A write in HTML, JSON or another data file only
+// describes one.
+func writeTakesEffect(item component, offset int) bool {
+	if item.Type == "markdown" || item.Type == "text" {
+		return true
+	}
+	return (isSourceCodeType(item.Type) || isScriptFile(item)) && !scriptCommentLine(item, offset)
+}
+
+// sentenceAround returns the sentence of text that holds text[from:to]: it
+// ends at a period, question or exclamation mark before whitespace, a blank
+// line, or the start of a Markdown block.
+func sentenceAround(text string, from, to int) string {
+	start := from
+	for start > 0 && !sentenceBreak(text, start-1) {
+		start--
+	}
+	end := to
+	for end < len(text) && !sentenceBreak(text, end) {
+		end++
+	}
+	return text[start:end]
+}
+
+func sentenceBreak(text string, index int) bool {
+	switch text[index] {
+	case '.', '!', '?':
+		return index+1 == len(text) || strings.ContainsRune(" \t\r\n", rune(text[index+1]))
+	case '\n':
+		next := text[index+1:]
+		return strings.TrimSpace(strings.SplitN(next, "\n", 2)[0]) == "" || blockStart.MatchString(next)
+	}
+	return false
 }
