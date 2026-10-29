@@ -141,8 +141,8 @@ var tierFloors = map[ruleTier]int{tierCaution: 30, tierCritical: 85}
 // criticalRules set the DO_NOT_INSTALL floor by rule ID at or above the given
 // severity, apart from any behaviour marker: TT3 CRITICAL sends cloud
 // secrets, several credentials, or any credential to a collection host or raw
-// IP address; SC3 runs decoded or unmarshalled code.
-var criticalRules = map[string]string{"TT3": "CRITICAL", "SC3": "LOW"}
+// IP address. SC3 sets the floor only through its decode-to-exec marker.
+var criticalRules = map[string]string{"TT3": "CRITICAL"}
 
 // cautionRules set the CAUTION floor in any file at or above the given
 // severity: SC8 is a file only partly scanned, and EA6 at HIGH a hook that

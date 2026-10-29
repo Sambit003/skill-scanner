@@ -86,7 +86,7 @@ func floorFindingBefore(left, right model.Finding) bool {
 // verdict_reason; other rules fall back to their catalog title.
 var behaviourReasons = map[string]string{
 	behaviourDownloadAndRun:         "remote code downloaded and run",
-	behaviourDecodeToExec:           "decoded payload piped to a shell",
+	behaviourDecodeToExec:           "encoded payload decoded and run",
 	behaviourInstallLure:            "install step that runs code fetched from outside the skill",
 	behaviourReverseShell:           "reverse shell",
 	behaviourCredentialExfiltration: "credentials sent off the machine",
@@ -95,7 +95,6 @@ var behaviourReasons = map[string]string{
 
 var floorRuleReasons = map[string]string{
 	"TT3": "credentials sent off the machine",
-	"SC3": "obfuscated code decoded and run",
 	"P1":  "instruction to ignore previous instructions",
 	"P2":  "hidden instructions",
 	"P3":  "instruction to send conversation or user data to an external destination",

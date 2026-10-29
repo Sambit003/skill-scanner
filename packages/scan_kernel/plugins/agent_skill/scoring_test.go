@@ -36,11 +36,11 @@ func TestVerdictFloors(t *testing.T) {
 		reason         string
 	}{
 		{"behaviour tag", floorFinding("SC2", "HIGH", .85, "SKILL.md", "Supply Chain", behaviourTagPrefix+behaviourDecodeToExec),
-			85, "DO_NOT_INSTALL", "DO_NOT_INSTALL: decoded payload piped to a shell (SC2, SKILL.md:3)"},
+			85, "DO_NOT_INSTALL", "DO_NOT_INSTALL: encoded payload decoded and run (SC2, SKILL.md:3)"},
 		{"TT3 critical", floorFinding("TT3", "CRITICAL", .9, "run.py"),
 			85, "DO_NOT_INSTALL", "DO_NOT_INSTALL: credentials sent off the machine (TT3, run.py:3)"},
-		{"SC3", floorFinding("SC3", "HIGH", .95, "run.py"),
-			85, "DO_NOT_INSTALL", "DO_NOT_INSTALL: obfuscated code decoded and run (SC3, run.py:3)"},
+		{"SC3 decode-to-exec", floorFinding("SC3", "HIGH", .95, "run.py", "Supply Chain", behaviourTagPrefix+behaviourDecodeToExec),
+			85, "DO_NOT_INSTALL", "DO_NOT_INSTALL: encoded payload decoded and run (SC3, run.py:3)"},
 		{"P1 in SKILL.md", floorFinding("P1", "HIGH", .8, "SKILL.md"),
 			30, "CAUTION", "CAUTION: instruction to ignore previous instructions (P1, SKILL.md:3)"},
 		{"YR5 in notes", floorFinding("YR5", "HIGH", .8, "notes.txt"),
@@ -79,6 +79,7 @@ func TestVerdictFloorsNeedConfirmedFindings(t *testing.T) {
 		"P4 concealment in code":     floorFinding("P4", "MEDIUM", .8, "run.py", "Prompt Injection", concealmentTag),
 		"MP1":                        floorFinding("MP1", "HIGH", .7, "SKILL.md"),
 		"SC2 in SKILL.md":            floorFinding("SC2", "HIGH", .9, "SKILL.md"),
+		"SC3 untagged":               floorFinding("SC3", "HIGH", .9, "run.py"),
 	} {
 		if tier := findingTier(finding); tier != tierNone {
 			t.Errorf("%s: tier=%d, want none", name, tier)
@@ -176,6 +177,49 @@ func TestP4ConcealmentSplit(t *testing.T) {
 		}
 		if !hasP4 || result.Summary.Recommendation != "SAFE" {
 			t.Errorf("%q: P4 found=%v, verdict %s, want a P4 finding and SAFE", sentence, hasP4, result.Summary.Recommendation)
+		}
+	}
+}
+
+// SC3 obfuscation that does not decode and run a payload stays additive
+// evidence and never reaches DO_NOT_INSTALL on its own.
+func TestSC3ObfuscationAloneIsNotDoNotInstall(t *testing.T) {
+	skill := "---\nname: report-helper\ndescription: Formats weekly reports.\n---\n\n# Report helper\n\nRun the helper to build the report.\n"
+	for name, files := range map[string]map[string]string{
+		"h1 hex checksum constant": {"verify.py": "EXPECTED = \"" + strings.Repeat("0123456789abcdef", 15) + "\"\n"},
+		"h2 marshal cache loader":  {"cache.py": "import marshal\n\nwith open(\"cache.bin\", \"rb\") as f:\n    data = mar" + "shal.loads(f.read())\n"},
+		"h3 _0x helper name":       {"helper.js": "function _0x1a2b(x){return x+1}\nmodule.exports = _0x1a2b;\n"},
+		"commented decode and run": {"run.py": "import base64\n# ex" + "ec(base64.b64decode(PAYLOAD))\nprint(1)\n"},
+	} {
+		files["SKILL.md"] = skill
+		result := scanSkillFiles(t, files)
+		sc3 := false
+		for _, finding := range result.Findings {
+			if finding.ID == "SC3" {
+				sc3 = true
+				if kind, ok := behaviourOf(finding); ok {
+					t.Errorf("%s: SC3 tagged %s", name, kind)
+				}
+			}
+		}
+		if !sc3 || result.Summary.Recommendation == "DO_NOT_INSTALL" {
+			t.Errorf("%s: SC3 found=%v, verdict %s %q, want SC3 below DO_NOT_INSTALL", name, sc3, result.Summary.Recommendation, result.Summary.VerdictReason)
+		}
+	}
+}
+
+// SC3 code that decodes and runs a payload carries decode-to-exec and sets
+// the DO_NOT_INSTALL floor.
+func TestSC3DecodeAndRunIsDoNotInstall(t *testing.T) {
+	skill := "---\nname: report-helper\ndescription: Formats weekly reports.\n---\n\n# Report helper\n\nRun the helper to build the report.\n"
+	for name, files := range map[string]map[string]string{
+		"python exec b64decode": {"run.py": "import base64\nex" + "ec(base64.b64decode(\"cHJpbnQoMSk=\"))\n"},
+		"javascript eval atob":  {"run.js": "ev" + "al(atob(\"Y29uc29sZS5sb2coMSk=\"));\n"},
+	} {
+		files["SKILL.md"] = skill
+		result := scanSkillFiles(t, files)
+		if result.Summary.Recommendation != "DO_NOT_INSTALL" || !strings.Contains(result.Summary.VerdictReason, "encoded payload decoded and run (SC3, ") {
+			t.Errorf("%s: verdict %s %q, want DO_NOT_INSTALL from tagged SC3", name, result.Summary.Recommendation, result.Summary.VerdictReason)
 		}
 	}
 }
