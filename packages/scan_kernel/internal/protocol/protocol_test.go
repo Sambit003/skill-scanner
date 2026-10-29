@@ -41,6 +41,10 @@ func TestProtocolSmoke(t *testing.T) {
 	if err != nil || !json.Valid(raw) {
 		t.Fatalf("invalid envelope: %v", err)
 	}
+	// The v1 summary schema has no verdict_reason.
+	if result, ok := envelope.Result.(model.ScanResult); !ok || result.Summary.VerdictReason != "" {
+		t.Fatalf("v1 summary carries verdict_reason: %+v", envelope.Result)
+	}
 }
 
 func TestProtocolV2ScanScope(t *testing.T) {
@@ -53,6 +57,9 @@ func TestProtocolV2ScanScope(t *testing.T) {
 	result, ok := envelope.Result.(model.ScanResult)
 	if !ok || result.Summary.ScanScope != model.ScanScopeSkillFolders || result.Summary.IncludeReadme == nil || *result.Summary.IncludeReadme {
 		t.Fatalf("v2 scope metadata missing: %+v", envelope.Result)
+	}
+	if result.Summary.VerdictReason == "" {
+		t.Fatalf("v2 summary is missing verdict_reason: %+v", result.Summary)
 	}
 	if report := result.Reports["json"].Content; !strings.Contains(report, `"scan_scope": "skill_folders"`) || !strings.Contains(report, `"include_readme": false`) {
 		t.Fatalf("v2 JSON report is missing scope metadata: %s", report)

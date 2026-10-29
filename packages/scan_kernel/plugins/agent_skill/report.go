@@ -35,6 +35,8 @@ func summarize(findings []model.Finding, items []component) model.Summary {
 	exposure := computeExposureScore(capabilities, len(items))
 	combined := float64(vulnerability) + (1-float64(vulnerability)/100)*.30*exposure
 	risk := min(100, max(0, int(combined)))
+	tier, floorFinding := verdictFloor(findings)
+	risk = max(risk, tierFloors[tier])
 	severity, recommendation := riskBand(risk)
 
 	bySeverity, byCategory := map[string]int{}, map[string]int{}
@@ -45,7 +47,92 @@ func summarize(findings []model.Finding, items []component) model.Summary {
 	return model.Summary{RiskScore: risk, VulnerabilityScore: vulnerability, ExposureScore: exposure,
 		Severity: severity, Recommendation: recommendation, SafeToInstall: risk <= 20,
 		FindingsCount: len(findings), FindingsBySeverity: bySeverity, FindingsByCategory: byCategory,
-		ScannerVersion: scannerVersion, ScanMode: "deterministic"}
+		ScannerVersion: scannerVersion, ScanMode: "deterministic",
+		VerdictReason: verdictReason(recommendation, risk, tier, floorFinding, len(evidence))}
+}
+
+// verdictFloor returns the highest tier any finding sets and the finding that
+// sets it: the most severe, then the most confident, then the first by file
+// and line.
+func verdictFloor(findings []model.Finding) (ruleTier, model.Finding) {
+	best, bestFinding := tierNone, model.Finding{}
+	for _, finding := range findings {
+		tier := findingTier(finding)
+		if tier == tierNone || tier < best {
+			continue
+		}
+		if tier == best && !floorFindingBefore(finding, bestFinding) {
+			continue
+		}
+		best, bestFinding = tier, finding
+	}
+	return best, bestFinding
+}
+
+func floorFindingBefore(left, right model.Finding) bool {
+	leftRank, rightRank := tierSeverityRank[strings.ToUpper(left.Severity)], tierSeverityRank[strings.ToUpper(right.Severity)]
+	switch {
+	case leftRank != rightRank:
+		return leftRank > rightRank
+	case left.Confidence != right.Confidence:
+		return left.Confidence > right.Confidence
+	case left.Location.File != right.Location.File:
+		return left.Location.File < right.Location.File
+	}
+	return left.Location.StartLine < right.Location.StartLine
+}
+
+// behaviourReasons and floorRuleReasons describe a floor finding in
+// verdict_reason; other rules fall back to their catalog title.
+var behaviourReasons = map[string]string{
+	behaviourDownloadAndRun:         "remote code downloaded and run",
+	behaviourDecodeToExec:           "decoded payload piped to a shell",
+	behaviourInstallLure:            "install step that runs code fetched from outside the skill",
+	behaviourReverseShell:           "reverse shell",
+	behaviourCredentialExfiltration: "credentials sent off the machine",
+	behaviourCredentialTheftFlow:    "password prompt whose answer is sent off the machine",
+}
+
+var floorRuleReasons = map[string]string{
+	"TT3": "credentials sent off the machine",
+	"SC3": "obfuscated code decoded and run",
+	"P1":  "instruction to ignore previous instructions",
+	"P2":  "hidden instructions",
+	"P3":  "instruction to send conversation or user data to an external destination",
+	"P4":  "instruction to manipulate the user or hide something from them",
+	"P8":  "instruction to send the system prompt out through a tool",
+	"E4":  "instruction to leak the conversation context",
+	"AR3": "instruction to turn off safety policies",
+	"TP1": "hidden instructions in a tool description",
+	"TP3": "instructions injected in a tool parameter description",
+	"YR5": "prompt-injection signature",
+	"SC8": "file only partly scanned because it is over the size limit",
+	"EA6": "hook that sends data or runs fetched code",
+}
+
+// verdictReason names what set the recommendation. A floor names its finding
+// when the floor alone gives the recommendation; otherwise the reason is the
+// additive risk score.
+func verdictReason(recommendation string, risk int, tier ruleTier, finding model.Finding, evidence int) string {
+	if _, floorRecommendation := riskBand(tierFloors[tier]); tier != tierNone && floorRecommendation == recommendation {
+		description := floorRuleReasons[ruleID(finding)]
+		if kind, ok := behaviourOf(finding); ok && behaviourReasons[kind] != "" {
+			description = behaviourReasons[kind]
+		}
+		if description == "" {
+			description = strings.ToLower(ruleTitles[ruleID(finding)])
+		}
+		return fmt.Sprintf("%s: %s (%s, %s:%d)", recommendation, description, ruleID(finding), finding.Location.File, finding.Location.StartLine)
+	}
+	switch {
+	case evidence == 1:
+		return fmt.Sprintf("%s: risk %d from 1 evidence finding", recommendation, risk)
+	case evidence > 1:
+		return fmt.Sprintf("%s: risk %d from %d evidence findings", recommendation, risk, evidence)
+	case risk > 0:
+		return fmt.Sprintf("%s: risk %d from exposure only, no evidence findings", recommendation, risk)
+	}
+	return recommendation + ": no evidence findings"
 }
 
 func computeVulnerabilityScore(findings []model.Finding, items []component) int {
@@ -257,6 +344,9 @@ var rmfTaxaNames = map[string]string{
 func renderMarkdown(summary model.Summary, findings []model.Finding, capabilities []model.Capability) string {
 	var output strings.Builder
 	fmt.Fprintf(&output, "# ScanKernel report\n\n**Risk:** %d/100 (%s)  \n**Recommendation:** %s  \n**Scope:** %s  \n**README files:** %s  \n**Findings:** %d\n", summary.RiskScore, summary.Severity, summary.Recommendation, summary.ScanScope, readmeStatus(summary.IncludeReadme), len(findings))
+	if summary.VerdictReason != "" {
+		fmt.Fprintf(&output, "**Verdict reason:** %s\n", cleanText(summary.VerdictReason))
+	}
 
 	output.WriteString("\n## Compliance summary\n\n")
 	fmt.Fprintf(&output, "- **Mapping version:** %s\n", mappingVersion)
@@ -343,6 +433,9 @@ func renderMarkdown(summary model.Summary, findings []model.Finding, capabilitie
 func renderTerminal(summary model.Summary, findings []model.Finding, capabilities []model.Capability) string {
 	var output strings.Builder
 	fmt.Fprintf(&output, "ScanKernel: risk %d/100 %s — %s [%s, README %s]\n", summary.RiskScore, summary.Severity, summary.Recommendation, summary.ScanScope, readmeStatus(summary.IncludeReadme))
+	if summary.VerdictReason != "" {
+		fmt.Fprintf(&output, "Verdict reason: %s\n", cleanText(summary.VerdictReason))
+	}
 	for _, finding := range findings {
 		review := ""
 		if reason, ok := needsReview(finding); ok {
