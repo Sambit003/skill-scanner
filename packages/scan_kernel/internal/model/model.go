@@ -26,6 +26,10 @@ type ScanRequest struct {
 	Offline        bool     `json:"-"`
 	ScanScope      string   `json:"-"`
 	IncludeReadme  bool     `json:"-"`
+	// ListCapabilities moves capability findings into ScanResult.Capabilities.
+	// Without it the findings keep their pre-capabilities shape, for
+	// protocol clients that have not opted in.
+	ListCapabilities bool `json:"-"`
 }
 
 type Location struct {
@@ -130,6 +134,9 @@ type Summary struct {
 	ScanMode           string         `json:"scan_mode"`
 	ScanScope          string         `json:"scan_scope,omitempty"`
 	IncludeReadme      *bool          `json:"include_readme,omitempty"`
+	// VerdictReason names what set the recommendation: the finding behind a
+	// verdict floor, or the risk score and its evidence count.
+	VerdictReason string `json:"verdict_reason,omitempty"`
 }
 
 type Report struct {
@@ -137,11 +144,23 @@ type Report struct {
 	ContentType string `json:"content_type"`
 }
 
+// Capability is something the scanned skill can do, such as running shell
+// commands or reading environment variables. Capabilities are listed apart
+// from findings: they are not counted as findings, and the risk score is the
+// same with or without the list.
+type Capability struct {
+	RuleID   string   `json:"rule_id"`
+	Label    string   `json:"label"`
+	Location Location `json:"location"`
+	Snippet  string   `json:"snippet,omitempty"`
+}
+
 type ScanResult struct {
-	Kind     string            `json:"kind"`
-	Summary  Summary           `json:"summary"`
-	Findings []Finding         `json:"findings"`
-	Reports  map[string]Report `json:"reports"`
+	Kind         string            `json:"kind"`
+	Summary      Summary           `json:"summary"`
+	Findings     []Finding         `json:"findings"`
+	Capabilities []Capability      `json:"capabilities,omitempty"`
+	Reports      map[string]Report `json:"reports"`
 }
 
 type RuleDocument struct {

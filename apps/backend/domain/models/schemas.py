@@ -104,6 +104,19 @@ class FindingResponse(BaseModel):
         if not self.documentation_url and self.rule_id:
             self.documentation_url = f"/v1/rules/{self.rule_id}"
 
+class CapabilityResponse(BaseModel):
+    """Something the skill can do, not a problem and not counted in the risk score."""
+
+    rule_id: str
+    label: str
+    location: FindingLocation
+    snippet: Optional[str] = None
+    documentation_url: Optional[str] = None
+
+    def model_post_init(self, __context: Any) -> None:
+        if not self.documentation_url and self.rule_id:
+            self.documentation_url = f"/v1/rules/{self.rule_id}"
+
 class ScanFindingsResponse(BaseModel):
     scan_id: str
     status: str
@@ -203,3 +216,5 @@ class ScanDetailResponse(ScanResponse):
     scanner_version: Optional[str] = "1.0.0"
     scan_mode: Optional[str] = "deterministic"
     findings: List[FindingResponse] = Field(default_factory=list)
+    # None for scans recorded before the scanner listed capabilities.
+    capabilities: Optional[List[CapabilityResponse]] = None

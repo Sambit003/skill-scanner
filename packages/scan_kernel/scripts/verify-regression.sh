@@ -10,8 +10,8 @@ FIXTURE_GOLDEN="${SCANNER_DIR}/testdata/regression/malicious-scan.json"
 CORPUS_COMMIT="84fdeffd12f2ee307994d1eb6feb48173b6e0502"
 # Canonical hashes for CORPUS_COMMIT. The first covers every user-visible
 # engine finding field; the second covers the complete summary.
-EXPECTED_FINDINGS_SHA256="a2dc460ecf96030776f23f7711fcb06a8375ebb3505d7082c82622b0ba9f754d"
-EXPECTED_SUMMARY_SHA256="b4f2a68e0e2891920e598b33dd891b959d2f940c7e592efc6472d837ebdf60b2"
+EXPECTED_FINDINGS_SHA256="22d5e4300a908430a09ada5cc858f8002257993657f57ba8ede9a3a62f3f23d9"
+EXPECTED_SUMMARY_SHA256="ff4ee5cd258190105681cca1e6da4b0134d043c01f5f082e9219ea9f7bcd2216"
 REGRESSION_TMP="$(mktemp -d /tmp/scankernel-regression.XXXXXX)"
 trap 'rm -rf "${REGRESSION_TMP}"' EXIT
 SCAN_KERNEL_DOCKER_IMAGE=""
@@ -91,4 +91,4 @@ run_scanner "${MALICIOUS_FIXTURE}" "${REGRESSION_TMP}/malicious-actual.json"
 jq -S '{summary,findings}' "${REGRESSION_TMP}/malicious-actual.json" > "${REGRESSION_TMP}/malicious-actual-canonical.json"
 jq -S '{summary,findings}' "${FIXTURE_GOLDEN}" > "${REGRESSION_TMP}/malicious-expected-canonical.json"
 diff -u "${REGRESSION_TMP}/malicious-expected-canonical.json" "${REGRESSION_TMP}/malicious-actual-canonical.json"
-printf 'Native-YARA regression verified: exact 14-finding malicious fixture payload.\n'
+printf 'Native-YARA regression verified: exact 7-finding malicious fixture payload.\n'

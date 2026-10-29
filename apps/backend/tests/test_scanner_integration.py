@@ -27,4 +27,7 @@ async def test_backend_calls_real_go_scanner() -> None:
     assert result.summary.safe_to_install is False
     assert result.summary.findings_count >= 2
     assert set(result.reports) == {"json", "sarif"}
+    # The request opts into capabilities; the fixture runs a shell command.
+    assert result.capabilities is not None
+    assert any(capability.rule_id == "AST4" for capability in result.capabilities)
     assert any(rule.rule_id == "P1" for rule in rules)

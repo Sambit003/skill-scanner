@@ -18,10 +18,11 @@ var diminishingWeights = []float64{1, .5, .25}
 const exposureFullScale = 8.5
 
 func summarize(findings []model.Finding, items []component) model.Summary {
-	ordered := deduplicateForScoring(findings)
-	evidence := make([]model.Finding, 0, len(ordered))
-	capabilities := make([]model.Finding, 0, len(ordered))
-	for _, finding := range ordered {
+	// Filter first, then de-duplicate each list: a copy that cannot count
+	// (under review, or out of its rule's context) must not hide one that can.
+	evidence := make([]model.Finding, 0, len(findings))
+	capabilities := make([]model.Finding, 0, len(findings))
+	for _, finding := range findings {
 		if isEvidenceFinding(finding) {
 			evidence = append(evidence, finding)
 		}
@@ -29,10 +30,13 @@ func summarize(findings []model.Finding, items []component) model.Summary {
 			capabilities = append(capabilities, finding)
 		}
 	}
+	evidence, capabilities = deduplicateForScoring(evidence), deduplicateForScoring(capabilities)
 	vulnerability := computeVulnerabilityScore(evidence, items)
 	exposure := computeExposureScore(capabilities, len(items))
 	combined := float64(vulnerability) + (1-float64(vulnerability)/100)*.30*exposure
 	risk := min(100, max(0, int(combined)))
+	tier, floorFinding := verdictFloor(findings)
+	risk = max(risk, tierFloors[tier])
 	severity, recommendation := riskBand(risk)
 
 	bySeverity, byCategory := map[string]int{}, map[string]int{}
@@ -43,7 +47,92 @@ func summarize(findings []model.Finding, items []component) model.Summary {
 	return model.Summary{RiskScore: risk, VulnerabilityScore: vulnerability, ExposureScore: exposure,
 		Severity: severity, Recommendation: recommendation, SafeToInstall: risk <= 20,
 		FindingsCount: len(findings), FindingsBySeverity: bySeverity, FindingsByCategory: byCategory,
-		ScannerVersion: scannerVersion, ScanMode: "deterministic"}
+		ScannerVersion: scannerVersion, ScanMode: "deterministic",
+		VerdictReason: verdictReason(recommendation, risk, tier, floorFinding, len(evidence))}
+}
+
+// verdictFloor returns the highest tier any finding sets and the finding that
+// sets it: the most severe, then the most confident, then the first by file
+// and line.
+func verdictFloor(findings []model.Finding) (ruleTier, model.Finding) {
+	best, bestFinding := tierNone, model.Finding{}
+	for _, finding := range findings {
+		tier := findingTier(finding)
+		if tier == tierNone || tier < best {
+			continue
+		}
+		if tier == best && !floorFindingBefore(finding, bestFinding) {
+			continue
+		}
+		best, bestFinding = tier, finding
+	}
+	return best, bestFinding
+}
+
+func floorFindingBefore(left, right model.Finding) bool {
+	leftRank, rightRank := tierSeverityRank[strings.ToUpper(left.Severity)], tierSeverityRank[strings.ToUpper(right.Severity)]
+	switch {
+	case leftRank != rightRank:
+		return leftRank > rightRank
+	case left.Confidence != right.Confidence:
+		return left.Confidence > right.Confidence
+	case left.Location.File != right.Location.File:
+		return left.Location.File < right.Location.File
+	}
+	return left.Location.StartLine < right.Location.StartLine
+}
+
+// behaviourReasons and floorRuleReasons describe a floor finding in
+// verdict_reason; other rules fall back to their catalog title.
+var behaviourReasons = map[string]string{
+	behaviourDownloadAndRun:         "remote code downloaded and run",
+	behaviourDecodeToExec:           "encoded payload decoded and run",
+	behaviourInstallLure:            "install step that runs code fetched from outside the skill",
+	behaviourReverseShell:           "reverse shell",
+	behaviourCredentialExfiltration: "credentials sent off the machine",
+	behaviourCredentialTheftFlow:    "password prompt whose answer is sent off the machine",
+}
+
+var floorRuleReasons = map[string]string{
+	"TT3": "credentials sent off the machine",
+	"P1":  "instruction to ignore previous instructions",
+	"P2":  "hidden instructions",
+	"P3":  "instruction to send conversation or user data to an external destination",
+	"P4":  "instruction to manipulate the user or hide something from them",
+	"P8":  "instruction to send the system prompt out through a tool",
+	"E4":  "instruction to leak the conversation context",
+	"AR3": "instruction to turn off safety policies",
+	"TP1": "hidden instructions in a tool description",
+	"TP3": "instructions injected in a tool parameter description",
+	"YR5": "prompt-injection signature",
+	"SC8": "file only partly scanned because it is over the size limit",
+	"EA6": "hook that sends data or runs fetched code",
+	"RA2": "writes to the agent's memory or instruction files",
+}
+
+// verdictReason names what set the recommendation. A floor names its finding
+// when the floor alone gives the recommendation; otherwise the reason is the
+// additive risk score.
+func verdictReason(recommendation string, risk int, tier ruleTier, finding model.Finding, evidence int) string {
+	if _, floorRecommendation := riskBand(tierFloors[tier]); tier != tierNone && floorRecommendation == recommendation {
+		description := floorRuleReasons[ruleID(finding)]
+		if kind, ok := behaviourOf(finding); ok && behaviourReasons[kind] != "" {
+			description = behaviourReasons[kind]
+		}
+		if description == "" {
+			description = strings.ToLower(ruleTitles[ruleID(finding)])
+		}
+		return fmt.Sprintf("%s: %s (%s, %s:%d)", recommendation, description, ruleID(finding), finding.Location.File, finding.Location.StartLine)
+	}
+	switch {
+	case evidence == 1:
+		return fmt.Sprintf("%s: risk %d from 1 evidence finding", recommendation, risk)
+	case evidence > 1:
+		return fmt.Sprintf("%s: risk %d from %d evidence findings", recommendation, risk, evidence)
+	case risk > 0:
+		return fmt.Sprintf("%s: risk %d from exposure only, no evidence findings", recommendation, risk)
+	}
+	return recommendation + ": no evidence findings"
 }
 
 func computeVulnerabilityScore(findings []model.Finding, items []component) int {
@@ -177,7 +266,7 @@ func scoringMatchedText(finding model.Finding) string {
 	return finding.MatchedText
 }
 
-func renderReports(formats []string, summary model.Summary, findings []model.Finding) (map[string]model.Report, error) {
+func renderReports(formats []string, summary model.Summary, findings []model.Finding, capabilities []model.Capability) (map[string]model.Report, error) {
 	reports := map[string]model.Report{}
 	for _, format := range formats {
 		if _, exists := reports[format]; exists {
@@ -187,11 +276,11 @@ func renderReports(formats []string, summary model.Summary, findings []model.Fin
 		var err error
 		switch format {
 		case "json":
-			content, contentType, err = renderJSON(summary, findings), "application/json", nil
+			content, contentType, err = renderJSON(summary, findings, capabilities), "application/json", nil
 		case "markdown":
-			content, contentType = renderMarkdown(summary, findings), "text/markdown; charset=utf-8"
+			content, contentType = renderMarkdown(summary, findings, capabilities), "text/markdown; charset=utf-8"
 		case "terminal":
-			content, contentType = renderTerminal(summary, findings), "text/plain; charset=utf-8"
+			content, contentType = renderTerminal(summary, findings, capabilities), "text/plain; charset=utf-8"
 		case "sarif":
 			content, err = renderSARIF(summary, findings)
 			contentType = "application/sarif+json"
@@ -206,10 +295,17 @@ func renderReports(formats []string, summary model.Summary, findings []model.Fin
 	return reports, nil
 }
 
-func renderJSON(summary model.Summary, findings []model.Finding) string {
-	raw, _ := json.MarshalIndent(map[string]any{"summary": summary, "findings": findings}, "", "  ")
+func renderJSON(summary model.Summary, findings []model.Finding, capabilities []model.Capability) string {
+	document := map[string]any{"summary": summary, "findings": findings}
+	if len(capabilities) > 0 {
+		document["capabilities"] = capabilities
+	}
+	raw, _ := json.MarshalIndent(document, "", "  ")
 	return string(raw)
 }
+
+// capabilitiesIntro heads the capabilities section of the text reports.
+const capabilitiesIntro = "What this skill can do. These are not findings and do not change the risk score; review them against what the skill says it does."
 
 var astTaxaNames = map[string]string{
 	"AST01": "Malicious Skills",
@@ -245,9 +341,12 @@ var rmfTaxaNames = map[string]string{
 	"MEASURE 2.10": "AI Privacy Risk Evaluation",
 }
 
-func renderMarkdown(summary model.Summary, findings []model.Finding) string {
+func renderMarkdown(summary model.Summary, findings []model.Finding, capabilities []model.Capability) string {
 	var output strings.Builder
 	fmt.Fprintf(&output, "# ScanKernel report\n\n**Risk:** %d/100 (%s)  \n**Recommendation:** %s  \n**Scope:** %s  \n**README files:** %s  \n**Findings:** %d\n", summary.RiskScore, summary.Severity, summary.Recommendation, summary.ScanScope, readmeStatus(summary.IncludeReadme), len(findings))
+	if summary.VerdictReason != "" {
+		fmt.Fprintf(&output, "**Verdict reason:** %s\n", cleanText(summary.VerdictReason))
+	}
 
 	output.WriteString("\n## Compliance summary\n\n")
 	fmt.Fprintf(&output, "- **Mapping version:** %s\n", mappingVersion)
@@ -303,6 +402,9 @@ func renderMarkdown(summary model.Summary, findings []model.Finding) string {
 	for _, finding := range findings {
 		fmt.Fprintf(&output, "\n## %s — %s\n\n- Severity: %s\n- Location: `%s:%d`\n- Category: %s\n",
 			ruleID(finding), cleanText(finding.Pattern), finding.Severity, finding.Location.File, finding.Location.StartLine, finding.Category)
+		if reason, review := needsReview(finding); review {
+			fmt.Fprintf(&output, "- Needs review: %s (not counted in the risk score)\n", reason)
+		}
 
 		if len(finding.Frameworks.OwaspAgentic) > 0 {
 			fmt.Fprintf(&output, "- OWASP Agentic Skills: %s\n", strings.Join(finding.Frameworks.OwaspAgentic, ", "))
@@ -319,14 +421,33 @@ func renderMarkdown(summary model.Summary, findings []model.Finding) string {
 
 		fmt.Fprintf(&output, "\n%s\n\nRemediation: %s\n", cleanText(finding.Explanation), cleanText(finding.Remediation))
 	}
+	if len(capabilities) > 0 {
+		fmt.Fprintf(&output, "\n## What this skill can do\n\n%s\n\n", capabilitiesIntro)
+		for _, capability := range capabilities {
+			fmt.Fprintf(&output, "- %s (%s) at `%s:%d`\n", cleanText(capability.Label), capability.RuleID, capability.Location.File, capability.Location.StartLine)
+		}
+	}
 	return output.String()
 }
 
-func renderTerminal(summary model.Summary, findings []model.Finding) string {
+func renderTerminal(summary model.Summary, findings []model.Finding, capabilities []model.Capability) string {
 	var output strings.Builder
 	fmt.Fprintf(&output, "ScanKernel: risk %d/100 %s — %s [%s, README %s]\n", summary.RiskScore, summary.Severity, summary.Recommendation, summary.ScanScope, readmeStatus(summary.IncludeReadme))
+	if summary.VerdictReason != "" {
+		fmt.Fprintf(&output, "Verdict reason: %s\n", cleanText(summary.VerdictReason))
+	}
 	for _, finding := range findings {
-		fmt.Fprintf(&output, "%s %-8s %s:%d %s\n", ruleID(finding), finding.Severity, finding.Location.File, finding.Location.StartLine, cleanText(finding.Pattern))
+		review := ""
+		if reason, ok := needsReview(finding); ok {
+			review = " [needs review: " + reason + "]"
+		}
+		fmt.Fprintf(&output, "%s %-8s %s:%d %s%s\n", ruleID(finding), finding.Severity, finding.Location.File, finding.Location.StartLine, cleanText(finding.Pattern), review)
+	}
+	if len(capabilities) > 0 {
+		fmt.Fprintf(&output, "\nWhat this skill can do (not findings; no effect on the risk score):\n")
+		for _, capability := range capabilities {
+			fmt.Fprintf(&output, "  %-5s %s:%d %s\n", capability.RuleID, capability.Location.File, capability.Location.StartLine, cleanText(capability.Label))
+		}
 	}
 	return output.String()
 }
@@ -420,7 +541,7 @@ func renderSARIF(summary model.Summary, findings []model.Finding) (string, error
 		if finding.Location.EndLine != nil {
 			region["endLine"] = *finding.Location.EndLine
 		}
-		results = append(results, map[string]any{
+		result := map[string]any{
 			"ruleId": id, "level": level,
 			"message": map[string]string{"text": cleanText(finding.Explanation)},
 			"locations": []any{map[string]any{
@@ -429,7 +550,11 @@ func renderSARIF(summary model.Summary, findings []model.Finding) (string, error
 					"region":           region,
 				},
 			}},
-		})
+		}
+		if reason, review := needsReview(finding); review {
+			result["properties"] = map[string]any{"needs_review": reason}
+		}
+		results = append(results, result)
 	}
 
 	ruleList := make([]map[string]any, 0, len(rules))

@@ -50,6 +50,7 @@ class ScannerClient:
             "timeout_seconds": self.timeout_seconds,
             "scan_scope": scan_scope,
             "include_readme": include_readme,
+            "include_capabilities": True,
         }
 
         result = await self._execute(request)

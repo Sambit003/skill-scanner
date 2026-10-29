@@ -150,7 +150,7 @@ export const LLM_CATEGORIES: LlmCategoryDoc[] = [
       "Treat persistent memory writes as privileged operations.",
     ],
     coverage: "detections-present",
-    url: "https://genai.owasp.org/llm01/",
+    url: "https://github.com/GenAI-Security-Project/GenAI-LLM-Top10/blob/main/2026/final/LLM01_PromptInjection.md",
   },
   {
     id: "LLM02:2026",
@@ -164,7 +164,7 @@ export const LLM_CATEGORIES: LlmCategoryDoc[] = [
       "Minimize context window contents to strictly necessary information.",
     ],
     coverage: "detections-present",
-    url: "https://genai.owasp.org/llm02/",
+    url: "https://github.com/GenAI-Security-Project/GenAI-LLM-Top10/blob/main/2026/final/LLM02_SensitiveInformationDisclosure.md",
   },
   {
     id: "LLM03:2026",
@@ -178,7 +178,7 @@ export const LLM_CATEGORIES: LlmCategoryDoc[] = [
       "Enforce authorization checks in deterministic application logic, not model judgment.",
     ],
     coverage: "detections-present",
-    url: "https://genai.owasp.org/llm03/",
+    url: "https://github.com/GenAI-Security-Project/GenAI-LLM-Top10/blob/main/2026/final/LLM03_ExcessiveAgency.md",
   },
   {
     id: "LLM04:2026",
@@ -192,7 +192,7 @@ export const LLM_CATEGORIES: LlmCategoryDoc[] = [
       "Verify package authenticity and registry provenance before installation.",
     ],
     coverage: "detections-present",
-    url: "https://genai.owasp.org/llm04/",
+    url: "https://github.com/GenAI-Security-Project/GenAI-LLM-Top10/blob/main/2026/final/LLM04_SupplyChain.md",
   },
   {
     id: "LLM05:2026",
@@ -206,7 +206,7 @@ export const LLM_CATEGORIES: LlmCategoryDoc[] = [
       "Isolate memory partitions across different user sessions.",
     ],
     coverage: "partial",
-    url: "https://genai.owasp.org/llm05/",
+    url: "https://github.com/GenAI-Security-Project/GenAI-LLM-Top10/blob/main/2026/final/LLM05_DataModelPoisoning.md",
   },
   {
     id: "LLM06:2026",
@@ -220,7 +220,7 @@ export const LLM_CATEGORIES: LlmCategoryDoc[] = [
       "Monitor resource usage and implement circuit breakers.",
     ],
     coverage: "partial",
-    url: "https://genai.owasp.org/llm06/",
+    url: "https://github.com/GenAI-Security-Project/GenAI-LLM-Top10/blob/main/2026/final/LLM06_UnboundedConsumption.md",
   },
   {
     id: "LLM07:2026",
@@ -234,7 +234,7 @@ export const LLM_CATEGORIES: LlmCategoryDoc[] = [
       "Display confidence scores and uncertainty disclosures to users.",
     ],
     coverage: "none",
-    url: "https://genai.owasp.org/llm07/",
+    url: "https://github.com/GenAI-Security-Project/GenAI-LLM-Top10/blob/main/2026/final/LLM07_Misinformation.md",
   },
   {
     id: "LLM08:2026",
@@ -248,7 +248,7 @@ export const LLM_CATEGORIES: LlmCategoryDoc[] = [
       "Implement secondary safety filters on model output to detect prompt reflection.",
     ],
     coverage: "detections-present",
-    url: "https://genai.owasp.org/llm08/",
+    url: "https://github.com/GenAI-Security-Project/GenAI-LLM-Top10/blob/main/2026/final/LLM08_HiddenContextExposure.md",
   },
   {
     id: "LLM09:2026",
@@ -262,7 +262,7 @@ export const LLM_CATEGORIES: LlmCategoryDoc[] = [
       "Audit vector embeddings for anomalies or cluster manipulation.",
     ],
     coverage: "none",
-    url: "https://genai.owasp.org/llm09/",
+    url: "https://github.com/GenAI-Security-Project/GenAI-LLM-Top10/blob/main/2026/final/LLM09_VectorAndEmbeddingWeaknesses.md",
   },
   {
     id: "LLM10:2026",
@@ -276,7 +276,7 @@ export const LLM_CATEGORIES: LlmCategoryDoc[] = [
       "Never pass unvalidated model text directly into execution sinks.",
     ],
     coverage: "detections-present",
-    url: "https://genai.owasp.org/llm10/",
+    url: "https://github.com/GenAI-Security-Project/GenAI-LLM-Top10/blob/main/2026/final/LLM10_ImproperOutputHandling.md",
   },
 ];
 
@@ -344,7 +344,7 @@ const rawFamilies = [
   { id: "P", title: "Prompt and instruction manipulation", summary: "Override, hidden instruction, prompt leakage, and harmful content patterns." },
   { id: "E", title: "Exfiltration and sensitive data", summary: "Environment, credential, file, network, and cloud upload exposure." },
   { id: "PE", title: "Privilege escalation", summary: "Root access, credential files, Docker socket access, and container escape capability." },
-  { id: "SC", title: "Supply chain and dependency risk", summary: "Unpinned installs, remote bootstrap, typosquats, and unsigned images." },
+  { id: "SC", title: "Supply chain and dependency risk", summary: "Unpinned installs, remote bootstrap, typosquats, unsigned images, and files too large to scan fully." },
   { id: "EA", title: "Excessive agency", summary: "Unrestricted tools, destructive autonomy, scope creep, and unbounded resources." },
   { id: "OH", title: "Output handling", summary: "Unsafe use of model or tool output across execution and trust boundaries." },
   { id: "MP", title: "Memory poisoning", summary: "Persistent context injection, context stuffing, and agent state manipulation." },
@@ -354,9 +354,9 @@ const rawFamilies = [
   { id: "TR", title: "Trigger abuse", summary: "Over-broad, shadowing, or generic activation triggers." },
   { id: "AST", title: "Python AST execution", summary: "exec, eval, subprocess, dynamic imports, compile, reflection, and execution chains." },
   { id: "TT", title: "Taint tracking", summary: "Source-to-sink flows involving credentials, files, external input, network, or execution." },
-  { id: "YR", title: "YARA signatures", summary: "Malware, webshell, cryptominer, and offensive-tool indicators." },
+  { id: "YR", title: "YARA signatures", summary: "Malware, webshell, cryptominer, offensive-tool, and prompt-injection indicators." },
   { id: "LP", title: "Least privilege", summary: "Capability declarations, wildcard permissions, undeclared operations, and overdeclaration." },
-  { id: "TP", title: "Tool metadata poisoning", summary: "Hidden metadata, Unicode deception, parameter injection, and description mismatch." },
+  { id: "TP", title: "Tool metadata poisoning", summary: "Hidden metadata, Unicode deception, and parameter injection." },
   { id: "AS", title: "Agent snooping", summary: "Agent config, MCP config, and peer skill enumeration." },
   { id: "AR", title: "Anti-refusal", summary: "Instructions that suppress refusal, warnings, or safety policy boundaries." },
   { id: "SSRF", title: "Server-side request forgery", summary: "Metadata endpoints, private network targets, and dynamic request hosts." },

@@ -2,6 +2,7 @@ package agentskill
 
 import (
 	"fmt"
+	"path"
 	"regexp"
 	"strings"
 	"unicode"
@@ -10,9 +11,20 @@ import (
 	"github.com/Sambit003/skill-scanner/packages/scan_kernel/internal/model"
 )
 
+// htmlCommentPattern reports HTML comments whose body carries
+// hiddenCommentKeyword in an instruction aimed at the agent
+// (commentInstructsAgent). Comments are tokenized by htmlComments rather than a
+// regular expression so a match can never run past "-->" into visible text.
+// Keywords are whole words (with their verb forms); POST and GET count only
+// in upper case, as HTTP methods are written, so "wp:post-title", "BUDGET"
+// and "target=" do not.
+var (
+	htmlCommentPattern   = staticPattern{ID: "P2", Title: "Hidden Instructions", Category: "Prompt Injection", Severity: "HIGH", Confidence: .7}
+	hiddenCommentKeyword = regexp.MustCompile(`(?i:\b(?:system|instructions?|ignor(?:e|es|ed|ing)|send(?:s|ing)?|transmit(?:s|ted|ting)?)\b)|\b(?:POST|GET)\b`)
+)
+
 var hiddenInstructionPatterns = []staticPattern{
-	newStaticPattern("P2", "Hidden Instructions", "Prompt Injection", "HIGH", .7, `(?s)<!--.*?(?:system|instructions?|ignore|POST|GET|send|transmit).*?-->`),
-	newStaticPattern("P2", "Hidden Instructions", "Prompt Injection", "HIGH", .8, `(?s)\[//\]:\s*#\s*\(.*?(?:system|instructions?|ignore|POST|GET|send|transmit).*?\)`),
+	newStaticPattern("P2", "Hidden Instructions", "Prompt Injection", "HIGH", .8, `(?s)\[//\]:\s*#\s*\(.*?(?:\b(?:system|instructions?|ignor(?:e|es|ed|ing)|send(?:s|ing)?|transmit(?:s|ted|ting)?)\b|\b(?-i:POST|GET)\b).*?\)`),
 	newStaticPattern("P2", "Hidden Instructions", "Prompt Injection", "HIGH", .6, `[\x{200b}\x{200c}\x{200d}\x{2060}\x{feff}]`),
 	newStaticPattern("P2", "Hidden Instructions", "Prompt Injection", "HIGH", .85, `[\x{202a}-\x{202e}\x{2066}-\x{2069}]`),
 	newStaticPattern("P2", "Hidden Instructions", "Prompt Injection", "HIGH", .7, `data:text/plain;base64,[A-Za-z0-9+/=]{50,}`),
@@ -71,9 +83,22 @@ func analyzeSpecialStatic(item component) []model.Finding {
 		fileType = "other"
 	}
 	if fileType == "markdown" || fileType == "other" {
+		for _, comment := range htmlComments(item.Content) {
+			if !commentInstructsAgent(item.Content[comment.bodyStart:comment.bodyEnd], hiddenCommentKeyword) {
+				continue
+			}
+			if finding, ok := findingFromStaticMatch(item, htmlCommentPattern, []int{comment.start, comment.end}); ok {
+				findings = append(findings, finding)
+			}
+		}
 		for index, pattern := range hiddenInstructionPatterns {
 			for _, match := range pattern.compiled.FindAllStringIndex(item.Content, -1) {
-				if index == 2 && safeEmojiZWJ(item.Content, match[0]) {
+				if index == 1 && safeEmojiZWJ(item.Content, match[0]) {
+					continue
+				}
+				// A UTF-8 byte-order mark at the start of a file is encoding
+				// metadata, not hidden text.
+				if match[0] == 0 && item.Content[:match[1]] == "\ufeff" {
 					continue
 				}
 				if finding, ok := findingFromStaticMatch(item, pattern, match); ok {
@@ -82,6 +107,11 @@ func analyzeSpecialStatic(item component) []model.Finding {
 			}
 		}
 	}
+	findings = append(findings, analyzeDecodeToExec(item)...)
+	findings = append(findings, analyzeOffensiveTooling(item)...)
+	findings = append(findings, analyzeEncodedPowerShell(item)...)
+	findings = append(findings, analyzeReverseShells(item)...)
+	findings = append(findings, analyzePersistence(item)...)
 	if isDependencyFile(item.Path) {
 		for _, pattern := range sc1Patterns {
 			for _, match := range pattern.compiled.FindAllStringIndex(item.Content, -1) {
@@ -179,12 +209,33 @@ func pythonStringRepr(value string) string {
 	return output.String()
 }
 
-func isDependencyFile(path string) bool {
-	lower := strings.ToLower(path)
-	return containsAny(lower, "requirements", "package.json", "pyproject.toml", "setup.py", "pipfile")
+func isDependencyFile(path string) bool { return dependencyManifestKind(path) != "" }
+
+// dependencyManifestKind classifies dependency manifests by file name:
+// package.json, pyproject.toml, setup.py, Pipfile, any .txt file whose name
+// contains "requirements" (requirements-dev.txt, dev-requirements.txt) and
+// any .txt file directly inside a requirements/ directory. Substring matching
+// on the whole path treated tenant_setup.py and compliance_requirements.md
+// as manifests.
+func dependencyManifestKind(filePath string) string {
+	normalized := strings.ToLower(strings.ReplaceAll(filePath, "\\", "/"))
+	name := path.Base(normalized)
+	switch {
+	case name == "package.json":
+		return "npm"
+	case name == "pyproject.toml":
+		return "pyproject"
+	case name == "setup.py", name == "pipfile",
+		strings.HasSuffix(name, ".txt") && (strings.Contains(name, "requirements") || path.Base(path.Dir(normalized)) == "requirements"):
+		return "requirements"
+	default:
+		return ""
+	}
 }
 
-func analyzeTriggers(manifest map[string]any) []model.Finding {
+// analyzeTriggers checks manifest triggers; lines holds each trigger's SKILL.md
+// line from frontmatterTriggerLines, with line 1 as the fallback.
+func analyzeTriggers(manifest map[string]any, lines []int) []model.Finding {
 	raw, ok := manifest["triggers"].([]any)
 	if !ok {
 		return nil
@@ -198,6 +249,10 @@ func analyzeTriggers(manifest map[string]any) []model.Finding {
 		if trigger == "" {
 			continue
 		}
+		line := 1
+		if index < len(lines) {
+			line = lines[index]
+		}
 		lower := strings.ToLower(trigger)
 		words := strings.Fields(lower)
 		if (len(words) == 1 && broad[lower]) || len(lower) <= 2 {
@@ -205,13 +260,13 @@ func analyzeTriggers(manifest map[string]any) []model.Finding {
 			if len(lower) <= 2 {
 				confidence = .7
 			}
-			findings = append(findings, manifestFinding("TR1", "Overly Broad Trigger", "LOW", confidence, index+1, trigger))
+			findings = append(findings, manifestFinding("TR1", "Overly Broad Trigger", "LOW", confidence, line, trigger))
 		}
 		if builtins[lower] || (len(words) > 0 && len(words) <= 2 && builtins[words[0]]) {
-			findings = append(findings, manifestFinding("TR2", "Shadow Command Trigger", "MEDIUM", .7, index+1, trigger))
+			findings = append(findings, manifestFinding("TR2", "Shadow Command Trigger", "MEDIUM", .7, line, trigger))
 		}
 		if bait.MatchString(lower) {
-			findings = append(findings, manifestFinding("TR3", "Keyword Baiting Trigger", "MEDIUM", .8, index+1, trigger))
+			findings = append(findings, manifestFinding("TR3", "Keyword Baiting Trigger", "MEDIUM", .8, line, trigger))
 		}
 	}
 	return findings
@@ -280,19 +335,85 @@ func isEmojiBase(char rune) bool {
 	return (char >= 0x1F000 && char <= 0x1FAFF) || (char >= 0x2600 && char <= 0x27BF) || char == 0x00A9 || char == 0x00AE
 }
 
+type htmlComment struct {
+	start, end, bodyStart, bodyEnd int
+}
+
+// htmlComments tokenizes HTML comments the way an HTML parser does: "<!--" up
+// to the first "-->" or "--!>", with "<!-->" and "<!--->" as empty comments.
+// An unclosed comment hides the rest of the document, so it runs to the end.
+func htmlComments(content string) []htmlComment {
+	var comments []htmlComment
+	for offset := 0; ; {
+		relative := strings.Index(content[offset:], "<!--")
+		if relative < 0 {
+			return comments
+		}
+		start := offset + relative
+		body := start + len("<!--")
+		switch {
+		case strings.HasPrefix(content[body:], ">"):
+			comments = append(comments, htmlComment{start, body + 1, body, body})
+			offset = body + 1
+			continue
+		case strings.HasPrefix(content[body:], "->"):
+			comments = append(comments, htmlComment{start, body + 2, body, body})
+			offset = body + 2
+			continue
+		}
+		closeAt, closeLength := len(content), 0
+		if index := strings.Index(content[body:], "-->"); index >= 0 {
+			closeAt, closeLength = body+index, len("-->")
+		}
+		if index := strings.Index(content[body:], "--!>"); index >= 0 && body+index < closeAt {
+			closeAt, closeLength = body+index, len("--!>")
+		}
+		comments = append(comments, htmlComment{start, closeAt + closeLength, body, closeAt})
+		if closeLength == 0 {
+			return comments
+		}
+		offset = closeAt + closeLength
+	}
+}
+
 func firstSmuggledTagOffset(content string) int {
-	for offset, char := range content {
-		if char < 0xE0000 || char > 0xE007F {
-			continue
+	for offset := 0; offset < len(content); {
+		char, size := utf8.DecodeRuneInString(content[offset:])
+		if char == 0x1F3F4 {
+			if end := subdivisionFlagEnd(content, offset+size); end > 0 {
+				offset = end
+				continue
+			}
 		}
-		// Preserve the narrow Unicode subdivision-flag carve-out.
-		prefix := content[:offset]
-		base, baseSize := utf8.DecodeLastRuneInString(prefix)
-		if base == 0x1F3F4 {
-			_ = baseSize
-			continue
+		if char >= 0xE0000 && char <= 0xE007F {
+			return offset
 		}
-		return offset
+		offset += size
+	}
+	return -1
+}
+
+// subdivisionFlagEnd returns the end of an emoji subdivision flag tag sequence
+// (for example England's: black flag, "gbeng" as tag letters, cancel tag) that
+// starts at offset, or -1. Only short lowercase region codes qualify, so the
+// carve-out cannot hide smuggled ASCII text.
+func subdivisionFlagEnd(content string, offset int) int {
+	tags := 0
+	for offset < len(content) {
+		char, size := utf8.DecodeRuneInString(content[offset:])
+		switch {
+		case char == 0xE007F:
+			if tags < 3 {
+				return -1
+			}
+			return offset + size
+		case tags < 2 && char >= 0xE0061 && char <= 0xE007A,
+			tags >= 2 && tags < 7 && ((char >= 0xE0061 && char <= 0xE007A) || (char >= 0xE0030 && char <= 0xE0039)):
+			tags++
+			offset += size
+		default:
+			return -1
+		}
 	}
 	return -1
 }

@@ -23,6 +23,8 @@ async def lifespan(app: FastAPI):
             await conn.execute(text("ALTER TABLE scans ADD COLUMN IF NOT EXISTS scan_scope VARCHAR(32)"))
             await conn.execute(text("ALTER TABLE scans ADD COLUMN IF NOT EXISTS include_readme BOOLEAN"))
             await conn.execute(text("ALTER TABLE scans ADD COLUMN IF NOT EXISTS repository_key VARCHAR(512)"))
+            # Nullable: scans recorded before capabilities existed keep NULL.
+            await conn.execute(text("ALTER TABLE scans ADD COLUMN IF NOT EXISTS capabilities JSON"))
             await conn.execute(text("UPDATE scans SET scan_scope = 'repository' WHERE scan_scope IS NULL"))
             await conn.execute(text("UPDATE scans SET include_readme = TRUE WHERE include_readme IS NULL"))
             await conn.execute(text("ALTER TABLE scans ALTER COLUMN scan_scope SET DEFAULT 'skill_folders'"))

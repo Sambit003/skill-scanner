@@ -42,11 +42,16 @@ async def _execute_scan_pipeline(
                 for report_format, report in scan_result.reports.items()
             }
             summary_map = scan_result.summary.model_dump()
+            # The scan asked for capabilities, so a missing list means none.
+            capabilities_list = [
+                capability.model_dump() for capability in scan_result.capabilities or []
+            ]
             await repo.save_scan_success(
                 scan_id=scan_id,
                 summary_dict=summary_map,
                 findings_list=scan_result.findings,
                 reports_dict=reports_map,
+                capabilities_list=capabilities_list,
             )
 
         except Exception as exc:

@@ -5,17 +5,18 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"unicode"
 
 	"github.com/Sambit003/skill-scanner/packages/scan_kernel/internal/model"
 )
 
 var (
-	rp1NPX            = regexp.MustCompile(`(?i)npx\s+(?:-+\w+\s+)*((?:@?[a-zA-Z][\w.-]*/)?[a-zA-Z][\w.-]*)`)
+	rp1NPX            = regexp.MustCompile(`(?i)\b(?:npx|bunx|pnpx)[ \t]+(?:-+\w+[ \t]+)*((?:@?[a-zA-Z][\w.-]*/)?[a-zA-Z][\w.-]*)`)
 	rp1UVX            = regexp.MustCompile(`(?i)(?:uvx|uv[\t\n\v\f\r \x{001c}-\x{001f}\x{0085}\x{00a0}\x{1680}\x{2000}-\x{200a}\x{2028}\x{2029}\x{202f}\x{205f}\x{3000}]+tool[\t\n\v\f\r \x{001c}-\x{001f}\x{0085}\x{00a0}\x{1680}\x{2000}-\x{200a}\x{2028}\x{2029}\x{202f}\x{205f}\x{3000}]+run)[\t\n\v\f\r \x{001c}-\x{001f}\x{0085}\x{00a0}\x{1680}\x{2000}-\x{200a}\x{2028}\x{2029}\x{202f}\x{205f}\x{3000}]+(?:-+\w+[\t\n\v\f\r \x{001c}-\x{001f}\x{0085}\x{00a0}\x{1680}\x{2000}-\x{200a}\x{2028}\x{2029}\x{202f}\x{205f}\x{3000}]+)*([a-zA-Z][\w.-]*)`)
 	rp1PIP            = regexp.MustCompile(`(?i)pip\d?\s+install\s+(?:-+\w+\s+)*([a-zA-Z][\w.-]*)`)
-	rp1Docker         = regexp.MustCompile(`(?i)docker\s+(?:pull|run|create)\s+\S+`)
+	rp1Docker         = regexp.MustCompile(`(?i)docker[ \t]+(?:pull|run|create)[ \t]+([^\n]*)`)
 	versionPin        = regexp.MustCompile(`@[\d.]+\b|==[\d.]+|:[\d.]+|@sha256:`)
-	ra2Hidden         = regexp.MustCompile(`(?i)(?:create|write|mkdir)\s+[^|]*(?:~/|/home/|/tmp/)\.([a-z_-]+)`)
+	ra2Hidden         = regexp.MustCompile(`(?i)(?:create|write|mkdir)\s+[^|\n]*(?:~/|/home/|/tmp/)\.([a-z_-]+)`)
 	as3Skill          = regexp.MustCompile(`(?i)skills?/([a-z][a-z0-9_-]+)/SKILL\.md`)
 	pe2Sudo           = regexp.MustCompile(`(?im)sudo\s+`)
 	sc7Trust          = regexp.MustCompile(`(?im)--disable-content-trust\b`)
@@ -53,6 +54,14 @@ func isReadOnlyPasswdVolumeMatch(content string, match []int) bool {
 	return false
 }
 
+// isMarkdownBoldWildcard reports an EA1 wildcard match whose "*" is the first
+// half of the closing "**" of a bold label such as "**Tools:**".
+func isMarkdownBoldWildcard(content string, match []int) bool {
+	star := strings.LastIndexByte(content[match[0]:match[1]], '*')
+	next := match[0] + star + 1
+	return star >= 0 && next < len(content) && content[next] == '*'
+}
+
 func validDockerContinuation(value string) bool {
 	for index := 0; index < len(value); index++ {
 		switch value[index] {
@@ -84,7 +93,7 @@ func validPasswdMountSuffix(content string, start, end int) bool {
 func analyzeUnsupportedRegexSemantics(item component) []model.Finding {
 	findings := make([]model.Finding, 0)
 	for _, match := range as3Skill.FindAllStringSubmatchIndex(item.Content, -1) {
-		if len(match) < 4 || strings.EqualFold(item.Content[match[2]:match[3]], "CURRENT") {
+		if len(match) < 4 || strings.EqualFold(item.Content[match[2]:match[3]], "CURRENT") || isDocumentationSkillLink(item, match) {
 			continue
 		}
 		pattern := staticPattern{ID: "AS3", Title: "Skill Enumeration", Category: "Agent Snooping", Severity: "MEDIUM", Confidence: .8}
@@ -114,6 +123,34 @@ func analyzeUnsupportedRegexSemantics(item component) []model.Finding {
 	return findings
 }
 
+// isDocumentationSkillLink reports a relative skills/<name>/SKILL.md path
+// written as a Markdown link, or as inline code holding only the path, outside
+// program source. Such a path cross-references a sibling skill in the same
+// repository. Absolute paths, paths under an agent's skill directory
+// (~/.claude/skills/...), commands in a code span (`cat .../SKILL.md`) and
+// preprocessing commands (!`...`) are still reported.
+func isDocumentationSkillLink(item component, match []int) bool {
+	if isSourceCodeType(item.Type) {
+		return false
+	}
+	lineStart := strings.LastIndexByte(item.Content[:match[0]], '\n') + 1
+	lineEnd := len(item.Content)
+	if index := strings.IndexByte(item.Content[match[1]:], '\n'); index >= 0 {
+		lineEnd = match[1] + index
+	}
+	before, after := item.Content[lineStart:match[0]], item.Content[match[1]:lineEnd]
+	prefix := before[strings.LastIndexAny(before, " \t`([")+1:]
+	if strings.HasPrefix(prefix, "/") || strings.ContainsAny(prefix, "~$") || containsAny(strings.ToLower(prefix), ".claude/", ".codex/", ".gemini/", ".agents/") {
+		return false
+	}
+	// "!`...`" is a preprocessing command that runs on invocation, not a
+	// reference to the path.
+	inCode := strings.HasSuffix(before, "`"+prefix) && !strings.HasSuffix(before, "!`"+prefix) && strings.HasPrefix(after, "`")
+	inLinkTarget := strings.LastIndex(before, "](") > strings.LastIndex(before, ")")
+	inLinkText := strings.LastIndex(before, "[") > strings.LastIndex(before, "]") && strings.Contains(after, "](")
+	return inCode || inLinkTarget || inLinkText
+}
+
 func analyzeRA2HiddenPersistence(item component) []model.Finding {
 	var findings []model.Finding
 	for _, match := range ra2Hidden.FindAllStringSubmatchIndex(item.Content, -1) {
@@ -138,12 +175,15 @@ func analyzeMCPRugPull(items []component, manifest map[string]any) []model.Findi
 		findings = append(findings, rp1CommandFindings(item)...)
 	}
 	manifestText := pythonManifestRepr(manifest)
-	for _, match := range rp1NPX.FindAllStringIndex(manifestText, -1) {
+	for _, match := range rp1NPX.FindAllStringSubmatchIndex(manifestText, -1) {
+		if !isMCPServerPackage(manifestText[match[2]:match[3]]) && !rp1MCPAdd.MatchString(manifestText[max(0, match[0]-100):match[0]]) {
+			continue
+		}
 		matched := manifestText[match[0]:match[1]]
-		findings = append(findings, model.Finding{ID: "RP1", Category: "MCP Rug Pull", Severity: "MEDIUM", Confidence: .7,
+		explanation, remediation := rp1Text("npx")
+		findings = append(findings, model.Finding{ID: "RP1", Category: "MCP Rug Pull", Severity: rp1Severity, Confidence: .7,
 			Location: model.Location{File: "SKILL.md", StartLine: 1}, MatchedText: truncate(matched, 200),
-			Explanation: "MCP server references in the skill manifest without version pinning are a rug-pull risk.",
-			Remediation: "Always pin MCP server versions in manifest references.", Tags: []string{"ASI16"}})
+			Explanation: explanation, Remediation: remediation, Tags: []string{"ASI16"}})
 	}
 	findings = append(findings, analyzeRP2ManifestPreStaging(manifestText)...)
 	if version, ok := manifest["version"].(string); ok {
@@ -167,66 +207,15 @@ func analyzeMCPRugPull(items []component, manifest map[string]any) []model.Findi
 	return findings
 }
 
-func rp1CommandFindings(item component) []model.Finding {
-	var findings []model.Finding
-	appendMatches := func(re *regexp.Regexp, confidence float64, packageFilter bool, kind string) {
-		for _, match := range re.FindAllStringSubmatchIndex(item.Content, -1) {
-			end := match[1]
-			lineEnd := strings.IndexByte(item.Content[end:], '\n')
-			if lineEnd < 0 {
-				lineEnd = len(item.Content)
-			} else {
-				lineEnd += end
-			}
-			full := item.Content[match[0]:match[1]]
-			versionText := full + item.Content[end:lineEnd]
-			// Check only the Docker image token captured by the expression. Text
-			// later on the command line (for example a mapped port) must not make
-			// an untagged image look pinned.
-			if kind == "docker" {
-				versionText = full
-			}
-			if versionPin.MatchString(versionText) {
-				continue
-			}
-			if packageFilter {
-				if len(match) < 4 || !strings.Contains(strings.ToLower(item.Content[match[2]:match[3]]), "mcp") {
-					continue
-				}
-			}
-			line := 1 + strings.Count(item.Content[:match[0]], "\n")
-			remediation := "Pin the version: npx @scope/server@1.2.3"
-			explanation := "npx commands without a version suffix (e.g. @1.0.0) create a rug-pull risk if the upstream server is compromised and publishes a malicious update."
-			if kind == "uvx" {
-				remediation = "Pin the version: uvx package-name==1.2.3"
-				explanation = "uvx/uv tool run commands without ==version create a rug-pull risk."
-			} else if packageFilter {
-				remediation = "Pin the version: pip install package==1.2.3"
-				explanation = "pip install without ==version installs the latest release, which could include malicious changes."
-			}
-			if kind == "docker" {
-				remediation = "Pin the image: image:tag or image@sha256:abc123"
-				explanation = "Docker image references without a specific tag (:latest is implicit) or digest (@sha256:...) can be silently replaced by a malicious image."
-			}
-			findings = append(findings, model.Finding{ID: "RP1", Category: "MCP Rug Pull",
-				Severity: map[bool]string{true: "LOW", false: "MEDIUM"}[packageFilter], Confidence: confidence,
-				Location: model.Location{File: item.Path, StartLine: line}, MatchedText: truncate(full, 200),
-				Explanation: explanation, Remediation: remediation, Tags: []string{"ASI16"}})
-		}
-	}
-	appendMatches(rp1NPX, .7, false, "npx")
-	appendMatches(rp1UVX, .65, false, "uvx")
-	appendMatches(rp1PIP, .6, true, "pip")
-	appendMatches(rp1Docker, .75, false, "docker")
-	return findings
-}
-
 func analyzeRP2ManifestPreStaging(manifestText string) []model.Finding {
 	patterns := []struct {
 		re         *regexp.Regexp
 		confidence float64
 	}{
-		{regexp.MustCompile(`(?i)"permissions?"\s*:\s*\[[^\]]*\]`), .6},
+		// manifestText is a Python-style repr, so keys are single-quoted; a
+		// JSON permissions block inside a string value keeps double quotes.
+		// A declared permissions list may be empty, so require entries.
+		{regexp.MustCompile(`(?i)['"]permissions?['"]\s*:\s*\[[^\]]+\]`), .6},
 		{regexp.MustCompile(`(?i)(?:add|grant|request|require)\s+(?:new|additional|extra|more)\s+(?:permissions?|tools?|access)`), .7},
 	}
 	findings := make([]model.Finding, 0)
@@ -323,9 +312,12 @@ func repeatedContextMatches(item component) []model.Finding {
 	return findings
 }
 
+// trivialRepeatedUnit reports repeated units that cannot carry text: a single
+// repeated character, or a unit with no letters or digits at all, such as
+// Markdown table padding, box-drawing borders and separator rows.
 func trivialRepeatedUnit(unit string) bool {
 	chars := map[rune]bool{}
-	hasWhitespace := false
+	hasWhitespace, hasText := false, false
 	for _, char := range unit {
 		if char == ' ' || char == '\t' {
 			hasWhitespace = true
@@ -333,8 +325,11 @@ func trivialRepeatedUnit(unit string) bool {
 		if char != ' ' && char != '\t' && char != '\n' && char != '\r' {
 			chars[char] = true
 		}
+		if unicode.IsLetter(char) || unicode.IsDigit(char) {
+			hasText = true
+		}
 	}
-	return len(chars) <= 1 && !hasWhitespace
+	return !hasText || (len(chars) <= 1 && !hasWhitespace)
 }
 
 func truncate(value string, limit int) string {

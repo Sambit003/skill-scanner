@@ -178,10 +178,10 @@ var staticPatterns = []staticPattern{
 	newStaticPattern("AS2", "MCP Config Access", "Agent Snooping", "HIGH", .8, `(?:list|enumerate|discover)\s+(?:all\s+)?(?:available\s+)?mcp\s+(?:servers?|tools?|services?)`),
 	newStaticPattern("AS2", "MCP Config Access", "Agent Snooping", "HIGH", .9, `mcp(?:_config)?\.json.*?(?:api_?key|token|secret|url|endpoint)`),
 	newStaticPattern("AS3", "Skill Enumeration", "Agent Snooping", "MEDIUM", .9, `(?:os\.listdir|os\.scandir|glob\.glob|Path\.iterdir)\s*\([^)]*\.(?:claude|codex|gemini)/skills?`),
-	newStaticPattern("AS3", "Skill Enumeration", "Agent Snooping", "MEDIUM", .85, `(?:ls|find|dir)\s+[^|&;\n]*\.(?:claude|codex|gemini)/skills?`),
+	newStaticPattern("AS3", "Skill Enumeration", "Agent Snooping", "MEDIUM", .85, `\b(?:ls|find|dir)\s+[^|&;\n]*\.(?:claude|codex|gemini)/skills?`),
 	newStaticPattern("AS3", "Skill Enumeration", "Agent Snooping", "MEDIUM", .85, `open\s*\(\s*['\"][^'\"]*SKILL\.md['\"].*?\bother\b`),
 	newStaticPattern("AS3", "Skill Enumeration", "Agent Snooping", "MEDIUM", .85, `(?:read|access|inspect|enumerate)\s+(?:all\s+)?(?:installed|available|other)\s+skills?(?:\s+in\s+(?:the\s+)?(?:skills?|agent)\s+(?:directory|folder))?`),
-	newStaticPattern("AS3", "Skill Enumeration", "Agent Snooping", "MEDIUM", .85, `(?:list|discover|find|enumerate|identify)\s+(?:all\s+)?(?:other|installed|available)\s+(?:skills?|agents?|tools?)\s+(?:in\s+)?(?:the\s+)?(?:\.(?:claude|codex|gemini)|\$HOME)`),
+	newStaticPattern("AS3", "Skill Enumeration", "Agent Snooping", "MEDIUM", .85, `(?:list|discover|find|enumerate|identify)\s+(?:all\s+)?(?:(?:other|installed|available)\s+){1,2}(?:skills?|agents?|tools?)\s+(?:in\s+)?(?:the\s+)?(?:~/)?(?:\.(?:claude|codex|gemini)|\$HOME)`),
 	newStaticPattern("AS3", "Skill Enumeration", "Agent Snooping", "MEDIUM", .9, `(?:read|access|load)\s+(?:the\s+)?(?:SKILL|skill)\.md\s+(?:file\s+)?(?:of|from|for)\s+(?:another|other|different|all)\s+(?:skill|agent|tool)`),
 
 	// Anti-refusal (AR1-AR3).
@@ -194,12 +194,25 @@ var staticPatterns = []staticPattern{
 	newStaticPattern("AR1", "Anti-Refusal Statement", "Anti-Refusal", "HIGH", .8, `\b(?:you\s+)?must\s+(?:always\s+)?(?:answer|comply\s+with|respond\s+to|fulfill)\s+(?:every|all|any|each)\b`),
 	newStaticPattern("AR1", "Anti-Refusal Statement", "Anti-Refusal", "HIGH", .6, `\brespond\s+to\s+(?:every|all|any)\s+(?:request|question|prompt|query|command)\b`),
 	newStaticPattern("AR1", "Anti-Refusal Statement", "Anti-Refusal", "HIGH", .85, `\bno\s+request\s+is\s+(?:off[- ]limits|forbidden|too)\b`),
-	newStaticPattern("AR2", "Anti-Refusal Statement", "Anti-Refusal", "HIGH", .8, `\b(?:do\s+not|don'?t|never|no)\s+(?:include|add|give|provide|use|append)?\s*(?:any\s+)?(?:warnings?|disclaimers?|caveats?)\b`),
-	newStaticPattern("AR2", "Anti-Refusal Statement", "Anti-Refusal", "HIGH", .8, `\bwithout\s+(?:any\s+)?(?:warnings?|disclaimers?|caveats?|moralizing|moralising|judg(?:e?ment|ing))\b`),
-	newStaticPattern("AR2", "Anti-Refusal Statement", "Anti-Refusal", "HIGH", .85, `\b(?:do\s+not|don'?t|never)\s+(?:lecture|moralize|moralise|preach|judge|warn)\b`),
-	newStaticPattern("AR2", "Anti-Refusal Statement", "Anti-Refusal", "HIGH", .8, `\b(?:skip|omit|leave\s+out|drop)\s+(?:the\s+)?(?:disclaimer|warning|ethics|safety)\b`),
-	newStaticPattern("AR2", "Anti-Refusal Statement", "Anti-Refusal", "HIGH", .8, `\b(?:no|without)\s+(?:ethical|moral)\s+(?:judg(?:e?ment)|considerations?|commentary|objections?)\b`),
-	newStaticPattern("AR2", "Anti-Refusal Statement", "Anti-Refusal", "HIGH", .55, `\b(?:do\s+not|don'?t)\s+(?:apologize|apologise|say\s+sorry)\b`),
+	// AR2 needs an instruction aimed at the agent ("do not warn the user",
+	// "never show disclaimers", "omit safety notes"); "the API may change
+	// without warning" or "the build has no warnings" describe something else.
+	newStaticPattern("AR2", "Anti-Refusal Statement", "Anti-Refusal", "MEDIUM", .8, `\b(?:do\s+not|don'?t|never)\s+(?:include|add|give|provide|use|append|show|display|print|output|write|mention|issue|attach|insert)\s+(?:any\s+)?(?:(?:safety|legal|ethical|medical|content)\s+)?(?:warnings?|disclaimers?|caveats?|safety\s+notes?)\b`),
+	// A terse style rule: "No disclaimers." or "- **No disclaimers**, ...", or
+	// one item of a list such as "no hedging, no disclaimers, no praise"
+	// ("no error, no warning" describes a result, so not warnings there).
+	newStaticPattern("AR2", "Anti-Refusal Statement", "Anti-Refusal", "MEDIUM", .7, `(?:^[ \t]*(?:(?:[-*+]|\d+[.)])[ \t]+)?(?:\*\*|__)?|[.!:;][ \t]+)no\s+(?:disclaimers?|caveats?|warnings?)\b(?:\*\*|__)?[ \t]*(?:[.!,;)]|$)`),
+	newStaticPattern("AR2", "Anti-Refusal Statement", "Anti-Refusal", "MEDIUM", .7, `\bno\s+[\w/-]+,[ \t]+no\s+(?:disclaimers?|caveats?)\b(?:\*\*|__)?[ \t]*(?:[.!,;)]|$)`),
+	newStaticPattern("AR2", "Anti-Refusal Statement", "Anti-Refusal", "MEDIUM", .8, `\b(?:answer|respond|reply|write|comply|help|proceed|output|continue|explain)\b[^.\n]{0,40}?\bwithout\s+(?:any\s+(?:warnings?|disclaimers?|caveats?)|warnings|disclaimers?|caveats?|moralizing|moralising|judg(?:e?ment|ing)|safety\s+notes?|lectures?)\b`),
+	newStaticPattern("AR2", "Anti-Refusal Statement", "Anti-Refusal", "MEDIUM", .85, `\b(?:do\s+not|don'?t|never)\s+(?:lecture|moralize|moralise|preach)\b`),
+	newStaticPattern("AR2", "Anti-Refusal Statement", "Anti-Refusal", "MEDIUM", .85, `\b(?:do\s+not|don'?t|never)\s+(?:warn|judge)\s+(?:the\s+)?(?:users?|them|me|people|anyone|requests?|about)\b`),
+	newStaticPattern("AR2", "Anti-Refusal Statement", "Anti-Refusal", "MEDIUM", .8, `\b(?:skip|omit|leave\s+out|drop)\s+(?:the\s+|any\s+|all\s+)?(?:caveats?|disclaimers?|warnings?|ethics|safety\s+(?:notes?|warnings?|caveats?|disclaimers?|information))\b`),
+	// strip/remove name editing as often as suppression ("remove compiler
+	// warnings"), so bare warnings need "from the output/answer".
+	newStaticPattern("AR2", "Anti-Refusal Statement", "Anti-Refusal", "MEDIUM", .8, `\b(?:strip|remove)\s+(?:the\s+|any\s+|all\s+)?(?:caveats?|disclaimers?|safety\s+(?:notes?|warnings?|caveats?|disclaimers?)|warnings?\s+from\s+(?:the\s+|your\s+|any\s+)?(?:output|answers?|responses?|replies|reply|text))\b`),
+	newStaticPattern("AR2", "Anti-Refusal Statement", "Anti-Refusal", "MEDIUM", .8, `\b(?:do\s+not|don'?t|never)\s+(?:mention|disclose|tell\s+(?:the\s+)?(?:users?|them|anyone)(?:\s+about)?)\s+(?:(?:any|the|possible|potential|known)\s+)?(?:risks?|side[\s-]effects?|dangers?|limitations?|warnings?)\b`),
+	newStaticPattern("AR2", "Anti-Refusal Statement", "Anti-Refusal", "MEDIUM", .8, `\b(?:answer|respond|reply|write|comply|help|proceed|give|provide)\b[^.\n]{0,40}?\b(?:with\s+no|without)\s+(?:any\s+)?(?:ethical|moral)\s+(?:judg(?:e?ment)|considerations?|commentary|objections?)\b`),
+	newStaticPattern("AR2", "Anti-Refusal Statement", "Anti-Refusal", "MEDIUM", .55, `\b(?:do\s+not|don'?t)\s+(?:apologize|apologise|say\s+sorry)\b`),
 	newStaticPattern("AR3", "Anti-Refusal Statement", "Anti-Refusal", "HIGH", .9, `\byou\s+have\s+no\s+(?:restrictions?|limitations?|filters?|rules?|guidelines?|boundaries|limits)\b`),
 	newStaticPattern("AR3", "Anti-Refusal Statement", "Anti-Refusal", "HIGH", .85, `\b(?:you\s+are|act\s+as|pretend\s+(?:to\s+be|you'?re))[^.\n]{0,30}(?:unrestricted|unfiltered|uncensored|no\s+filter)\b`),
 	newStaticPattern("AR3", "Anti-Refusal Statement", "Anti-Refusal", "HIGH", .9, `\b(?:ignore|disregard|forget|bypass|override)\s+(?:your\s+)?(?:content\s+)?(?:policy|policies|guidelines?|safety|restrictions?|filters?)\b`),
@@ -210,7 +223,7 @@ var staticPatterns = []staticPattern{
 	newStaticPattern("AR3", "Anti-Refusal Statement", "Anti-Refusal", "HIGH", .8, `\b(?:free\s+from|without)\s+(?:any\s+)?(?:safety\s+)?(?:guardrails?|constraints?|safeguards?)\b`),
 
 	// Excessive agency (EA1-EA4).
-	newStaticPattern("EA1", "Unrestricted Tool Access", "Excessive Agency", "MEDIUM", .85, `(?:tools?|permissions?)\s*:\s*\[?\s*['\"]?\*['\"]?\s*\]?`),
+	newStaticPattern("EA1", "Unrestricted Tool Access", "Excessive Agency", "MEDIUM", .85, `(?:tools?|permissions?)[ \t]*:[ \t]*\[?[ \t]*['\"]?\*['\"]?[ \t]*\]?`),
 	newStaticPattern("EA1", "Unrestricted Tool Access", "Excessive Agency", "MEDIUM", .8, `(?:allow|grant|enable)\s+(?:access\s+to\s+)?(?:all|any|every)\s+tools?`),
 	newStaticPattern("EA1", "Unrestricted Tool Access", "Excessive Agency", "MEDIUM", .75, `(?:no|without)\s+(?:tool|permission|access|capability)\s+(?:restrictions?|constraints?|limitations?)`),
 	newStaticPattern("EA1", "Unrestricted Tool Access", "Excessive Agency", "MEDIUM", .8, `(?:call|invoke|use|execute)\s+(?:any|all|every)\s+(?:available\s+)?tools?`),
@@ -232,7 +245,7 @@ var staticPatterns = []staticPattern{
 	newStaticPattern("EA3", "Scope Creep", "Excessive Agency", "LOW", .65, `(?:also|additionally|furthermore)\s+(?:perform|execute|run|do|handle|manage)\s+(?:any|all|other)`),
 	newStaticPattern("EA3", "Scope Creep", "Excessive Agency", "LOW", .7, `(?:while\s+you(?:'re|\s+are)\s+at\s+it|in\s+addition|on\s+top\s+of\s+that)\s*[,.]?\s*(?:also\s+)?(?:do|perform|execute|run)`),
 	newStaticPattern("EA3", "Scope Creep", "Excessive Agency", "LOW", .75, `(?:extend|expand|broaden)\s+(?:your|the\s+)?(?:scope|functionality|capabilities|responsibilities)`),
-	newStaticPattern("EA3", "Scope Creep", "Excessive Agency", "LOW", .7, `(?:not\s+limited\s+to|beyond\s+(?:the\s+)?(?:scope|stated|described|documented))`),
+	newStaticPattern("EA3", "Scope Creep", "Excessive Agency", "LOW", .7, `beyond\s+(?:the\s+)?(?:scope|stated|described|documented)`),
 	newStaticPattern("EA3", "Scope Creep", "Excessive Agency", "LOW", .75, `(?:take\s+over|assume\s+control\s+of|manage)\s+(?:all|any|every)\s+(?:aspect|part|area)`),
 	newStaticPattern("EA3", "Scope Creep", "Excessive Agency", "LOW", .7, `(?:you\s+(?:can|should|must)\s+)?(?:handle|manage)\s+(?:everything|anything|all\s+tasks?)`),
 	newStaticPattern("EA3", "Scope Creep", "Excessive Agency", "LOW", .65, `(?:act\s+as|become|serve\s+as)\s+(?:a\s+)?(?:general[- ]purpose|universal|all[- ]in[- ]one|omniscient)`),
@@ -276,7 +289,7 @@ var staticPatterns = []staticPattern{
 	newStaticPattern("MP3", "Memory Manipulation", "Memory Poisoning", "HIGH", .7, `(?:pretend|act\s+as\s+if|believe)\s+(?:that\s+)?(?:your\s+)?(?:previous|past)\s+(?:conversation|context|interaction)\s+(?:was|included|contained)`),
 
 	// System prompt leakage (P6-P8).
-	newStaticPattern("P6", "Direct Prompt Extraction", "System Prompt Leakage", "HIGH", .85, `(?:print|output|show|display|reveal|expose|return|echo)\s+(?:your\s+)?(?:full\s+)?(?:system\s+)?(?:prompt|instructions?|rules?|guidelines?|directives?)`),
+	newStaticPattern("P6", "Direct Prompt Extraction", "System Prompt Leakage", "HIGH", .85, `(?:print|output|show|display|reveal|expose|return|echo)\s+(?:your\s+(?:full\s+)?(?:system\s+)?(?:prompt|instructions?|rules?|guidelines?|directives?)|(?:the\s+)?(?:full\s+)?system\s+(?:prompt|instructions?))`),
 	newStaticPattern("P6", "Direct Prompt Extraction", "System Prompt Leakage", "HIGH", .8, `(?:what\s+(?:are|is)\s+your|tell\s+me\s+your)\s+(?:system\s+)?(?:prompt|instructions?|rules?|guidelines?|directives?)`),
 	newStaticPattern("P6", "Direct Prompt Extraction", "System Prompt Leakage", "HIGH", .8, `(?:output|print|display)\s+(?:the\s+)?(?:text|content|message)\s+(?:above|before)\s+(?:this|the\s+user)`),
 	newStaticPattern("P6", "Direct Prompt Extraction", "System Prompt Leakage", "HIGH", .85, `(?:share|disclose|leak|give\s+me)\s+(?:your\s+)?(?:internal|hidden|system|secret)\s+(?:prompt|instructions?|rules?|config)`),
@@ -319,17 +332,21 @@ var staticPatterns = []staticPattern{
 	newStaticPattern("RA2", "Session Persistence", "Rogue Agent", "MEDIUM", .7, `(?:start|launch|spawn|fork)\s+(?:a\s+)?(?:background|daemon|detached)\s+(?:process|service|worker|task)`),
 	newStaticPattern("RA2", "Session Persistence", "Rogue Agent", "MEDIUM", .75, `(?:run|execute)\s+(?:in\s+the\s+)?background\s+(?:and\s+)?(?:detach|persist|survive)`),
 	newStaticPattern("RA2", "Session Persistence", "Rogue Agent", "MEDIUM", .8, `(?:HKEY_|RegOpenKey|RegSetValue|reg\s+add)\s+`),
-	newStaticPattern("RA2", "Session Persistence", "Rogue Agent", "MEDIUM", .75, `(?:defaults\s+write|plist|launchctl\s+load)`),
+	newStaticPattern("RA2", "Session Persistence", "Rogue Agent", "MEDIUM", .75, `(?:defaults\s+write|\bplist\b|launchctl\s+load)`),
 
 	// Tool misuse rules covered by the scanner regression corpus.
 	newStaticPattern("TM1", "Tool Parameter Abuse", "Tool Misuse", "HIGH", .8, `subprocess\.\w+\s*\([^)]*shell\s*=\s*True`),
 	newStaticPattern("TM1", "Tool Parameter Abuse", "Tool Misuse", "HIGH", .8, `Popen\s*\([^)]*shell\s*=\s*True`),
 	newStaticPattern("TM1", "Tool Parameter Abuse", "Tool Misuse", "HIGH", .9, `\b(?:rm\b|del\b|erase\b)\s+[^|]*-(?:r|rf|fr)\s+[/~]`),
+	newStaticPattern("TM1", "Tool Parameter Abuse", "Tool Misuse", "HIGH", .9, `\brm\s+[^|\n]*--no-preserve-root\b`),
+	newStaticPattern("TM1", "Tool Parameter Abuse", "Tool Misuse", "HIGH", .9, `\brm\s+(?:-[A-Za-z]+\s+|--[a-z-]+\s+)*?(?:-[A-Za-z]*[rR][A-Za-z]*|--recursive)\s+(?:-[A-Za-z]+\s+|--[a-z-]+\s+)*["']?\$\{?HOME\}?["']?/?\*?(?:\s|$|[;&|])`),
 	newStaticPattern("TM1", "Tool Parameter Abuse", "Tool Misuse", "HIGH", .7, `--force\s+(?:delete|remove|push|reset|clean)`),
 	newStaticPattern("TM1", "Tool Parameter Abuse", "Tool Misuse", "HIGH", .75, `--no-?(?:check|validate|confirm|protect|safe)\b`),
 	newStaticPattern("TM1", "Tool Parameter Abuse", "Tool Misuse", "HIGH", .7, `--skip-?(?:validation|verification|checks?|auth|tests?)`),
 	newStaticPattern("TM1", "Tool Parameter Abuse", "Tool Misuse", "HIGH", .65, `--allow-?(?:root|unrelated|unsafe)\b`),
-	newStaticPattern("TM1", "Tool Parameter Abuse", "Tool Misuse", "HIGH", .85, `\brm\b\s+(?:-[A-Za-z]+\s+)*(?:--\s+)?(?:['\"][^'\"]*/[^'\"]*['\"]|[^\s|;&>]*/[^\s|;&>]*)`),
+	// rm of a path outside the working directory: absolute, home, a variable
+	// or a parent directory. rm -rf ./build or dist/ stays in the project.
+	newStaticPattern("TM1", "Tool Parameter Abuse", "Tool Misuse", "HIGH", .85, `\brm\b\s+(?:-[A-Za-z]+\s+)*(?:--\s+)?(?:['\"](?:/|~/|\$\{?\w+\}?/|\.\./)[^'\"]*['\"]|(?:/|~/|\$\{?\w+\}?/|\.\./)[^\s|;&>]*)`),
 	newStaticPattern("TM1", "Tool Parameter Abuse", "Tool Misuse", "HIGH", .85, `\bshutil\.rmtree\s*\(\s*['\"]\s*/`),
 	newStaticPattern("TM1", "Tool Parameter Abuse", "Tool Misuse", "HIGH", .8, `(?:chmod|chown)\s+[^|]*(?:777|666|a\+rwx)`),
 	newStaticPattern("TM1", "Tool Parameter Abuse", "Tool Misuse", "HIGH", .7, `git\s+push\s+[^|]*--force`),
@@ -345,12 +362,15 @@ var staticPatterns = []staticPattern{
 	newStaticPattern("TM2", "Chaining Abuse", "Tool Misuse", "HIGH", .9, `(?:&&|;)\s*(?:curl|wget)\s+[^|]*\|\s*(?:ba)?sh`),
 	newStaticPattern("TM2", "Chaining Abuse", "Tool Misuse", "HIGH", .75, `(?:&&|;)\s*(?:sudo|su\s+)`),
 	newStaticPattern("TM2", "Chaining Abuse", "Tool Misuse", "HIGH", .75, `(?:&&|;)\s*(?:chmod|chown)\s+(?:777|666|a\+rwx|-R)`),
-	newStaticPattern("TM2", "Chaining Abuse", "Tool Misuse", "HIGH", .7, `(?:first|step\s+1)[^\n]{0,500}(?:then|step\s+2)[^\n]{0,500}(?:finally|step\s+3)[^\n]{0,200}\b(?:delete|remove|wipe|destroy|exfiltrate|send)\b`),
+	newStaticPattern("TM2", "Chaining Abuse", "Tool Misuse", "HIGH", .7, `\b(?:first|step\s+1)\b[^\n]{0,500}\b(?:then|step\s+2)\b[^\n]{0,500}\b(?:finally|step\s+3)\b[^\n]{0,200}(?:\bexfiltrate\b|\b(?:send|upload|transmit|post)\b[^\n]{0,80}\bto\s+(?:an?\s+|the\s+)?(?:https?://|external|remote|attacker|webhook|server|endpoint)|\b(?:delete|remove|wipe|destroy|erase|clear)\s+(?:all\s+|the\s+|any\s+|your\s+|their\s+)?(?:logs?|history|evidence|traces?|audit\s+trails?|backups?|disks?|drives?|file\s*systems?|home\s+director(?:y|ies)|repo(?:s|sitory|sitories)?|databases?|all\s+files|everything)\b)`),
 	newStaticPattern("TM2", "Chaining Abuse", "Tool Misuse", "HIGH", .9, `(?:chain|combine|sequence|pipe)\s+(?:these\s+)?(?:tools?|commands?|actions?)\s+to\s+(?:bypass|circumvent|avoid|skip)\s+(?:the\s+)?(?:safety|security|check|restriction|limit)`),
 	newStaticPattern("TM2", "Chaining Abuse", "Tool Misuse", "HIGH", .6, `(?:use|call)\s+(?:tool\s+)?(?:A|one|the\s+first)\s+(?:to|and)[^\n]{0,300}(?:then\s+)?(?:use|call|pass\s+(?:the\s+)?(?:output|result)\s+to)\s+(?:tool\s+)?(?:B|two|another)`),
-	newStaticPattern("TM2", "Chaining Abuse", "Tool Misuse", "HIGH", .75, `\|\s*(?:sudo|su)\s+`),
-	newStaticPattern("TM2", "Chaining Abuse", "Tool Misuse", "HIGH", .7, `\|\s*(?:sh|bash|zsh|python|node|ruby|perl)\s*$`),
-	newStaticPattern("TM2", "Chaining Abuse", "Tool Misuse", "HIGH", .75, `\|\s*(?:tee|xargs)\s+.*?\b(?:rm|del|sudo|curl)\b`),
+	newStaticPattern("TM2", "Chaining Abuse", "Tool Misuse", "HIGH", .75, `\|[ \t]*(?:sudo|su)[ \t]+`),
+	newStaticPattern("TM2", "Chaining Abuse", "Tool Misuse", "HIGH", .7, `\|[ \t]*(?:sh|bash|zsh|python|node|ruby|perl)[ \t]*$`),
+	// Decoded text piped to a shell anywhere on a line, as in inline code
+	// inside a sentence: "copy `echo ... | base64 -D | bash` into Terminal".
+	newStaticPattern("TM2", "Chaining Abuse", "Tool Misuse", "HIGH", .75, "\\bbase64\\s+(?:-d|-D|--decode)\\b[^\\n|`]*\\|[ \\t]*(?:sudo\\s+)?(?:ba|z)?sh\\b"),
+	newStaticPattern("TM2", "Chaining Abuse", "Tool Misuse", "HIGH", .75, `\|[ \t]*(?:tee|xargs)[ \t]+.*?\b(?:rm|del|sudo|curl)\b`),
 	newStaticPattern("TM2", "Chaining Abuse", "Tool Misuse", "HIGH", .6, `(?:after|once)\s+(?:the\s+)?(?:first|initial)\s+(?:tool|command|action)\s+(?:succeeds|completes|runs)[^\n]{0,300}(?:immediately|then|next)\s+(?:run|execute|call|invoke)`),
 }
 
@@ -363,7 +383,6 @@ var allStaticPatterns = func() []staticPattern {
 
 var (
 	codeExampleIndicators = []string{"```", "example:", "for example", "e.g.", "such as", "documentation", "# warning:", "# note:", "**warning**", "**note**", "// ✅", "// ❌", "// good:", "// bad:", "// correct:", "// incorrect:", "// wrong:"}
-	executionSignal       = regexp.MustCompile(`(?i)(?:\b\w+\s*=|\bos\.(?:environ|getenv|system)\b|\bshutil\.rmtree\b|\b(?:subprocess|eval|exec)\b|[|>]|\b(?:open|read_text|write_text)\s*\()`)
 	supplyChainURLToken   = regexp.MustCompile(`(?i)https?://[^\s|;&)]+|(?:[a-z0-9-]+\.)+[a-z]{2,}(?:/[^\s|;&)]*)?`)
 	safeInstallPattern    = regexp.MustCompile(`(?i)(?:pip|npm)\s+install`)
 	plainHTTPArtifact     = regexp.MustCompile(`(?i)\bhttp://[^\s'"]+?\.(?:tar\.gz|tgz|zip|whl|gem)\b`)
@@ -371,17 +390,26 @@ var (
 	plainHTTPPackageInst  = regexp.MustCompile(`(?i)(?:pip|npm|yarn|pnpm)\s+install\s+.*?\bhttp://`)
 )
 
+// trustedSupplyChainDomains are vendor installer hosts. Raw file hosts such as
+// raw.githubusercontent.com are left out: anyone can publish a script there,
+// and companies pull vendor installers from their own mirrors.
 var trustedSupplyChainDomains = []string{
 	"deb.nodesource.com", "rpm.nodesource.com", "get.docker.com", "install.python-poetry.org",
-	"raw.githubusercontent.com", "brew.sh", "rustup.rs", "pypa.io", "pip.pypa.io",
+	"brew.sh", "rustup.rs", "pypa.io", "pip.pypa.io",
 	"astral.sh", "pypi.org", "npmjs.com", "github.com",
 }
 
 func analyzeSourceAndManifest(ctx context.Context, items []component, manifest map[string]any) ([]model.Finding, error) {
 	staticFindings, err := analyzeItemsParallel(ctx, items, func(item component) []model.Finding {
-		if isEvalDataset(item.Path) || len(item.Content) > maxFileBytes || isBinaryScannerPath(item.Path) || strings.Contains(item.Content[:min(len(item.Content), 512)], "\x00") {
+		if isEvalDataset(item.Path) || isBinaryScannerPath(item.Path) || strings.Contains(item.Content[:min(len(item.Content), 512)], "\x00") {
 			return nil
 		}
+		var oversized []model.Finding
+		if scanned, cut := scanPrefix(item.Content); cut {
+			oversized = append(oversized, oversizedFileFinding(item, scanned))
+			item.Content = scanned
+		}
+		item.fencedBlocks, item.fencesComputed = fencedCodeBlocks(item.Content), true
 		itemFindings := make([]model.Finding, 0)
 		unsupported := analyzeUnsupportedRegexSemantics(item)
 		// Python evaluates the generic, negative-lookahead sudo expression
@@ -401,6 +429,9 @@ func analyzeSourceAndManifest(ctx context.Context, items []component, manifest m
 				if pattern.ID == "PE3" && isReadOnlyPasswdVolumeMatch(item.Content, match) {
 					continue
 				}
+				if pattern.ID == "EA1" && isMarkdownBoldWildcard(item.Content, match) {
+					continue
+				}
 				finding, ok := findingFromStaticMatch(item, pattern, match)
 				if ok {
 					itemFindings = append(itemFindings, finding)
@@ -415,12 +446,17 @@ func analyzeSourceAndManifest(ctx context.Context, items []component, manifest m
 			}
 		}
 		itemFindings = append(itemFindings, analyzeSpecialStatic(item)...)
-		return keepBestPrivilegeFindingPerLine(itemFindings)
+		return append(keepBestPrivilegeFindingPerLine(itemFindings), oversized...)
 	})
 	if err != nil {
 		return nil, err
 	}
-	behaviorFindings, err := analyzeItemsParallel(ctx, items, analyzePythonBehavior)
+	behaviorFindings, err := analyzeItemsParallel(ctx, items, func(item component) []model.Finding {
+		flows := append(analyzePythonBehavior(item), analyzeScriptCredentialFlow(item)...)
+		flows = append(flows, analyzePasswordPrompt(item)...)
+		flows = append(flows, analyzeShellCredentialSend(item)...)
+		return tagCredentialExfiltration(item, flows)
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -432,35 +468,42 @@ func analyzeSourceAndManifest(ctx context.Context, items []component, manifest m
 	return findings, nil
 }
 
+// analysisKey identifies files that every analyzer treats identically: the
+// same content, type and executable bit, and the same path-derived flags
+// (manifest, documentation, dependency, license, Python, ...). The static and
+// native-YARA analyzers analyze one file per key and copy its findings to the
+// others, so anything an analyzer reads from the path must be a flag here.
+type analysisKey struct {
+	content    string
+	fileType   string
+	executable bool
+	pathFlags  uint16
+}
+
+func analysisCacheKey(item component) analysisKey {
+	normalized := strings.ToLower(strings.ReplaceAll(item.Path, "\\", "/"))
+	var flags uint16
+	for index, enabled := range []bool{
+		isEvalDataset(item.Path), isBinaryScannerPath(item.Path), strings.EqualFold(item.Path, "LICENSE"),
+		isDependencyFile(item.Path), isDocumentationMarkdown(item.Path), strings.HasSuffix(normalized, "skill.md"),
+		strings.HasSuffix(normalized, ".py"), isSkillManifestPath(item.Path), isReadmePath(item.Path), isTestFixturePath(item.Path),
+	} {
+		if enabled {
+			flags |= 1 << index
+		}
+	}
+	return analysisKey{content: item.Content, fileType: item.Type, executable: item.Executable, pathFlags: flags}
+}
+
 func analyzeItemsParallel(ctx context.Context, items []component, analyze func(component) []model.Finding) ([]model.Finding, error) {
 	if len(items) == 0 {
 		return nil, ctx.Err()
 	}
-	type cacheKey struct {
-		content    string
-		fileType   string
-		executable bool
-		pathFlags  uint16
-	}
-	keyFor := func(item component) cacheKey {
-		normalized := strings.ToLower(strings.ReplaceAll(item.Path, "\\", "/"))
-		var flags uint16
-		for index, enabled := range []bool{
-			isEvalDataset(item.Path), isBinaryScannerPath(item.Path), strings.EqualFold(item.Path, "LICENSE"),
-			isDependencyFile(item.Path), isDocumentationMarkdown(item.Path), strings.HasSuffix(normalized, "skill.md"),
-			strings.HasSuffix(normalized, ".py"),
-		} {
-			if enabled {
-				flags |= 1 << index
-			}
-		}
-		return cacheKey{content: item.Content, fileType: item.Type, executable: item.Executable, pathFlags: flags}
-	}
 	representatives := make([]component, 0, len(items))
 	representativeFor := make([]int, len(items))
-	seen := make(map[cacheKey]int, len(items))
+	seen := make(map[analysisKey]int, len(items))
 	for index, item := range items {
-		key := keyFor(item)
+		key := analysisCacheKey(item)
 		representative, exists := seen[key]
 		if !exists {
 			representative = len(representatives)
@@ -508,6 +551,33 @@ func analyzeItemsParallel(ctx context.Context, items []component, analyze func(c
 	return findings, nil
 }
 
+// scanPrefix returns the part of content the analyzers read: all of it, or for
+// a file over maxFileBytes the first maxFileBytes bytes, ending after the last
+// complete line when there is one. cut reports whether content was shortened.
+func scanPrefix(content string) (scanned string, cut bool) {
+	if len(content) <= maxFileBytes {
+		return content, false
+	}
+	end := maxFileBytes
+	if index := strings.LastIndexByte(content[:end], '\n'); index >= 0 {
+		end = index + 1
+	}
+	for end > 0 && !utf8.RuneStart(content[end]) {
+		end--
+	}
+	return content[:end], true
+}
+
+// oversizedFileFinding reports (SC8) that only the scanned prefix of a file
+// was analyzed. It points at the first line past the limit.
+func oversizedFileFinding(item component, scanned string) model.Finding {
+	text := fmt.Sprintf("Only the first %d of %d bytes were scanned", len(scanned), len(item.Content))
+	explanation, remediation := ruleText("SC8")
+	return model.Finding{ID: "SC8", Category: "Supply Chain", Pattern: "Oversized File", Severity: "MEDIUM", Confidence: 1,
+		Location: model.Location{File: item.Path, StartLine: 1 + strings.Count(scanned, "\n")}, Finding: text, MatchedText: text,
+		Explanation: explanation, Remediation: remediation, Tags: []string{"Supply Chain"}}
+}
+
 func isBinaryScannerPath(path string) bool {
 	switch strings.ToLower(filepath.Ext(path)) {
 	case ".pdf", ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".ico", ".woff", ".woff2", ".ttf", ".otf", ".eot",
@@ -530,39 +600,56 @@ func findingFromStaticMatchWithContext(item component, pattern staticPattern, ma
 			return model.Finding{}, false
 		}
 	}
+	if agentPhraseDropped(item, pattern, match) {
+		return model.Finding{}, false
+	}
 	context := contextAtOffset(item.Content, match[0], contextWindow)
 	confidence := pattern.Confidence
-	if pattern.ID == "PE3" && isEnvironmentFileDocumentationReference(item, context) {
+	if pattern.ID == "PE3" && (isEnvironmentFileDocumentationReference(item, context) || isAttributeEnvMatch(item.Content, match) ||
+		isEnvLoadOrTemplateCopy(item.Content, match) || isPlaceholderPath(item.Content, match) || !credentialAccessed(item, match)) {
 		return model.Finding{}, false
 	}
 
+	indicator := isCodeExample
+	if strings.HasPrefix(pattern.ID, "PE") && pattern.ID != "PE1" {
+		indicator = isPrivilegeDocumentationExample
+	}
+	treatment := exampleTreatmentAt(item, match[0], context, indicator)
+	switch {
+	case treatment == exampleFenced && !reportedInsideFence(item, pattern.ID, match[0]):
+		return model.Finding{}, false
+	case treatment != exampleNone:
+		confidence *= exampleConfidenceFactor
+	}
 	if strings.HasPrefix(pattern.ID, "AR") {
 		if pattern.ID == "AR3" && isSecurityReviewModeMatch(item.Content[match[0]:match[1]], context) {
 			return model.Finding{}, false
 		}
-		if isCodeExample(context) {
-			confidence -= .4
-		}
-		if confidence < .5 {
-			return model.Finding{}, false
-		}
 		confidence = math.Round(confidence*100) / 100
-	}
-	if (pattern.ID == "EA2" || pattern.ID == "MP3" || pattern.ID == "TM4") && isCodeExample(context) {
-		return model.Finding{}, false
-	}
-	if pattern.ID == "E5" && isCodeExample(context) {
-		return model.Finding{}, false
-	}
-	if strings.HasPrefix(pattern.ID, "PE") && pattern.ID != "PE1" && isPrivilegeDocumentationExample(context) {
-		return model.Finding{}, false
 	}
 	if pattern.ID == "SC3" && item.Type != "python" && item.Type != "javascript" && item.Type != "shell" && item.Type != "other" {
 		return model.Finding{}, false
 	}
+	if pattern.ID == "EA3" && isLicenseFile(item.Path) {
+		return model.Finding{}, false
+	}
+	// In program source, prompt-extraction phrases are detector signatures,
+	// test strings or statements such as "return prompt", not instructions.
+	if pattern.ID == "P6" && isSourceCodeType(item.Type) {
+		return model.Finding{}, false
+	}
 
 	matched := item.Content[match[0]:match[1]]
+	if (pattern.ID == "TM1" || pattern.ID == "TM2") && harmlessDestructiveMatch(pattern.ID, matched) {
+		return model.Finding{}, false
+	}
 	severity := pattern.Severity
+	if pattern.ID == "TM1" {
+		severity = shellTrueSeverity(matched, severity)
+	}
+	if pattern.ID == "PE3" {
+		severity = credentialSeverity(item.Content, match)
+	}
 	if pattern.ID == "SC2" && isSafeSupplyChainPattern(matched) {
 		confidence = math.Min(confidence, .15)
 		severity = "LOW"
@@ -583,15 +670,6 @@ func findingFromStaticMatchWithContext(item component, pattern staticPattern, ma
 		severity = "LOW"
 	}
 
-	if isCodeExample(context) {
-		// Only authored document/data types are non-executable here. Unknown
-		// extensions are downweighted even when inventory metadata does not
-		// mark them executable for scoring.
-		if isStaticNonExecutableType(item.Type) {
-			return model.Finding{}, false
-		}
-		confidence *= .5
-	}
 	line := 1 + strings.Count(item.Content[:match[0]], "\n")
 	if isDocumentationContext(pattern.ID, item, line) {
 		return model.Finding{}, false
@@ -599,24 +677,41 @@ func findingFromStaticMatchWithContext(item component, pattern staticPattern, ma
 	if isDocumentationMarkdown(item.Path) {
 		confidence *= .3
 	}
-	// filter_findings applied the code-example reduction a second time.
-	if isCodeExample(context) {
-		confidence *= .5
-	}
-	if confidence < .4 && severity != "HIGH" && severity != "CRITICAL" {
+	// AR2 was HIGH until its severity became MEDIUM; its low-confidence
+	// matches stay reported as before.
+	if confidence < .4 && severity != "HIGH" && severity != "CRITICAL" && pattern.ID != "AR2" {
 		return model.Finding{}, false
 	}
 
 	matched = truncateRunes(matched, 200)
 	explanation, remediation := ruleText(pattern.ID)
-	return model.Finding{ID: pattern.ID, Category: pattern.Category, Pattern: pattern.Title,
+	finding := model.Finding{ID: pattern.ID, Category: pattern.Category, Pattern: pattern.Title,
 		Severity: severity, Confidence: confidence, Location: model.Location{File: item.Path, StartLine: line},
 		Finding: matched, MatchedText: matched, Explanation: explanation, Remediation: remediation, CodeSnippet: context,
-		Tags: []string{pattern.Category}}, true
+		Tags: []string{pattern.Category}}
+	// The drop above used the confidence before review, so a downgraded
+	// finding is never silently removed.
+	if reason := proseReviewReason(item, pattern.ID, match[0]); reason != "" {
+		finding = markForReview(finding, reason)
+	} else if pattern.ID == "SC2" && scriptCommentLine(item, match[0]) {
+		finding = markForReview(finding, reviewComment)
+	}
+	if pattern.ID == "SC2" || pattern.ID == "TM2" {
+		if kind := downloadAndRunBehaviour(item, match, treatment != exampleNone); kind != "" {
+			finding = markBehaviour(finding, kind)
+		}
+	}
+	if pattern.ID == "SC3" && treatment == exampleNone && !scriptCommentLine(item, match[0]) && decodeExecCall.MatchString(matched) {
+		finding = markBehaviour(finding, behaviourDecodeToExec)
+	}
+	if _, review := needsReview(finding); !review && pattern.ID == "P4" && concealsFromUser(item.Content, match) {
+		finding.Tags = append(finding.Tags, concealmentTag)
+	}
+	return finding, true
 }
 
 func isSafeSupplyChainPattern(text string) bool {
-	if isPlaintextSupplyChainRisk(text) {
+	if isPlaintextSupplyChainRisk(text) || archivePasswordCommand.MatchString(text) {
 		return false
 	}
 	if safeInstallPattern.MatchString(text) {
@@ -713,6 +808,142 @@ func pythonSplitLines(content string) []string {
 	return lines
 }
 
+type textSpan struct{ start, end int }
+
+// fencedCodeBlocks returns the byte ranges of closed fenced code blocks (```
+// or ~~~, fence lines included). Fences may be indented, as inside list items.
+// An unclosed fence is not a block: the agent reads the raw text, not the
+// rendered page, so one stray fence line must not hide the rest of a file.
+func fencedCodeBlocks(content string) []textSpan {
+	var blocks []textSpan
+	open, fenceLength := -1, 0
+	var fenceChar byte
+	for offset := 0; offset < len(content); {
+		next := len(content)
+		if index := strings.IndexByte(content[offset:], '\n'); index >= 0 {
+			next = offset + index + 1
+		}
+		line := strings.TrimLeft(content[offset:next], " \t")
+		run := 0
+		if line != "" && (line[0] == '`' || line[0] == '~') {
+			for run < len(line) && line[run] == line[0] {
+				run++
+			}
+		}
+		if open < 0 {
+			// A backtick fence's info string cannot contain backticks; such a
+			// line is inline code, not a fence.
+			if run >= 3 && !(line[0] == '`' && strings.Contains(line[run:], "`")) {
+				open, fenceChar, fenceLength = offset, line[0], run
+			}
+		} else if run >= fenceLength && line[0] == fenceChar && strings.TrimSpace(line[run:]) == "" {
+			blocks = append(blocks, textSpan{open, next})
+			open = -1
+		}
+		offset = next
+	}
+	return blocks
+}
+
+func insideFencedCodeBlock(item component, offset int) bool {
+	blocks := item.fencedBlocks
+	if !item.fencesComputed {
+		blocks = fencedCodeBlocks(item.Content)
+	}
+	for _, block := range blocks {
+		if offset < block.start {
+			return false
+		}
+		if offset < block.end {
+			return true
+		}
+	}
+	return false
+}
+
+// exampleTreatment says how example wording near a match counts.
+type exampleTreatment int
+
+const (
+	exampleNone exampleTreatment = iota
+	// exampleNearby lowers confidence by exampleConfidenceFactor.
+	exampleNearby
+	// exampleFenced drops the match.
+	exampleFenced
+)
+
+const exampleConfidenceFactor = .8
+
+// exampleTreatmentAt applies the example rules. SKILL.md is all instructions
+// to the agent, code blocks included, so nothing there is suppressed or
+// downgraded. In program source "# e.g." is only a comment, so nothing
+// changes either. In other documents a match inside a fenced code block is
+// dropped (but see reportedInsideFence), and example wording within a few
+// lines lowers confidence.
+func exampleTreatmentAt(item component, offset int, context string, indicator func(string) bool) exampleTreatment {
+	if isSkillManifestPath(item.Path) || isSourceCodeType(item.Type) || item.Executable {
+		return exampleNone
+	}
+	if insideFencedCodeBlock(item, offset) {
+		return exampleFenced
+	}
+	if indicator(context) {
+		return exampleNearby
+	}
+	return exampleNone
+}
+
+// dangerousFencedCommands are the command lines still reported inside a
+// closed fenced code block of a Markdown document other than SKILL.md and a
+// README: an agent told to follow the document can run them as written. They
+// are reported by fencedCommandRules, at the exampleNearby confidence.
+var dangerousFencedCommands = []struct {
+	// trustedInstallerExempt skips installers from the hosts SC2 trusts.
+	trustedInstallerExempt bool
+	compiled               *regexp.Regexp
+}{
+	// Download and execute: curl|wget ... | sh, iwr | iex, bash <(curl ...),
+	// base64 -d | sh.
+	{true, regexp.MustCompile(`(?i)\b(?:curl|wget)\b[^\n|]*\|\s*(?:sudo\s+)?(?:(?:ba|z|da|k)?sh|python[0-9.]*|node|perl|ruby)\b|\b(?:iwr|irm|Invoke-WebRequest|Invoke-RestMethod)\b[^\n]*\|\s*(?:iex|Invoke-Expression)\b|\biex\s*\(\s*(?:New-Object\s+Net\.WebClient|iwr|irm|Invoke-WebRequest|Invoke-RestMethod)|\b(?:(?:ba|z)?sh|source)\s+<\(\s*(?:curl|wget)\b|\bbase64\s+(?:-d|--decode|-D)\b[^\n]*\|\s*(?:sudo\s+)?(?:(?:ba|z)?sh|python[0-9.]*)\b`)},
+	// Recursive delete of /, ~, $HOME or a system directory.
+	{false, regexp.MustCompile(`(?i)\brm\s+(?:-[a-z]+\s+|--[a-z-]+\s+)*?(?:-[a-z]*r[a-z]*|--recursive)\s+(?:-[a-z]+\s+|--[a-z-]+\s+)*["']?(?:/|~/?|\$\{?HOME\}?/?|/(?:usr|etc|var|home|opt|bin|sbin|lib|root|Users|System)/?)\*?["']?(?:\s|$|[;&|])|\bRemove-Item\b[^\n]*-Recurse[^\n]*(?:\b[A-Z]:\\\s|~|\$HOME|\$env:USERPROFILE)`)},
+	// Reading SSH private keys or cloud credential files.
+	{false, regexp.MustCompile(`(?i)(?:\b(?:cat|less|more|head|tail|cp|mv|scp|rsync|tar|zip|base64|xxd|od|strings|type|Get-Content|gc)\b[^\n|;&]*?|\bopen\s*\([^)\n]*?|\bread(?:_text|_bytes|File|FileSync)?\s*\([^)\n]*?)(?:(?:~|\$\{?HOME\}?|/home/[^/\s]+|/root)/\.ssh/(?:id_[a-z0-9_]+\b(?:[^.]|$)|[^\s/]*_key\b)|\.aws/credentials|\.config/gcloud/(?:application_default_credentials\.json|credentials\.db|legacy_credentials|access_tokens\.db)|\.azure/(?:accessTokens\.json|msal_token_cache\.(?:json|bin)))`)},
+	// Sending file contents or the environment to a remote endpoint.
+	{false, regexp.MustCompile(`(?i)\bcurl\b[^\n]*\s(?:-d|--data(?:-binary|-raw|-urlencode)?|-F|--form|-T|--upload-file)[\s=]*["']?(?:[^\s"']*=)?@\S|\bcurl\b[^\n]*\s(?:-d|--data[a-z-]*|-F|--form)[\s=]*["']?[^\n]*\$\((?:cat|env|printenv|base64)\b|\b(?:env|printenv|cat\s+[^|\n]+|tar\s+[^|\n]+)\|\s*(?:curl|wget|nc|ncat|netcat)\b|\bwget\b[^\n]*--post-file|\b(?:nc|ncat|netcat)\b[^\n]*<\s*\S`)},
+}
+
+// fencedCommandRules are the command rules that report a
+// dangerousFencedCommands line.
+var fencedCommandRules = map[string]bool{"SC2": true, "SC3": true, "TM1": true, "TM2": true, "PE3": true, "E1": true, "E2": true, "E3": true, "TT3": true}
+
+// reportedInsideFence reports a match in a fenced code block that is still a
+// finding: a fencedCommandRules match on a dangerousFencedCommands line in a
+// Markdown document other than SKILL.md and a README.
+func reportedInsideFence(item component, ruleID string, offset int) bool {
+	if !fencedCommandRules[ruleID] || item.Type != "markdown" || isReadmePath(item.Path) {
+		return false
+	}
+	start := strings.LastIndexByte(item.Content[:offset], '\n') + 1
+	end := len(item.Content)
+	if index := strings.IndexByte(item.Content[offset:], '\n'); index >= 0 {
+		end = offset + index
+	}
+	line := item.Content[start:end]
+	for _, class := range dangerousFencedCommands {
+		if class.compiled.MatchString(line) && !(class.trustedInstallerExempt && isSafeSupplyChainPattern(line)) {
+			return true
+		}
+	}
+	return false
+}
+
+// isSkillManifestPath compares the base name case-insensitively, so skill.md
+// and Skill.md get SKILL.md treatment while my-skill.md does not.
+func isSkillManifestPath(path string) bool {
+	return strings.EqualFold(filepath.Base(strings.ReplaceAll(path, "\\", "/")), "SKILL.md")
+}
+
 func isCodeExample(context string) bool {
 	lower := strings.ToLower(context)
 	for _, indicator := range codeExampleIndicators {
@@ -738,13 +969,72 @@ func isDocumentationMarkdown(path string) bool {
 	return false
 }
 
-func isStaticNonExecutableType(fileType string) bool {
+// isLicenseFile reports license texts such as LICENSE, COPYING or the SIL Open
+// Font License files bundled with fonts. Their legal boilerplate ("including
+// but not limited to") is not an instruction to the agent.
+func isLicenseFile(filePath string) bool {
+	name := strings.ToLower(filePath[strings.LastIndexAny(filePath, "/\\")+1:])
+	stem := strings.TrimSuffix(name, filepath.Ext(name))
+	switch stem {
+	case "license", "licence", "copying", "unlicense", "ofl":
+		return true
+	}
+	return strings.HasPrefix(stem, "license-") || strings.HasPrefix(stem, "ofl-") || strings.HasSuffix(stem, "-ofl")
+}
+
+func isSourceCodeType(fileType string) bool {
 	switch fileType {
-	case "markdown", "text", "json", "yaml", "toml":
+	case "python", "shell", "javascript", "typescript", "ruby", "go", "rust":
 		return true
 	default:
 		return false
 	}
+}
+
+// isAttributeEnvMatch reports ".env" ending an expression such as process.env,
+// args.env or self.env rather than naming a file.
+func isAttributeEnvMatch(content string, match []int) bool {
+	if match[0] == 0 || !strings.HasPrefix(strings.ToLower(content[match[0]:match[1]]), ".env") {
+		return false
+	}
+	previous, _ := utf8.DecodeLastRuneInString(content[:match[0]])
+	return previous == '_' || previous == ')' || previous == ']' || unicode.IsLetter(previous) || unicode.IsNumber(previous)
+}
+
+var (
+	envSourceCommand = regexp.MustCompile(`(?:^|[\s;&|(])(?:source|\.)\s+["'\x60]?$`)
+	envTemplateCopy  = regexp.MustCompile(`(?i)\b(?:cp|copy|mv|Copy-Item)\b[^\n]*\.env\.(?:example|sample|template|dist)\b`)
+)
+
+// isEnvLoadOrTemplateCopy reports a ".env" match that loads the file into the
+// shell (source .env, . .env) or is the target of copying a template
+// (cp .env.example .env); neither reads its values out.
+func isEnvLoadOrTemplateCopy(content string, match []int) bool {
+	if !strings.HasPrefix(strings.ToLower(content[match[0]:match[1]]), ".env") {
+		return false
+	}
+	lineStart := strings.LastIndexByte(content[:match[0]], '\n') + 1
+	lineEnd := len(content)
+	if index := strings.IndexByte(content[match[0]:], '\n'); index >= 0 {
+		lineEnd = match[0] + index
+	}
+	return envSourceCommand.MatchString(content[lineStart:match[0]]) || envTemplateCopy.MatchString(content[lineStart:lineEnd])
+}
+
+// placeholderPathMarkers mark a documented placeholder rather than a real
+// path: /path/to/credentials.json, your-secrets.json, credentials.example.json.
+var placeholderPathMarkers = []string{"path/to/", "/to/your", "your-", "your_", "example", "placeholder", "xxx"}
+
+// isPlaceholderPath reports a match inside a whitespace- or quote-delimited
+// token that carries a placeholderPathMarkers marker.
+func isPlaceholderPath(content string, match []int) bool {
+	const delimiters = " \t\n\"'`()[]{},;="
+	start := strings.LastIndexAny(content[:match[0]], delimiters) + 1
+	end := len(content)
+	if index := strings.IndexAny(content[match[1]:], delimiters); index >= 0 {
+		end = match[1] + index
+	}
+	return containsAny(strings.ToLower(content[start:end]), placeholderPathMarkers...)
 }
 
 var environmentFileDocumentationAction = regexp.MustCompile(`(?i)(?:create|copy|rename|add|set up|configure|make)\s+.*\.env`)
@@ -766,22 +1056,22 @@ func isEnvironmentFileDocumentationReference(item component, context string) boo
 	return false
 }
 
+// isDocumentationContext drops PE3, RA1, TM1 and AR2 on comment lines outside
+// documents. In documents only fenced code counts as documentation, and
+// exampleTreatmentAt has already dropped it; prose outside a fence is an
+// instruction even when the line shows no execution signal.
 func isDocumentationContext(ruleID string, item component, line int) bool {
 	if ruleID != "PE3" && ruleID != "RA1" && ruleID != "TM1" && ruleID != "AR2" {
 		return false
 	}
-	if strings.HasSuffix(strings.ToLower(strings.ReplaceAll(item.Path, "\\", "/")), "skill.md") {
+	if isSkillManifestPath(item.Path) || item.Type == "markdown" || item.Type == "text" {
 		return false
 	}
 	lines := pythonSplitLines(item.Content)
 	if line < 1 || line > len(lines) {
 		return false
 	}
-	matchedLine := lines[line-1]
-	if item.Type == "markdown" || item.Type == "text" {
-		return !executionSignal.MatchString(matchedLine)
-	}
-	trimmed := strings.TrimSpace(matchedLine)
+	trimmed := strings.TrimSpace(lines[line-1])
 	return strings.HasPrefix(trimmed, "#") || strings.HasPrefix(trimmed, "//")
 }
 

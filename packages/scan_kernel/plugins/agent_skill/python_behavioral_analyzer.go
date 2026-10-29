@@ -58,7 +58,12 @@ var taintExecSinks = wordSet(
 	"exec", "eval", "compile", "os.system", "os.popen", "subprocess.run", "subprocess.call",
 	"subprocess.check_output", "subprocess.check_call", "subprocess.Popen",
 )
-var taintFileWriteSinks = wordSet("open", "pathlib.Path.write_text", "pathlib.Path.write_bytes", "shutil.copy", "shutil.copy2", "shutil.copyfile")
+
+// pythonFileObjectWrite is the sink name for write()/writelines() on a file
+// object opened for writing, such as open(path, "w").write(data).
+const pythonFileObjectWrite = "file.write"
+
+var taintFileWriteSinks = wordSet("open", pythonFileObjectWrite, "pathlib.Path.write_text", "pathlib.Path.write_bytes", "shutil.copy", "shutil.copy2", "shutil.copyfile")
 
 var taintRuleProperties = map[string]struct {
 	severity   string
@@ -72,12 +77,18 @@ type taintedVariable struct {
 	name       string
 	sourceCall string
 	line       int
+	// role and credentialFile describe a credential (credential_flow.go):
+	// where it sits in the value, and whether it is a credential file's
+	// content.
+	role           credentialRole
+	credentialFile bool
 }
 
 func analyzePythonBehavior(item component) []model.Finding {
-	if !strings.HasSuffix(item.Path, ".py") || len(item.Content) > maxFileBytes {
+	if !strings.HasSuffix(item.Path, ".py") {
 		return nil
 	}
+	item.Content, _ = scanPrefix(item.Content)
 	pythonParserMu.Lock()
 	defer pythonParserMu.Unlock()
 	module, err := pyparser.ParseFile(item.Path, item.Content)
@@ -179,6 +190,14 @@ func analyzePythonTaint(item component, module *pyparser.Module, aliases, types 
 	findings := make([]model.Finding, 0)
 	tainted := map[string]taintedVariable{}
 	seen := map[string]bool{}
+	writeHandles := pythonWriteHandles(module, aliases)
+	flow := newPythonCredentialFlow(module, aliases, types, tainted)
+	moduleReadsCredentialFile := false
+	pythonWalk(module, func(raw any) {
+		if call, ok := raw.(*pyparser.Call); ok && !moduleReadsCredentialFile {
+			moduleReadsCredentialFile = flow.readsCredentialFile(call)
+		}
+	})
 	pythonWalk(module, func(raw any) {
 		if assignment, ok := raw.(*pyparser.Assign); ok {
 			source := findPythonSourceInExpression(assignment.Value, types, aliases)
@@ -199,7 +218,13 @@ func analyzePythonTaint(item component, module *pyparser.Module, aliases, types 
 				}
 			}
 			if source != "" {
-				markPythonTargets(assignment.Targets, tainted, source, assignment.P.Line)
+				flow.markTargets(assignment.Targets, assignment.Value, source, assignment.P.Line)
+			} else if role, ok := flow.role(assignment.Value); ok && role == credentialData {
+				for _, target := range assignment.Targets {
+					if name, ok := target.(*pyparser.Name); ok {
+						flow.environment[name.Id] = true
+					}
+				}
 			}
 			return
 		}
@@ -211,11 +236,21 @@ func analyzePythonTaint(item component, module *pyparser.Module, aliases, types 
 		if sink == "" {
 			sink = resolvePythonDynamicImportCall(call, aliases)
 		}
+		if isPythonFileObjectWrite(call, writeHandles, aliases) {
+			sink = pythonFileObjectWrite
+		}
 		if !isTaintSink(sink) || (sink == "open" && !pythonOpenForWrite(call)) {
 			return
 		}
 		line := call.P.Line
 		endLine := pythonCallEndLine(item.Content, call.P.Line, call.P.Col)
+		// A credential sent only to authenticate the request to its own API
+		// is not TT3; see credential_flow.go.
+		leak := ""
+		if taintNetworkOutputSinks[sink] {
+			leak = flow.sinkLeak(call, sink, moduleReadsCredentialFile)
+		}
+		leaks := leak != ""
 		emit := func(id, message string) {
 			key := fmt.Sprintf("%s\x00%d", id, line)
 			if seen[key] {
@@ -223,6 +258,10 @@ func analyzePythonTaint(item component, module *pyparser.Module, aliases, types 
 			}
 			seen[key] = true
 			properties := taintRuleProperties[id]
+			if id == "TT3" && leak == "HIGH" {
+				properties.severity, properties.confidence = "HIGH", .8
+				message += " (credential in an auth header to a host that is not its own service)"
+			}
 			if finding, ok := pythonAnalyzerFinding(item, id, message, properties.severity, properties.confidence, line, endLine, "Data Flow"); ok {
 				findings = append(findings, finding)
 			}
@@ -232,12 +271,29 @@ func analyzePythonTaint(item component, module *pyparser.Module, aliases, types 
 				continue
 			}
 			rule := pickTaintRule(source.name, sink, true)
-			emit(rule, fmt.Sprintf("Direct flow: %s (%s) → %s (%s)", source.name, taintSourceCategory(source.name), sink, taintSinkCategory(sink)))
+			if rule == "TT3" && !leaks {
+				continue
+			}
+			message := fmt.Sprintf("Direct flow: %s (%s) → %s (%s)", source.name, taintSourceCategory(source.name), sink, taintSinkCategory(sink))
+			emit(rule, message)
+			if rule == "TT4" && leaks && flow.readsCredentialFile(source.call) {
+				emit("TT3", "Credential file content: "+message)
+			}
 		}
 		for _, variable := range findTaintedPythonArguments(call, tainted) {
 			rule := pickTaintRule(variable.sourceCall, sink, false)
-			emit(rule, fmt.Sprintf("Tainted flow: '%s' from %s (line %d, %s) → %s (%s)",
-				variable.name, variable.sourceCall, variable.line, taintSourceCategory(variable.sourceCall), sink, taintSinkCategory(sink)))
+			if rule == "TT3" && !leaks {
+				continue
+			}
+			message := fmt.Sprintf("Tainted flow: '%s' from %s (line %d, %s) → %s (%s)",
+				variable.name, variable.sourceCall, variable.line, taintSourceCategory(variable.sourceCall), sink, taintSinkCategory(sink))
+			emit(rule, message)
+			if rule == "TT4" && leaks && variable.credentialFile {
+				emit("TT3", "Credential file content: "+message)
+			}
+		}
+		if leaks {
+			emit("TT3", fmt.Sprintf("Credential flow → %s (%s): the whole environment, a credential file or a collection host", sink, taintSinkCategory(sink)))
 		}
 	})
 	return findings
@@ -317,19 +373,48 @@ func findTaintedPythonArguments(call *pyparser.Call, tainted map[string]taintedV
 	return results
 }
 
-func markPythonTargets(targets []pyparser.Expr, tainted map[string]taintedVariable, source string, line int) {
+// markTargets taints the names an assignment binds. A tuple assigned from a
+// tuple of the same length takes its roles element by element.
+func (flow *pythonCredentialFlow) markTargets(targets []pyparser.Expr, value pyparser.Expr, source string, line int) {
 	for _, target := range targets {
-		switch value := target.(type) {
+		switch node := target.(type) {
 		case *pyparser.Name:
-			tainted[value.Id] = taintedVariable{name: value.Id, sourceCall: source, line: line}
+			flow.mark(node.Id, value, source, line)
 		case *pyparser.Tuple:
-			for _, element := range value.Elts {
-				if name, ok := element.(*pyparser.Name); ok {
-					tainted[name.Id] = taintedVariable{name: name.Id, sourceCall: source, line: line}
+			values, paired := value.(*pyparser.Tuple)
+			for index, element := range node.Elts {
+				name, ok := element.(*pyparser.Name)
+				if !ok {
+					continue
+				}
+				if paired && len(values.Elts) == len(node.Elts) {
+					flow.mark(name.Id, values.Elts[index], source, line)
+				} else {
+					flow.mark(name.Id, value, source, line)
 				}
 			}
 		}
 	}
+}
+
+// mark records one tainted name. Taint is not flow-sensitive, so a name
+// that once held a leaking credential keeps the data role when another
+// assignment gives it a harmless one.
+func (flow *pythonCredentialFlow) mark(name string, value pyparser.Expr, source string, line int) {
+	variable := taintedVariable{name: name, sourceCall: source, line: line}
+	variable.role, _ = flow.role(value)
+	pythonWalk(value, func(raw any) {
+		switch node := raw.(type) {
+		case *pyparser.Call:
+			variable.credentialFile = variable.credentialFile || flow.readsCredentialFile(node)
+		case *pyparser.Name:
+			variable.credentialFile = variable.credentialFile || flow.tainted[node.Id].credentialFile
+		}
+	})
+	if existing, ok := flow.tainted[name]; ok && isCredentialTaint(existing) && existing.role == credentialData && isCredentialTaint(variable) {
+		variable.role = credentialData
+	}
+	flow.tainted[name] = variable
 }
 
 func pickTaintRule(source, sink string, direct bool) string {
@@ -382,6 +467,51 @@ func isTaintSource(name string) bool {
 
 func isTaintSink(name string) bool {
 	return taintNetworkOutputSinks[name] || taintExecSinks[name] || taintFileWriteSinks[name]
+}
+
+// pythonWriteHandles returns the names bound to files opened for writing, by
+// assignment (f = open(path, "w")) or a with statement (with open(...) as f).
+func pythonWriteHandles(module *pyparser.Module, aliases map[string]string) map[string]bool {
+	handles := map[string]bool{}
+	record := func(target pyparser.Expr, value pyparser.Expr) {
+		name, isName := target.(*pyparser.Name)
+		call, isCall := value.(*pyparser.Call)
+		if isName && isCall && resolvePythonCallName(call, aliases) == "open" && pythonOpenForWrite(call) {
+			handles[name.Id] = true
+		}
+	}
+	pythonWalk(module, func(raw any) {
+		switch node := raw.(type) {
+		case *pyparser.Assign:
+			for _, target := range node.Targets {
+				record(target, node.Value)
+			}
+		case *pyparser.With:
+			for _, item := range node.Items {
+				if item.OptionalVars != nil {
+					record(item.OptionalVars, item.ContextExpr)
+				}
+			}
+		}
+	})
+	return handles
+}
+
+// isPythonFileObjectWrite reports write() or writelines() on a file opened for
+// writing, either inline (open(path, "w").write(data)) or through a handle
+// from pythonWriteHandles (f.write(data)).
+func isPythonFileObjectWrite(call *pyparser.Call, handles map[string]bool, aliases map[string]string) bool {
+	attribute, ok := call.Func.(*pyparser.Attribute)
+	if !ok || (attribute.Attr != "write" && attribute.Attr != "writelines") {
+		return false
+	}
+	switch receiver := attribute.Value.(type) {
+	case *pyparser.Name:
+		return handles[receiver.Id]
+	case *pyparser.Call:
+		return resolvePythonCallName(receiver, aliases) == "open" && pythonOpenForWrite(receiver)
+	}
+	return false
 }
 
 func pythonOpenForWrite(call *pyparser.Call) bool {
@@ -549,10 +679,8 @@ func pythonStringConstant(expression pyparser.Expr) (string, bool) {
 }
 
 func pythonAnalyzerFinding(item component, id, message, severity string, confidence float64, line, endLine int, category string) (model.Finding, bool) {
+	// Python source gets no example handling: "# e.g." is only a comment.
 	context := contextAtLine(item.Content, line, 3)
-	if isCodeExample(context) {
-		confidence *= .5
-	}
 	if confidence < .4 && severity != "HIGH" && severity != "CRITICAL" {
 		return model.Finding{}, false
 	}

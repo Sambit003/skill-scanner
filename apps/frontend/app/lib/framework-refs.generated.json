@@ -477,6 +477,23 @@
         "Information Security"
       ],
       "nist_rmf": []
+    },
+    "YR5": {
+      "owasp_agentic": [
+        "AST01",
+        "AST02",
+        "AST04",
+        "AST08"
+      ],
+      "owasp_llm": [
+        "LLM01:2026"
+      ],
+      "nist_gai_risks": [
+        "Information Security"
+      ],
+      "nist_rmf": [
+        "MEASURE 2.7"
+      ]
     }
   }
 }

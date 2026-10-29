@@ -59,8 +59,9 @@ class ScanRepository:
         summary_dict: Dict[str, Any],
         findings_list: List[Dict[str, Any]],
         reports_dict: Dict[str, str],
+        capabilities_list: Optional[List[Dict[str, Any]]] = None,
     ) -> None:
-        """Persist findings and mark the scan as COMPLETED."""
+        """Persist findings and capabilities and mark the scan as COMPLETED."""
         completed_at = datetime.now(timezone.utc)
 
         # 1. Update Scan Model
@@ -78,6 +79,7 @@ class ScanRepository:
                 findings_by_severity=summary_dict.get("findings_by_severity", {}),
                 findings_by_category=summary_dict.get("findings_by_category", {}),
                 reports_blob=reports_dict,
+                capabilities=capabilities_list,
                 completed_at=completed_at,
             )
         )

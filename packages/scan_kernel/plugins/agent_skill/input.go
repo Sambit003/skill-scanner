@@ -39,6 +39,15 @@ type component struct {
 	Executable bool   `json:"executable"`
 	SizeBytes  int    `json:"size_bytes"`
 	Content    string `json:"-"`
+	// LinkTarget is set when the file is a symbolic link to another file
+	// inside the scanned root: the target's path, read at the link's path.
+	LinkTarget string `json:"-"`
+	// Magic names a compiled program or archive recognised by its first
+	// bytes (see fileMagic), or is empty.
+	Magic string `json:"-"`
+	// fencedBlocks caches fencedCodeBlocks(Content) for one analysis pass.
+	fencedBlocks   []textSpan
+	fencesComputed bool
 }
 
 type preparedInput struct {
@@ -47,6 +56,11 @@ type preparedInput struct {
 	TempDir    string
 	Components []component
 	Skills     []skillInput
+	// NoManifest is set when the target has no SKILL.md in any letter case;
+	// every file was then selected and the scan reports SC9.
+	NoManifest bool
+	// Links are the symbolic links in scope that leave the root or dangle.
+	Links []symlinkEntry
 }
 
 type skillInput struct {
@@ -54,6 +68,14 @@ type skillInput struct {
 	ManifestPath string
 	Components   []component
 	Manifest     map[string]any
+	TriggerLines []int
+	// ManifestContent is the SKILL.md text, for analyzers that need the
+	// front matter's line numbers.
+	ManifestContent string
+	// NonStandardManifest is set when the instruction file is not SKILL.md
+	// but another Markdown file with skill front matter; the scan reports
+	// SC9 for it.
+	NonStandardManifest bool
 }
 
 func (p *preparedInput) cleanup() {
@@ -72,7 +94,7 @@ func prepare(ctx context.Context, target string, offline bool, scanScope string,
 		return nil, err
 	}
 	prepared := &preparedInput{Root: root, SourceType: sourceType, TempDir: tempDir}
-	allComponents, _, readErr := readComponents(root)
+	allComponents, links, readErr := readComponents(root)
 	if readErr != nil {
 		prepared.cleanup()
 		return nil, readErr
@@ -82,7 +104,18 @@ func prepare(ctx context.Context, target string, offline bool, scanScope string,
 		prepared.cleanup()
 		return nil, err
 	}
+	prepared.Links = selectLinks(links, prepared.Skills, scanScope)
+	prepared.NoManifest = !hasSkillManifest(allComponents)
 	return prepared, nil
+}
+
+func hasSkillManifest(all []component) bool {
+	for _, item := range all {
+		if isSkillManifestPath(item.Path) {
+			return true
+		}
+	}
+	return false
 }
 
 func selectComponents(all []component, scanScope string, includeReadme bool) ([]component, []skillInput, error) {
@@ -96,14 +129,30 @@ func selectComponents(all []component, scanScope string, includeReadme bool) ([]
 		return nil, nil, errors.New("include_readme is not applicable to skill_files scope")
 	}
 
+	// The instruction file is matched in any letter case: an agent on a
+	// case-insensitive file system loads skill.md as SKILL.md.
 	manifestPaths := make([]string, 0)
 	for _, item := range all {
-		if filepath.Base(filepath.FromSlash(item.Path)) == "SKILL.md" {
+		if isSkillManifestPath(item.Path) {
 			manifestPaths = append(manifestPaths, item.Path)
 		}
 	}
 	if scanScope != "repository" && len(manifestPaths) == 0 {
-		return nil, nil, errors.New("no specification-compliant SKILL.md files were found in the target")
+		if len(all) == 0 {
+			return nil, nil, errors.New("the target contains no files to scan")
+		}
+		// No instruction file under any name the scanner knows (SKILLS.md, a
+		// prompt file, nothing). Scan every file, README included, since any
+		// of them may be what the agent is told to read: a file name must not
+		// decide whether the target gets a verdict. The caller reports SC9.
+		return all, nil, nil
+	}
+	nonStandard := map[string]bool{}
+	if scanScope != "repository" {
+		for _, path := range nonStandardManifestPaths(all, manifestPaths) {
+			manifestPaths = append(manifestPaths, path)
+			nonStandard[path] = true
+		}
 	}
 
 	selected := make([]component, 0, len(all))
@@ -113,7 +162,7 @@ func selectComponents(all []component, scanScope string, includeReadme bool) ([]
 		}
 		include := scanScope == "repository"
 		if scanScope == "skill_files" {
-			include = filepath.Base(filepath.FromSlash(item.Path)) == "SKILL.md"
+			include = isSkillManifestPath(item.Path) || nonStandard[item.Path]
 		} else if scanScope == "skill_folders" {
 			for _, manifestPath := range manifestPaths {
 				if pathWithinSkill(item.Path, filepath.ToSlash(filepath.Dir(filepath.FromSlash(manifestPath)))) {
@@ -130,7 +179,7 @@ func selectComponents(all []component, scanScope string, includeReadme bool) ([]
 	skills := make([]skillInput, 0, len(manifestPaths))
 	for _, manifestPath := range manifestPaths {
 		root := filepath.ToSlash(filepath.Dir(filepath.FromSlash(manifestPath)))
-		unit := skillInput{Root: root, ManifestPath: manifestPath}
+		unit := skillInput{Root: root, ManifestPath: manifestPath, NonStandardManifest: nonStandard[manifestPath]}
 		for _, item := range selected {
 			if !pathWithinSkill(item.Path, root) {
 				continue
@@ -144,11 +193,83 @@ func selectComponents(all []component, scanScope string, includeReadme bool) ([]
 			unit.Components = append(unit.Components, copy)
 			if item.Path == manifestPath {
 				unit.Manifest = parseFrontmatter(item.Content)
+				unit.TriggerLines = frontmatterTriggerLines(item.Content)
+				unit.ManifestContent = item.Content
 			}
 		}
 		skills = append(skills, unit)
 	}
 	return selected, skills, nil
+}
+
+// nonStandardManifestPaths finds skills whose instruction file is not
+// SKILL.md: a Markdown file, other than a README or a template, with name and
+// description front matter, in a folder that is neither inside nor above a
+// SKILL.md folder. One file per folder is returned, and a folder inside
+// another such folder is part of it. Plain documentation has no such front
+// matter. Claude Code subagents and commands (a file under an agents or
+// commands folder) carry the same front matter but are not skills.
+func nonStandardManifestPaths(all []component, manifestPaths []string) []string {
+	taken := make([]string, 0, len(manifestPaths))
+	for _, path := range manifestPaths {
+		taken = append(taken, filepath.ToSlash(filepath.Dir(filepath.FromSlash(path))))
+	}
+	var candidates []string
+	for _, item := range all {
+		extension := strings.ToLower(filepath.Ext(item.Path))
+		if (extension != ".md" && extension != ".markdown") || isSkillManifestPath(item.Path) || isReadmePath(item.Path) ||
+			strings.Contains(strings.ToLower(filepath.Base(item.Path)), "template") || underAgentComponentFolder(item.Path) {
+			continue
+		}
+		manifest := parseFrontmatter(item.Content)
+		name, _ := manifest["name"].(string)
+		description, _ := manifest["description"].(string)
+		if strings.TrimSpace(name) != "" && strings.TrimSpace(description) != "" {
+			candidates = append(candidates, item.Path)
+		}
+	}
+	// Outer folders first, so a nested folder joins its parent.
+	sort.SliceStable(candidates, func(i, j int) bool {
+		return strings.Count(candidates[i], "/") < strings.Count(candidates[j], "/")
+	})
+	var result []string
+	for _, path := range candidates {
+		root := filepath.ToSlash(filepath.Dir(filepath.FromSlash(path)))
+		related := false
+		for _, other := range taken {
+			if pathWithinSkill(root, other) || pathWithinSkill(other, root) {
+				related = true
+				break
+			}
+		}
+		if !related {
+			taken = append(taken, root)
+			result = append(result, path)
+		}
+	}
+	return result
+}
+
+func underAgentComponentFolder(path string) bool {
+	parts := strings.Split(path, "/")
+	for _, part := range parts[:len(parts)-1] {
+		if part == "agents" || part == "commands" {
+			return true
+		}
+	}
+	return false
+}
+
+// isJunkFile reports operating-system and version-control clutter that never
+// holds skill content. Other dotfiles (.env, .notes.md, .helper.sh) are scanned
+// like any file: a hidden file is an easy place to keep an instruction or a
+// payload that the skill tells the agent to read or run.
+func isJunkFile(name string) bool {
+	switch name {
+	case ".DS_Store", ".git", ".localized":
+		return true
+	}
+	return strings.HasPrefix(name, "._")
 }
 
 func pathWithinSkill(path, root string) bool {
@@ -414,26 +535,31 @@ func copyFile(source, destination string) error {
 	return errors.Join(copyErr, output.Close())
 }
 
-func readComponents(root string) ([]component, map[string]any, error) {
+// readComponents reads every file under root. A symbolic link to a file
+// inside root is read at the link's path, with LinkTarget set; links that
+// leave root or dangle are returned apart and never followed.
+func readComponents(root string) ([]component, []symlinkEntry, error) {
 	allowed := map[string]string{
 		".py": "python", ".sh": "shell", ".bash": "shell", ".zsh": "shell",
 		".md": "markdown", ".markdown": "markdown", ".json": "json",
 		".yaml": "yaml", ".yml": "yaml", ".toml": "toml", ".js": "javascript",
 		".ts": "typescript", ".txt": "text", ".rb": "ruby", ".go": "go", ".rs": "rust",
+		".ps1": "powershell", ".psm1": "powershell", ".bat": "batch", ".cmd": "batch",
 	}
 	var components []component
+	var links []symlinkEntry
 	err := filepath.WalkDir(root, func(path string, entry os.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
 		}
 		if entry.IsDir() {
 			switch entry.Name() {
-			case ".git", "__pycache__", "node_modules", ".venv", "venv", ".tox", ".pytest_cache":
+			case ".git", ".hg", ".svn", "__pycache__", "node_modules", ".venv", "venv", ".tox", ".pytest_cache":
 				return filepath.SkipDir
 			}
 			return nil
 		}
-		if strings.HasPrefix(entry.Name(), ".") && !strings.HasPrefix(entry.Name(), ".claude") {
+		if isJunkFile(entry.Name()) {
 			return nil
 		}
 		ext := strings.ToLower(filepath.Ext(entry.Name()))
@@ -442,19 +568,27 @@ func readComponents(root string) ([]component, map[string]any, error) {
 			kind = "other"
 		}
 		info, err := entry.Info()
+		linkTarget := ""
 		if entry.Type()&os.ModeSymlink != 0 {
+			// A link is never followed outside the scanned root: a link that
+			// leaves it, or dangles, is recorded and reported (SC11).
+			relativePath, _ := filepath.Rel(root, path)
+			raw, _ := os.Readlink(path)
 			resolved, resolveErr := filepath.EvalSymlinks(path)
 			if resolveErr != nil {
+				links = append(links, symlinkEntry{Path: filepath.ToSlash(relativePath), Target: raw, Secret: secretLinkTarget(raw, path), Dangling: true})
 				return nil
 			}
 			relativeTarget, relativeErr := filepath.Rel(root, resolved)
 			if relativeErr != nil || relativeTarget == ".." || strings.HasPrefix(relativeTarget, ".."+string(os.PathSeparator)) {
+				links = append(links, symlinkEntry{Path: filepath.ToSlash(relativePath), Target: raw, Secret: secretLinkTarget(raw, resolved)})
 				return nil
 			}
 			info, err = os.Stat(resolved)
 			if err == nil && info.IsDir() {
 				return nil
 			}
+			linkTarget = filepath.ToSlash(relativeTarget)
 		}
 		if err != nil {
 			return err
@@ -474,8 +608,9 @@ func readComponents(root string) ([]component, map[string]any, error) {
 		components = append(components, component{
 			Path: filepath.ToSlash(relative), Type: kind, Lines: pythonLineCount(content),
 			Executable: ext == ".py" || ext == ".sh" || ext == ".bash" || ext == ".zsh" ||
-				ext == ".js" || ext == ".ts" || ext == ".rb" || ext == ".go" || ext == ".rs" || ext == ".pl",
-			SizeBytes: len(raw), Content: content,
+				ext == ".js" || ext == ".ts" || ext == ".rb" || ext == ".go" || ext == ".rs" || ext == ".pl" ||
+				kind == "powershell" || kind == "batch",
+			SizeBytes: len(raw), Content: content, LinkTarget: linkTarget, Magic: fileMagic(raw, ext),
 		})
 		return nil
 	})
@@ -483,16 +618,8 @@ func readComponents(root string) ([]component, map[string]any, error) {
 		return nil, nil, err
 	}
 	sort.Slice(components, func(i, j int) bool { return components[i].Path < components[j].Path })
-	manifest := map[string]any{}
-	for _, manifestName := range []string{"SKILL.md", "skill.md"} {
-		for _, item := range components {
-			if item.Path == manifestName {
-				manifest = parseFrontmatter(item.Content)
-				return components, manifest, nil
-			}
-		}
-	}
-	return components, manifest, nil
+	sort.Slice(links, func(i, j int) bool { return links[i].Path < links[j].Path })
+	return components, links, nil
 }
 
 // pythonDecodeUTF8 mirrors bytes.decode("utf-8", errors="replace"). Unlike
@@ -552,17 +679,38 @@ func pythonDecodeUTF8(raw []byte) string {
 	return decoded.String()
 }
 
-func parseFrontmatter(content string) map[string]any {
+var frontmatterEnd = regexp.MustCompile(`\n---\s*\n`)
+
+// frontmatterYAML returns the YAML between the opening "---" and the closing
+// "---" line. It starts on the opening line, so YAML line N is file line N.
+func frontmatterYAML(content string) (string, bool) {
 	if !strings.HasPrefix(content, "---") {
-		return map[string]any{}
+		return "", false
 	}
-	endPattern := regexp.MustCompile(`\n---\s*\n`)
-	end := endPattern.FindStringIndex(content[3:])
+	end := frontmatterEnd.FindStringIndex(content[3:])
 	if len(end) != 2 {
+		return "", false
+	}
+	return content[3 : 3+end[0]], true
+}
+
+// frontmatterTriggerLines returns the SKILL.md line of each trigger that
+// parseFrontmatter keeps, in the same order.
+func frontmatterTriggerLines(content string) []int {
+	block, ok := frontmatterYAML(content)
+	if !ok {
+		return nil
+	}
+	return yamlSequenceLines([]byte(block), "triggers")
+}
+
+func parseFrontmatter(content string) map[string]any {
+	block, ok := frontmatterYAML(content)
+	if !ok {
 		return map[string]any{}
 	}
 	var decoded map[string]any
-	if err := yamlUnmarshal([]byte(content[3:3+end[0]]), &decoded); err != nil {
+	if err := yamlUnmarshal([]byte(block), &decoded); err != nil {
 		return map[string]any{}
 	}
 	if decoded == nil {
@@ -575,15 +723,26 @@ func parseFrontmatter(content string) map[string]any {
 	if value, exists := decoded["description"]; exists {
 		manifest["description"] = value
 	}
+	if value, exists := decoded["version"]; exists {
+		manifest["version"] = value
+	}
 	manifest["triggers"] = manifestStringList(decoded["triggers"])
-	manifest["permissions"] = manifestStringList(decoded["permissions"])
+	// Claude Code skills have no permissions field, so the key is set only
+	// when the front matter declares one: the LP rules check declared
+	// permissions and must stay quiet for skills that have none to declare.
+	// A scalar is a comma-separated list, as for allowed-tools.
+	if value, exists := decoded["permissions"]; exists {
+		permissions := manifestStringList(value)
+		if text, ok := value.(string); ok {
+			permissions = commaSeparatedList(text)
+		}
+		manifest["permissions"] = permissions
+	}
 	allowedTools := manifestStringList(decoded["allowed-tools"])
 	if text, ok := decoded["allowed-tools"].(string); ok {
 		allowedTools = nil
-		for _, value := range strings.Split(text, ",") {
-			if value = strings.TrimSpace(value); value != "" {
-				allowedTools = append(allowedTools, value)
-			}
+		for _, entry := range splitAllowedTools(text) {
+			allowedTools = append(allowedTools, entry)
 		}
 	}
 	manifest["allowed-tools"] = allowedTools
@@ -597,6 +756,16 @@ func parseFrontmatter(content string) map[string]any {
 	}
 	manifest["parameters"] = parameters
 	return manifest
+}
+
+func commaSeparatedList(text string) []any {
+	var values []any
+	for _, value := range strings.Split(text, ",") {
+		if value = strings.TrimSpace(value); value != "" {
+			values = append(values, value)
+		}
+	}
+	return values
 }
 
 func manifestStringList(value any) []any {
