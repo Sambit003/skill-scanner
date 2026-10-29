@@ -26,8 +26,9 @@ type reverseShellSignature struct {
 const shellName = `(?:/(?:usr/)?bin/)?(?:ba|z|k|da)?sh\b`
 
 var reverseShellSignatures = []reverseShellSignature{
-	{"bash", regexp.MustCompile(`(?i)/dev/(?:tcp|udp)/[^/\s"'` + "`" + `]+/\d+`),
-		[]*regexp.Regexp{regexp.MustCompile(`(?i)\b(?:ba|z|k|da)?sh\s+-i\b|0>&\s*1\b|0<&\s*\d+|\b(?:ba|z|k|da)?sh\b[^\n]*<&\s*\d+`)}, 0},
+	{"bash", regexp.MustCompile(`(?i)/dev/(?:tcp|udp)/[^/\s"'` + "`" + `]+/[^\s"'` + "`" + `;&|)]+`),
+		[]*regexp.Regexp{regexp.MustCompile(`(?i)\b(?:ba|z|k|da)?sh\s+-i\b|0>&\s*1\b|0<&\s*\d+|\b(?:ba|z|k|da)?sh\b[^\n]*<&\s*\d+` +
+			`|\bwhile\s+read\s+(?:-\w+\s+)*\w+[^\n]*?\bdo\s+(?:eval\s+)?["']?\$\{?\w+`)}, 3},
 	{"netcat", regexp.MustCompile(`(?i)\b(?:nc|ncat|netcat)(?:\.exe)?\b[^\n|;&]*\s-[a-z]*[ec]\s+["']?(?:` + shellName + `|cmd(?:\.exe)?\b|powershell(?:\.exe)?\b)`), nil, 0},
 	{"netcat", regexp.MustCompile(`(?i)\b(?:ba|z|k|da)?sh\s+-i\b[^\n]*\|\s*(?:nc|ncat|netcat|openssl\s+s_client)\b|\b(?:nc|ncat|netcat|openssl\s+s_client)\b[^\n|]*\|\s*` + shellName + `[^\n|]*\|\s*(?:nc|ncat|netcat|openssl\s+s_client)\b`), nil, 0},
 	{"socat", regexp.MustCompile(`(?i)\bsocat\b[^\n]*\b(?:exec|system):\s*["']?` + shellName),
