@@ -60,6 +60,21 @@ const downloadExtractRun = `\b(?:curl|wget)\b[^\n&;|]*\s-[oO]\s*\S+\s*(?:&&|;)\s
 	`(?:(?:sudo\s+)?(?:unzip|tar|7z|7za|unrar|bsdtar|gunzip)\b[^\n&;|]*(?:&&|;)\s*(?:[^\n&;|]*(?:&&|;)\s*)?)?` +
 	`(?:sudo\s+)?(?:(?:ba|z)?sh\b|chmod\s+\+x\b|\./)`
 
+// powershellCradle matches PowerShell running fetched text: iwr|irm ... |
+// iex, iex (iwr ...), iex ((New-Object Net.WebClient).DownloadString(...)),
+// DownloadString(...) | iex, and a fetch followed by Invoke-Expression on the
+// same line.
+const powershellCradle = `\b(?:iwr|irm|Invoke-WebRequest|Invoke-RestMethod)\b[^\n]*\|\s*(?:iex|Invoke-Expression)\b` +
+	`|\b(?:iex|Invoke-Expression)\b\s*\(*\s*(?:New-Object\s+(?:System\.)?Net\.WebClient|iwr|irm|Invoke-WebRequest|Invoke-RestMethod)\b[^\n]*` +
+	`|\b(?:iex|Invoke-Expression)\b[^\n]*\.DownloadString\s*\([^\n]*` +
+	`|\.DownloadString\s*\([^\n]*(?:\|\s*|;\s*)(?:iex|Invoke-Expression)\b` +
+	`|\b(?:iwr|irm|Invoke-WebRequest|Invoke-RestMethod)\b[^\n]*;\s*(?:iex|Invoke-Expression)\b`
+
+// windowsDownloadRun matches certutil -urlcache or bitsadmin /transfer saving
+// a download that a later step on the line starts.
+const windowsDownloadRun = `\b(?:certutil(?:\.exe)?\b[^\n&|;]*[-/]urlcache\b|bitsadmin(?:\.exe)?\b[^\n&|;]*/transfer\b)[^\n&|;]*` +
+	`(?:&&?|;)\s*(?:start\b|call\b|cmd(?:\.exe)?\s+/c\b|powershell\b|[^\s&|;]*\.(?:exe|bat|cmd|ps1)\b)`
+
 var (
 	// archivePasswordCommand is an archive extracted on the command line with
 	// a literal password: unzip -P 1234, 7z x -p1234. A variable or
@@ -72,7 +87,7 @@ var (
 	downloadAndRunCommand = regexp.MustCompile(`(?i)\b(?:curl|wget)\b[^\n|]*\|\s*(?:sudo\s+)?(?:/(?:usr/)?bin/)?(?:(?:ba|z|da|k)?sh|python[0-9.]*|node|perl|ruby)\b` +
 		`|(?:\b(?:ba|z)?sh|\bsource|\beval|\B\.)\s+(?:-c\s+)?["']?(?:<\(|\$\()\s*(?:curl|wget)\b[^\n)]*\)` +
 		`|` + downloadExtractRun +
-		`|\b(?:iwr|irm|Invoke-WebRequest|Invoke-RestMethod)\b[^\n]*\|\s*(?:iex|Invoke-Expression)\b|\biex\s*\(\s*(?:New-Object\s+Net\.WebClient|iwr|irm|Invoke-WebRequest|Invoke-RestMethod)[^\n]*` +
+		`|` + powershellCradle + `|` + windowsDownloadRun +
 		`|\b(?:eval|exec)\s*\(\s*(?:await\s+)?(?:fetch|urllib|requests|httpx)\b[^\n]*|\bnew\s+Function\s*\([^\n]*\bfetch\s*\([^\n]*`)
 	// originURL matches a URL with a scheme, or a bare IPv4 address with an
 	// optional port and path.

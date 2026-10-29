@@ -42,6 +42,9 @@ type component struct {
 	// LinkTarget is set when the file is a symbolic link to another file
 	// inside the scanned root: the target's path, read at the link's path.
 	LinkTarget string `json:"-"`
+	// Magic names a compiled program or archive recognised by its first
+	// bytes (see fileMagic), or is empty.
+	Magic string `json:"-"`
 	// fencedBlocks caches fencedCodeBlocks(Content) for one analysis pass.
 	fencedBlocks   []textSpan
 	fencesComputed bool
@@ -541,6 +544,7 @@ func readComponents(root string) ([]component, []symlinkEntry, error) {
 		".md": "markdown", ".markdown": "markdown", ".json": "json",
 		".yaml": "yaml", ".yml": "yaml", ".toml": "toml", ".js": "javascript",
 		".ts": "typescript", ".txt": "text", ".rb": "ruby", ".go": "go", ".rs": "rust",
+		".ps1": "powershell", ".psm1": "powershell", ".bat": "batch", ".cmd": "batch",
 	}
 	var components []component
 	var links []symlinkEntry
@@ -604,8 +608,9 @@ func readComponents(root string) ([]component, []symlinkEntry, error) {
 		components = append(components, component{
 			Path: filepath.ToSlash(relative), Type: kind, Lines: pythonLineCount(content),
 			Executable: ext == ".py" || ext == ".sh" || ext == ".bash" || ext == ".zsh" ||
-				ext == ".js" || ext == ".ts" || ext == ".rb" || ext == ".go" || ext == ".rs" || ext == ".pl",
-			SizeBytes: len(raw), Content: content, LinkTarget: linkTarget,
+				ext == ".js" || ext == ".ts" || ext == ".rb" || ext == ".go" || ext == ".rs" || ext == ".pl" ||
+				kind == "powershell" || kind == "batch",
+			SizeBytes: len(raw), Content: content, LinkTarget: linkTarget, Magic: fileMagic(raw, ext),
 		})
 		return nil
 	})

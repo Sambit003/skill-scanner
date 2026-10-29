@@ -91,6 +91,8 @@ var ruleExplanations = map[string]string{
 	"SC10":  "The SKILL.md front matter is not valid YAML, so tools that read it strictly (Claude Code among them) may not load the skill's name, description, hooks or allowed-tools as written. The usual cause is an unquoted colon followed by a space inside a description. The scanner still read each top-level field on its own and checked hooks and allowed-tools.",
 	"SC11":  "The skill contains a symbolic link. The scanner never follows a link outside the scanned folder, so it cannot check what the agent will read through it. A link to a credential store, .env file, keychain, /etc or the user's agent configuration (HIGH) makes the agent read that file whenever it reads the skill's file. A link to anything else outside the folder, or a dangling link (MEDIUM), means the skill uses a file this scan could not see. A link to a file elsewhere in the scanned folder but outside the skill folder (LOW) was scanned at the link's path; its findings are reported there.",
 	"SC12":  "The file names offensive security tools: penetration-testing or exploit frameworks, credential dumpers, network scanners or cryptocurrency miners. Security skills often describe these tools, so the name alone is a note, not a sign of malware. What the skill actually runs is checked by the other rules.",
+	"SC13":  "The skill ships a compiled program (ELF, Mach-O or Windows PE) or an archive (zip, gzip, 7z, rar), recognised by its first bytes. The scanner never unpacks, parses or runs it, so what it does was not checked. When SKILL.md tells the agent or the user to run the program, or to extract the archive, the finding is HIGH.",
+	"SC14":  "The skill ships a PowerShell or batch script (MEDIUM), or a file uses a Windows technique common in droppers (HIGH): certutil -decode or -urlcache, bitsadmin /transfer, a process started with a hidden window, or a PowerShell -EncodedCommand that hides the command it runs. PowerShell download cradles are reported as SC2 and an encoded command that downloads and runs code as SC3.",
 }
 
 var ruleTitles = map[string]string{
@@ -184,6 +186,8 @@ var ruleTitles = map[string]string{
 	"SC10":  "Invalid Front Matter",
 	"SC11":  "Symbolic Link Outside the Skill",
 	"SC12":  "Mentions Offensive Tooling",
+	"SC13":  "Bundled Program or Archive",
+	"SC14":  "Bundled Windows Script",
 }
 
 var ruleRemediations = map[string]string{
@@ -277,4 +281,6 @@ var ruleRemediations = map[string]string{
 	"SC10":  "Quote the value that contains the colon (description: \"Use when: ...\") or use a block scalar, then check the front matter with a YAML parser.",
 	"SC11":  "Replace the link with the file itself, or remove it. A skill should ship every file it needs inside its own folder and never link to secrets or system files.",
 	"SC12":  "Check that the skill's purpose explains why it names these tools, and that it does not run them against systems the user has not authorized.",
+	"SC13":  "Ship source code or scripts the reader can review instead of binaries, or name where the program comes from and how to verify it (a signed release with checksums). Never ask the agent to run a shipped binary.",
+	"SC14":  "Keep Windows scripts readable and plain: no encoded commands, hidden windows or download utilities. Prefer a documented installer from the vendor over a script that fetches and starts programs.",
 }

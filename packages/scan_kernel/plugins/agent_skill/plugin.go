@@ -16,7 +16,7 @@ func New() Plugin { return Plugin{} }
 
 func (Plugin) Descriptor() model.PluginDescriptor {
 	return model.PluginDescriptor{ID: "agent_skill", Aliases: []string{"skill", "agent-skills", "agent_skills"}, Version: scannerVersion,
-		SupportedExtensions: []string{".md", ".markdown", ".py", ".sh", ".bash", ".zsh", ".json", ".yaml", ".yml", ".toml", ".txt", ".js", ".ts", ".rb", ".go", ".rs", ".zip"}}
+		SupportedExtensions: []string{".md", ".markdown", ".py", ".sh", ".bash", ".zsh", ".json", ".yaml", ".yml", ".toml", ".txt", ".js", ".ts", ".rb", ".go", ".rs", ".ps1", ".psm1", ".bat", ".cmd", ".zip"}}
 }
 
 func (Plugin) Rules() []model.RuleDocument { return ruleDocuments() }
@@ -40,6 +40,7 @@ func (Plugin) Scan(ctx context.Context, request model.ScanRequest) (model.ScanRe
 	}
 	findings = append(findings, analyzeDependencies(ctx, prepared.Components, request.Offline)...)
 	findings = append(findings, analyzeSymlinks(prepared.Links, prepared.Components, prepared.Skills)...)
+	findings = append(findings, analyzeBundledFiles(prepared.Components, prepared.Skills)...)
 	if prepared.NoManifest && len(prepared.Components) > 0 {
 		findings = append(findings, noManifestFinding(prepared.Components))
 	}

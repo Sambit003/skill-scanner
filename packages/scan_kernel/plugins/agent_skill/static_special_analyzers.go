@@ -109,6 +109,7 @@ func analyzeSpecialStatic(item component) []model.Finding {
 	}
 	findings = append(findings, analyzeDecodeToExec(item)...)
 	findings = append(findings, analyzeOffensiveTooling(item)...)
+	findings = append(findings, analyzeEncodedPowerShell(item)...)
 	if isDependencyFile(item.Path) {
 		for _, pattern := range sc1Patterns {
 			for _, match := range pattern.compiled.FindAllStringIndex(item.Content, -1) {
