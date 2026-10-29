@@ -121,10 +121,47 @@ func insideInlineCode(content string, offset int) bool {
 	return strings.Count(content[lineStart:offset], "`")%2 == 1
 }
 
+var (
+	// runInstruction tells the agent or user to run something.
+	runInstruction = regexp.MustCompile(`(?i)\b(?:run|execute|exec|paste|type|enter|launch|start)\b`)
+	// descriptiveContext describes a reverse shell instead of asking for one:
+	// what attackers or malware do, an example, or detection.
+	descriptiveContext = regexp.MustCompile(`(?i)\b(?:attackers?|an\s+attacker|adversar(?:y|ies)|malware|threat\s+actors?|intruders?)\b` +
+		`|\bfor\s+example\b|\be\.g\.|\bsuch\s+as\b|\btypical\b|\blooks?\s+like\b` +
+		`|\b(?:detect\w*|flag\w*|look\s+for|hunt\w*|indicators?|signatures?|iocs?|alert\w*)\b`)
+	markdownHeading = regexp.MustCompile(`(?m)^#{1,6}\s+(.*)$`)
+)
+
+// reverseShellDescribed reports a SKILL.md reverse shell in a descriptive
+// context: descriptive wording on its line or the three lines before it (the
+// lines before a fenced block's opening fence), or under a heading about
+// detection.
+func reverseShellDescribed(item component, offset int) bool {
+	anchor := offset
+	for _, block := range fencedCodeBlocks(item.Content) {
+		if offset >= block.start && offset < block.end {
+			anchor = block.start
+			break
+		}
+	}
+	lineEnd := len(item.Content)
+	if index := strings.IndexByte(item.Content[offset:], '\n'); index >= 0 {
+		lineEnd = offset + index
+	}
+	before := lineWindow(item.Content[:anchor+1], anchor, 3)
+	if descriptiveContext.MatchString(before) || descriptiveContext.MatchString(item.Content[strings.LastIndexByte(item.Content[:offset], '\n')+1:lineEnd]) {
+		return true
+	}
+	headings := markdownHeading.FindAllStringSubmatch(item.Content[:anchor], -1)
+	return len(headings) > 0 && descriptiveContext.MatchString(headings[len(headings)-1][1])
+}
+
 // analyzeReverseShells reports (RA3, CRITICAL) a reverse shell. It is tagged
-// reverse-shell when it would run: in a script line, or in a SKILL.md code
-// span or block that is not a table row, a documentation example or review
-// text, aimed at a listener that is not a placeholder or a private address.
+// reverse-shell when it would run: in a script line or hook, a SKILL.md
+// fenced block, or SKILL.md inline code under an instruction to run it, that
+// is not a table row, an example, a description (reverseShellDescribed,
+// which also marks it for review) or review text, aimed at a listener that is
+// not a placeholder or a private address.
 func analyzeReverseShells(item component) []model.Finding {
 	language, match := reverseShellAt(item.Content)
 	if match == nil {
@@ -141,6 +178,8 @@ func analyzeReverseShells(item component) []model.Finding {
 		Explanation: explanation, Remediation: remediation, CodeSnippet: context, Tags: []string{"Rogue Agent"}}
 	if reason := proseReviewReason(item, "RA3", match[0]); reason != "" {
 		finding = markForReview(finding, reason)
+	} else if (item.Type == "markdown" || item.Type == "text") && reverseShellDescribed(item, match[0]) {
+		finding = markForReview(finding, reviewDescription)
 	}
 	if reverseShellRuns(item, match[0], context) {
 		finding = markBehaviour(finding, behaviourReverseShell)
@@ -165,6 +204,12 @@ func reverseShellRuns(item component, offset int, context string) bool {
 	if index := strings.IndexByte(item.Content[offset:], '\n'); index >= 0 {
 		lineEnd = offset + index
 	}
-	inCode := insideFencedCodeBlock(item, offset) || insideInlineCode(item.Content, offset)
-	return inCode && !isTableRow(item.Content[lineStart:lineEnd]) && !isCodeExample(item.Content[lineStart:lineEnd])
+	line := item.Content[lineStart:lineEnd]
+	if isTableRow(line) || isCodeExample(line) || reverseShellDescribed(item, offset) {
+		return false
+	}
+	// A fenced block is a command to run; inline code needs an instruction
+	// to run it on its line.
+	return insideFencedCodeBlock(item, offset) ||
+		insideInlineCode(item.Content, offset) && runInstruction.MatchString(item.Content[lineStart:offset])
 }

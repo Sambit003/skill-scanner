@@ -24,7 +24,10 @@ const (
 	reviewTestFixture = "test fixture"
 	// reviewComment: a download-and-run command on a script comment line,
 	// such as a usage note, never runs.
-	reviewComment      = "comment"
+	reviewComment = "comment"
+	// reviewDescription: a reverse shell described in documentation (what
+	// attackers run, an example, what to detect), not asked for.
+	reviewDescription  = "description"
 	negationWindowSize = 100
 )
 
