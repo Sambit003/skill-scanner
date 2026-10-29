@@ -4,6 +4,8 @@ import (
 	"encoding/base64"
 	"testing"
 	"unicode/utf16"
+
+	"gitlab.com/superalign/labs/asset-scan-demo/packages/scan_kernel/internal/model"
 )
 
 // encodePowerShell builds a -EncodedCommand argument: base64 of UTF-16LE.
@@ -94,6 +96,26 @@ func TestBundledLookAlikesCarryNoBehaviour(t *testing.T) {
 			if kind, ok := behaviourOf(finding); ok {
 				t.Errorf("%s: %s on %s:%d tagged %s", name, finding.ID, finding.Location.File, finding.Location.StartLine, kind)
 			}
+		}
+	}
+}
+
+func TestShippedFilesScoreOnlyWithEvidence(t *testing.T) {
+	for _, test := range []struct {
+		finding model.Finding
+		class   ruleClass
+		moves   bool
+	}{
+		{model.Finding{ID: "SC13", Severity: "MEDIUM"}, ruleHygiene, true},
+		{model.Finding{ID: "SC13", Severity: "HIGH"}, ruleEvidence, false},
+		{model.Finding{ID: "SC14", Severity: "MEDIUM"}, ruleHygiene, true},
+		{model.Finding{ID: "SC14", Severity: "HIGH"}, ruleEvidence, false},
+	} {
+		if got := findingPolicy(test.finding).Class; got != test.class {
+			t.Errorf("%s %s class=%s, want %s", test.finding.ID, test.finding.Severity, got, test.class)
+		}
+		if moves := capabilityLabel(test.finding) != ""; moves != test.moves {
+			t.Errorf("%s %s moves=%v, want %v", test.finding.ID, test.finding.Severity, moves, test.moves)
 		}
 	}
 }

@@ -19,8 +19,8 @@ import (
 )
 
 // capabilityLabels are the rules whose findings move to the capabilities
-// list, with the plain label shown there. E1 and E2 move only in part; see
-// capabilityLabel and splitCapabilities.
+// list, with the plain label shown there. E1, E2, SC13 and SC14 move only in
+// part; see capabilityLabel and splitCapabilities.
 var capabilityLabels = map[string]string{
 	"AST3": "Imports code dynamically",
 	"AST4": "Runs shell commands",
@@ -28,6 +28,8 @@ var capabilityLabels = map[string]string{
 	"AST7": "Looks up functions by name at runtime",
 	"E1":   "Sends network requests",
 	"E2":   "Reads environment variables",
+	"SC13": "Ships a compiled program or archive",
+	"SC14": "Ships a PowerShell or batch script",
 }
 
 var (
@@ -116,6 +118,11 @@ func capabilityLabel(finding model.Finding) string {
 		return ""
 	}
 	if ruleID(finding) == "E2" && !envRead.MatchString(strings.TrimSpace(finding.MatchedText)) {
+		return ""
+	}
+	// A shipped program or script moves only when nothing more is known
+	// (MEDIUM); one SKILL.md says to run, or a Windows technique, stays.
+	if (ruleID(finding) == "SC13" || ruleID(finding) == "SC14") && finding.Severity != "MEDIUM" {
 		return ""
 	}
 	return label

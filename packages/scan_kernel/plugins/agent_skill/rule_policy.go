@@ -59,8 +59,8 @@ var scoringRulePolicies = map[string]rulePolicy{
 	"SC10": {ruleHygiene, contextAny},
 	"SC11": {ruleHygiene, contextAny},
 	"SC12": {ruleHygiene, contextAny},
-	"SC13": {ruleCapability, contextAny},
-	"SC14": {ruleCapability, contextAny},
+	"SC13": {ruleHygiene, contextAny},
+	"SC14": {ruleHygiene, contextAny},
 	"RA3":  {ruleEvidence, contextAny},
 }
 
@@ -84,8 +84,11 @@ func findingContext(path string) ruleContext {
 // findings are evidence: EA6 reports a skill hook's presence at MEDIUM, and
 // at HIGH a hook that posts events to a URL or runs a command that downloads,
 // executes fetched code, sends data or reads credentials; SC11 at HIGH is a
-// symbolic link to a secret or system location.
-var highSeverityEvidence = map[string]bool{"EA6": true, "SC11": true}
+// symbolic link to a secret or system location; SC13 at HIGH is a shipped
+// program SKILL.md tells the agent or user to run, and SC14 at HIGH a
+// Windows download, decode or hidden-window technique. A shipped program or
+// script on its own (MEDIUM) is hygiene and listed as a capability.
+var highSeverityEvidence = map[string]bool{"EA6": true, "SC11": true, "SC13": true, "SC14": true}
 
 func findingPolicy(finding model.Finding) rulePolicy {
 	policy := classifyRule(ruleID(finding))
