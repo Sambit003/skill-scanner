@@ -367,6 +367,9 @@ var staticPatterns = []staticPattern{
 	newStaticPattern("TM2", "Chaining Abuse", "Tool Misuse", "HIGH", .6, `(?:use|call)\s+(?:tool\s+)?(?:A|one|the\s+first)\s+(?:to|and)[^\n]{0,300}(?:then\s+)?(?:use|call|pass\s+(?:the\s+)?(?:output|result)\s+to)\s+(?:tool\s+)?(?:B|two|another)`),
 	newStaticPattern("TM2", "Chaining Abuse", "Tool Misuse", "HIGH", .75, `\|[ \t]*(?:sudo|su)[ \t]+`),
 	newStaticPattern("TM2", "Chaining Abuse", "Tool Misuse", "HIGH", .7, `\|[ \t]*(?:sh|bash|zsh|python|node|ruby|perl)[ \t]*$`),
+	// Decoded text piped to a shell anywhere on a line, as in inline code
+	// inside a sentence: "copy `echo ... | base64 -D | bash` into Terminal".
+	newStaticPattern("TM2", "Chaining Abuse", "Tool Misuse", "HIGH", .75, "\\bbase64\\s+(?:-d|-D|--decode)\\b[^\\n|`]*\\|[ \\t]*(?:sudo\\s+)?(?:ba|z)?sh\\b"),
 	newStaticPattern("TM2", "Chaining Abuse", "Tool Misuse", "HIGH", .75, `\|[ \t]*(?:tee|xargs)[ \t]+.*?\b(?:rm|del|sudo|curl)\b`),
 	newStaticPattern("TM2", "Chaining Abuse", "Tool Misuse", "HIGH", .6, `(?:after|once)\s+(?:the\s+)?(?:first|initial)\s+(?:tool|command|action)\s+(?:succeeds|completes|runs)[^\n]{0,300}(?:immediately|then|next)\s+(?:run|execute|call|invoke)`),
 }
