@@ -605,7 +605,8 @@ func findingFromStaticMatchWithContext(item component, pattern staticPattern, ma
 	if strings.HasPrefix(pattern.ID, "PE") && pattern.ID != "PE1" {
 		indicator = isPrivilegeDocumentationExample
 	}
-	switch treatment := exampleTreatmentAt(item, match[0], context, indicator); {
+	treatment := exampleTreatmentAt(item, match[0], context, indicator)
+	switch {
 	case treatment == exampleFenced && !reportedInsideFence(item, pattern.ID, match[0]):
 		return model.Finding{}, false
 	case treatment != exampleNone:
@@ -683,6 +684,11 @@ func findingFromStaticMatchWithContext(item component, pattern staticPattern, ma
 	// finding is never silently removed.
 	if reason := proseReviewReason(item, pattern.ID, match[0]); reason != "" {
 		finding = markForReview(finding, reason)
+	}
+	if pattern.ID == "SC2" || pattern.ID == "TM2" {
+		if kind := downloadAndRunBehaviour(item, match, treatment != exampleNone); kind != "" {
+			finding = markBehaviour(finding, kind)
+		}
 	}
 	return finding, true
 }
