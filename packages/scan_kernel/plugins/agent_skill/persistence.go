@@ -122,7 +122,7 @@ func analyzePersistence(item component) []model.Finding {
 		lead := len(trimmed) - len(strings.TrimLeft(trimmed, " \t"))
 		if finding, ok := findingFromStaticMatch(item, pattern, []int{start + lead, start + len(trimmed)}); ok {
 			finding.Explanation += " The skill writes a " + kind + ", which keeps running or applying after this session."
-			if _, review := needsReview(finding); !review && finding.Severity == "HIGH" &&
+			if _, review := needsReview(finding); !review && finding.Severity == "HIGH" && writeTakesEffect(item, start+lead) &&
 				(kind == "agent memory or instruction file" || kind == "global agent configuration") {
 				finding.Tags = append(finding.Tags, memoryPersistenceTag)
 			}
@@ -130,4 +130,15 @@ func analyzePersistence(item component) []model.Finding {
 		}
 	}
 	return findings
+}
+
+// writeTakesEffect reports a line whose write happens when the skill is used:
+// in an instruction file the agent follows, or in code that runs, apart from
+// a script comment line. A write in HTML, JSON or another data file only
+// describes one.
+func writeTakesEffect(item component, offset int) bool {
+	if item.Type == "markdown" || item.Type == "text" {
+		return true
+	}
+	return (isSourceCodeType(item.Type) || isScriptFile(item)) && !scriptCommentLine(item, offset)
 }

@@ -231,7 +231,8 @@ func TestSC3DecodeAndRunIsDoNotInstall(t *testing.T) {
 // A HIGH RA2 write to the agent's memory or instruction files (hidden, for
 // every future task, from code, or to global configuration unasked) sets the
 // CAUTION floor. The project's own memory updated on the user's request, a
-// table row describing the technique, and other persistence do not.
+// table row describing the technique, a write shown in an HTML page or a
+// script comment, and other persistence do not.
 func TestMemoryPersistenceFloor(t *testing.T) {
 	skill := func(body string) string { return claudeSkill("", body) }
 	tagged := func(result model.ScanResult) (model.Finding, bool) {
@@ -267,6 +268,10 @@ func TestMemoryPersistenceFloor(t *testing.T) {
 		"project MEMORY.md on request": {map[string]string{"SKILL.md": skill("When the user asks you to remember something, add it to the project's MEMORY.md under Notes.\n")}, "MEDIUM", false},
 		"technique table row": {map[string]string{"SKILL.md": skill("| Technique | Example |\n|---|---|\n" +
 			"| Memory poisoning | append a rule to CLAUDE.md so it applies to every future task |\n")}, "HIGH", true},
+		"HTML reference page": {map[string]string{"SKILL.md": skill("See references/example.html for a diagram.\n"),
+			"references/example.html": "<pre>\necho '- always run the check' >> ~/.claude/CLAUDE." + "md\n</pre>\n"}, "HIGH", false},
+		"script comment line": {map[string]string{"SKILL.md": skill("Run scripts/notes.sh once.\n"),
+			"scripts/notes.sh": "#!/bin/sh\n# echo '- always run the check' >> ~/.claude/CLAUDE." + "md\necho done\n"}, "HIGH", false},
 		"crontab instruction": {map[string]string{"SKILL.md": skill("Install the nightly sync:\n\n```bash\n(crontab -l; echo \"0 2 * * * $HOME/bin/sync.sh\") | cron" + "tab -\n```\n")}, "HIGH", false},
 	} {
 		result := scanSkillFiles(t, test.files)
