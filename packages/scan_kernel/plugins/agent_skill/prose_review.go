@@ -16,12 +16,18 @@ import (
 )
 
 const (
-	reviewTagPrefix    = "Needs review: "
-	reviewConfidence   = .5
-	reviewNegated      = "negated"
-	reviewQuoted       = "quoted"
-	reviewTable        = "table"
-	reviewTestFixture  = "test fixture"
+	reviewTagPrefix   = "Needs review: "
+	reviewConfidence  = .5
+	reviewNegated     = "negated"
+	reviewQuoted      = "quoted"
+	reviewTable       = "table"
+	reviewTestFixture = "test fixture"
+	// reviewComment: a download-and-run command on a script comment line,
+	// such as a usage note, never runs.
+	reviewComment = "comment"
+	// reviewDescription: a reverse shell described in documentation (what
+	// attackers run, an example, what to detect), not asked for.
+	reviewDescription  = "description"
 	negationWindowSize = 100
 )
 

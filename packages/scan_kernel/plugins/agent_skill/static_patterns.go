@@ -246,6 +246,12 @@ var portedStaticPatterns = []staticPattern{
 	newStaticPattern("SC2", "External Script Fetching", "Supply Chain", "HIGH", 0.85, "http://[^\\s'\\\"]+?\\.(?:tar\\.gz|tgz|zip|whl|gem)\\b"),
 	newStaticPattern("SC2", "External Script Fetching", "Supply Chain", "HIGH", 0.85, "http://(?:pypi\\.org|registry\\.npmjs\\.org|github\\.com|raw\\.githubusercontent\\.com|rubygems\\.org)"),
 	newStaticPattern("SC2", "External Script Fetching", "Supply Chain", "HIGH", 0.85, "(?:pip|npm|yarn|pnpm)\\s+install\\s+.*?\\bhttp://"),
+	// PowerShell download cradles and Windows download-then-run chains.
+	newStaticPattern("SC2", "External Script Fetching", "Supply Chain", "HIGH", 0.9, powershellCradle),
+	newStaticPattern("SC2", "External Script Fetching", "Supply Chain", "HIGH", 0.85, windowsDownloadRun),
+	newStaticPattern("SC14", "Windows Download or Decode Utility", "Supply Chain", "HIGH", 0.85, `\bcertutil(?:\.exe)?\b[^\n]*\s[-/](?:decode|decodehex|urlcache)\b`),
+	newStaticPattern("SC14", "Windows Download or Decode Utility", "Supply Chain", "HIGH", 0.85, `\bbitsadmin(?:\.exe)?\b[^\n]*\s/transfer\b`),
+	newStaticPattern("SC14", "Hidden Window Process", "Supply Chain", "HIGH", 0.85, `\b(?:Start-Process|powershell(?:\.exe)?|pwsh)\b[^\n]*\s-(?:WindowStyle|w|wi|win|wind|windo|window|windows|windowst|windowsty|windowstyl)\s+["']?hidden\b`),
 	newStaticPattern("SC3", "Obfuscated Code", "Supply Chain", "HIGH", 0.95, "exec\\s*\\(\\s*(?:base64\\.)?b64decode\\s*\\("),
 	newStaticPattern("SC3", "Obfuscated Code", "Supply Chain", "HIGH", 0.95, "eval\\s*\\(\\s*(?:base64\\.)?b64decode\\s*\\("),
 	newStaticPattern("SC3", "Obfuscated Code", "Supply Chain", "HIGH", 0.95, "exec\\s*\\(\\s*codecs\\.decode\\s*\\([^)]*['\\\"]hex['\\\"]\\s*\\)"),

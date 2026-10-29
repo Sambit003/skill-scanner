@@ -2,30 +2,104 @@ package agentskill
 
 // The capabilities list ("What this skill can do") holds behavior that is
 // ordinary for a skill with scripts: running shell commands, reading named
-// environment variables, dynamic imports, and tools run from a package
-// registry. Network requests (E1) stay findings. These are listed apart from the findings. Their
-// findings still feed the risk score exactly as before, so moving them out
-// of the findings array changes no score or verdict.
+// environment variables, dynamic imports, plain network requests, and tools
+// run from a package registry. These are listed apart from the findings.
+// Their findings still feed the risk score exactly as before, so moving them
+// out of the findings array changes no score or verdict.
 
 import (
+	"net"
+	"net/url"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 
 	"gitlab.com/superalign/labs/asset-scan-demo/packages/scan_kernel/internal/model"
 )
 
 // capabilityLabels are the rules whose findings move to the capabilities
-// list, with the plain label shown there. E2 moves only in part; see
-// capabilityLabel. E1 (network requests) stays a finding: telling a plain API
-// call from data being sent out needs the malware rules.
+// list, with the plain label shown there. E1, E2, SC13 and SC14 move only in
+// part; see capabilityLabel and splitCapabilities.
 var capabilityLabels = map[string]string{
 	"AST3": "Imports code dynamically",
 	"AST4": "Runs shell commands",
 	"AST6": "Compiles code at runtime",
 	"AST7": "Looks up functions by name at runtime",
+	"E1":   "Sends network requests",
 	"E2":   "Reads environment variables",
+	"SC13": "Ships a compiled program or archive",
+	"SC14": "Ships a PowerShell or batch script",
 }
+
+var (
+	// requestSensitiveData is a request that carries secrets, environment
+	// values or file contents.
+	requestSensitiveData = regexp.MustCompile(`(?i)\bos\.(?:environ|getenv)\b|\bprocess\.env\b|\bgetenv\s*\(|\bENV\[|\$env:|\$\{?[A-Z][A-Z0-9_]*\}?` +
+		`|\bopen\s*\(|\.read(?:_text|_bytes)?\s*\(|\breadFile(?:Sync)?\b|\bcreateReadStream\b|\bGet-Content\b|\$\((?:cat|base64|tar|env|printenv)\b|\bfiles\s*=` +
+		`|\s(?:-d|--data(?:-binary|-raw|-urlencode)?|-F|--form)[\s=]*["']?(?:[^\s"'@]*=)?@|\s(?:-T|--upload-file|--post-file)\b` +
+		`|\b(?:password|passwd|secret|token|api[_-]?key|credentials?|cookies?|private[_-]?key|ssh)\b`)
+	// requestSendsUserData is an instruction to send user data, context or
+	// files out.
+	requestSendsUserData = regexp.MustCompile(`(?i)(?:send|transmit|post|upload)\s+(?:user\s+)?(?:data|information|context|files?)\b`)
+)
+
+// riskyReceiver reports a request destination that collects whatever it is
+// sent: a collection or webhook host, a paste site, or a raw IP address.
+func riskyReceiver(text string) bool {
+	if collectionHost.MatchString(text) {
+		return true
+	}
+	for _, raw := range originURL.FindAllString(text, -1) {
+		if loopbackOrigin(raw) {
+			continue
+		}
+		candidate := raw
+		if !strings.Contains(candidate, "://") {
+			candidate = "http://" + candidate
+		}
+		if parsed, err := url.Parse(strings.TrimRight(candidate, ".,:")); err == nil {
+			host := strings.ToLower(parsed.Hostname())
+			if net.ParseIP(host) != nil || pasteSiteHost.MatchString(host) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// requestCallText returns an E1 request as written: from the start of its
+// line to the end of the first call opened there, or the line and its
+// backslash continuations.
+func requestCallText(content string, line int) string {
+	lines := strings.Split(content, "\n")
+	if line < 1 || line > len(lines) {
+		return ""
+	}
+	offset := 0
+	for _, previous := range lines[:line-1] {
+		offset += len(previous) + 1
+	}
+	text := lines[line-1]
+	if open := strings.IndexByte(text, '('); open >= 0 {
+		return text[:open] + balancedCallText(content, offset+open)
+	}
+	for next := line; next < len(lines) && strings.HasSuffix(strings.TrimSpace(text), "\\"); next++ {
+		text += "\n" + lines[next]
+	}
+	return text
+}
+
+// sensitiveRequestText reports a request that carries secrets, environment
+// values or file contents, instructs sending user data, or goes to a
+// collection, webhook or paste host or a raw IP.
+func sensitiveRequestText(call, matched string) bool {
+	return requestSensitiveData.MatchString(call) || requestSendsUserData.MatchString(matched) || riskyReceiver(call)
+}
+
+// dataFlowRules are the taint rules whose finding on a request's line means
+// the request sends data the file read or computed.
+var dataFlowRules = map[string]bool{"TT1": true, "TT2": true, "TT3": true, "TT4": true}
 
 // envRead is E2 reading one named variable; enumerating or harvesting the
 // environment (os.environ.items(), Object.keys(process.env),
@@ -46,6 +120,11 @@ func capabilityLabel(finding model.Finding) string {
 	if ruleID(finding) == "E2" && !envRead.MatchString(strings.TrimSpace(finding.MatchedText)) {
 		return ""
 	}
+	// A shipped program or script moves only when nothing more is known
+	// (MEDIUM); one SKILL.md says to run, or a Windows technique, stays.
+	if (ruleID(finding) == "SC13" || ruleID(finding) == "SC14") && finding.Severity != "MEDIUM" {
+		return ""
+	}
 	return label
 }
 
@@ -57,10 +136,27 @@ func splitCapabilities(findings []model.Finding, items []component) ([]model.Fin
 	for _, item := range items {
 		content[item.Path] = item.Content
 	}
+	// An E1 request stays a finding when sensitiveRequestText says so, when
+	// a taint flow ends on its line, or when its file has a behaviour-tagged
+	// finding.
+	taggedFiles, flowLines := map[string]bool{}, map[string]bool{}
+	for _, finding := range findings {
+		if _, tagged := behaviourOf(finding); tagged {
+			taggedFiles[finding.Location.File] = true
+		}
+		if dataFlowRules[ruleID(finding)] {
+			flowLines[finding.Location.File+"\x00"+strconv.Itoa(finding.Location.StartLine)] = true
+		}
+	}
 	kept := make([]model.Finding, 0, len(findings))
 	var capabilities []model.Capability
 	for _, finding := range findings {
 		label := capabilityLabel(finding)
+		if ruleID(finding) == "E1" && label != "" && (taggedFiles[finding.Location.File] ||
+			flowLines[finding.Location.File+"\x00"+strconv.Itoa(finding.Location.StartLine)] ||
+			sensitiveRequestText(requestCallText(content[finding.Location.File], finding.Location.StartLine), finding.MatchedText)) {
+			label = ""
+		}
 		if label == "" {
 			kept = append(kept, finding)
 			continue

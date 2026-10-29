@@ -390,9 +390,12 @@ var (
 	plainHTTPPackageInst  = regexp.MustCompile(`(?i)(?:pip|npm|yarn|pnpm)\s+install\s+.*?\bhttp://`)
 )
 
+// trustedSupplyChainDomains are vendor installer hosts. Raw file hosts such as
+// raw.githubusercontent.com are left out: anyone can publish a script there,
+// and companies pull vendor installers from their own mirrors.
 var trustedSupplyChainDomains = []string{
 	"deb.nodesource.com", "rpm.nodesource.com", "get.docker.com", "install.python-poetry.org",
-	"raw.githubusercontent.com", "brew.sh", "rustup.rs", "pypa.io", "pip.pypa.io",
+	"brew.sh", "rustup.rs", "pypa.io", "pip.pypa.io",
 	"astral.sh", "pypi.org", "npmjs.com", "github.com",
 }
 
@@ -449,7 +452,10 @@ func analyzeSourceAndManifest(ctx context.Context, items []component, manifest m
 		return nil, err
 	}
 	behaviorFindings, err := analyzeItemsParallel(ctx, items, func(item component) []model.Finding {
-		return append(analyzePythonBehavior(item), analyzeScriptCredentialFlow(item)...)
+		flows := append(analyzePythonBehavior(item), analyzeScriptCredentialFlow(item)...)
+		flows = append(flows, analyzePasswordPrompt(item)...)
+		flows = append(flows, analyzeShellCredentialSend(item)...)
+		return tagCredentialExfiltration(item, flows)
 	})
 	if err != nil {
 		return nil, err
@@ -687,6 +693,8 @@ func findingFromStaticMatchWithContext(item component, pattern staticPattern, ma
 	// finding is never silently removed.
 	if reason := proseReviewReason(item, pattern.ID, match[0]); reason != "" {
 		finding = markForReview(finding, reason)
+	} else if pattern.ID == "SC2" && scriptCommentLine(item, match[0]) {
+		finding = markForReview(finding, reviewComment)
 	}
 	if pattern.ID == "SC2" || pattern.ID == "TM2" {
 		if kind := downloadAndRunBehaviour(item, match, treatment != exampleNone); kind != "" {

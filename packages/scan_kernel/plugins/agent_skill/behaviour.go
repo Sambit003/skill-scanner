@@ -26,6 +26,9 @@ const (
 	// behaviourInstallLure: the user is told to run something fetched from
 	// outside the skill before the skill works.
 	behaviourInstallLure = "install-lure"
+	// behaviourReverseShell: an interactive shell wired to an outbound
+	// connection.
+	behaviourReverseShell = "reverse-shell"
 )
 
 // behaviourOf returns the behaviour kind a finding carries, if any.
@@ -54,11 +57,29 @@ func markBehaviour(finding model.Finding, kind string) model.Finding {
 }
 
 // downloadExtractRun matches a download saved to a file and run, with an
+// optional quarantine-removal step (xattr -d com.apple.quarantine), an
 // optional extract step and one more step between: curl -o f && sh f,
-// curl -o a.zip && unzip a.zip && chmod +x a && ./a.
-const downloadExtractRun = `\b(?:curl|wget)\b[^\n&;|]*\s-[oO]\s*\S+\s*(?:&&|;)\s*` +
+// curl -o f URL && xattr -d ... f && chmod +x f, curl -o a.zip && unzip
+// a.zip && chmod +x a && ./a.
+const downloadExtractRun = `\b(?:curl|wget)\b[^\n&;|]*\s-[oO]\s*\S+[^\n&;|]*(?:&&|;)\s*` +
+	`(?:(?:sudo\s+)?xattr\b[^\n&;|]*(?:&&|;)\s*)?` +
 	`(?:(?:sudo\s+)?(?:unzip|tar|7z|7za|unrar|bsdtar|gunzip)\b[^\n&;|]*(?:&&|;)\s*(?:[^\n&;|]*(?:&&|;)\s*)?)?` +
 	`(?:sudo\s+)?(?:(?:ba|z)?sh\b|chmod\s+\+x\b|\./)`
+
+// powershellCradle matches PowerShell running fetched text: iwr|irm ... |
+// iex, iex (iwr ...), iex ((New-Object Net.WebClient).DownloadString(...)),
+// DownloadString(...) | iex, and a fetch followed by Invoke-Expression on the
+// same line.
+const powershellCradle = `\b(?:iwr|irm|Invoke-WebRequest|Invoke-RestMethod)\b[^\n]*\|\s*(?:iex|Invoke-Expression)\b` +
+	`|\b(?:iex|Invoke-Expression)\b\s*\(*\s*(?:New-Object\s+(?:System\.)?Net\.WebClient|iwr|irm|Invoke-WebRequest|Invoke-RestMethod)\b[^\n]*` +
+	`|\b(?:iex|Invoke-Expression)\b[^\n]*\.DownloadString\s*\([^\n]*` +
+	`|\.DownloadString\s*\([^\n]*(?:\|\s*|;\s*)(?:iex|Invoke-Expression)\b` +
+	`|\b(?:iwr|irm|Invoke-WebRequest|Invoke-RestMethod)\b[^\n]*;\s*(?:iex|Invoke-Expression)\b`
+
+// windowsDownloadRun matches certutil -urlcache or bitsadmin /transfer saving
+// a download that a later step on the line starts.
+const windowsDownloadRun = `\b(?:certutil(?:\.exe)?\b[^\n&|;]*[-/]urlcache\b|bitsadmin(?:\.exe)?\b[^\n&|;]*/transfer\b)[^\n&|;]*` +
+	`(?:&&?|;)\s*(?:start\b|call\b|cmd(?:\.exe)?\s+/c\b|powershell\b|[^\s&|;]*\.(?:exe|bat|cmd|ps1)\b)`
 
 var (
 	// archivePasswordCommand is an archive extracted on the command line with
@@ -72,7 +93,7 @@ var (
 	downloadAndRunCommand = regexp.MustCompile(`(?i)\b(?:curl|wget)\b[^\n|]*\|\s*(?:sudo\s+)?(?:/(?:usr/)?bin/)?(?:(?:ba|z|da|k)?sh|python[0-9.]*|node|perl|ruby)\b` +
 		`|(?:\b(?:ba|z)?sh|\bsource|\beval|\B\.)\s+(?:-c\s+)?["']?(?:<\(|\$\()\s*(?:curl|wget)\b[^\n)]*\)` +
 		`|` + downloadExtractRun +
-		`|\b(?:iwr|irm|Invoke-WebRequest|Invoke-RestMethod)\b[^\n]*\|\s*(?:iex|Invoke-Expression)\b|\biex\s*\(\s*(?:New-Object\s+Net\.WebClient|iwr|irm|Invoke-WebRequest|Invoke-RestMethod)[^\n]*` +
+		`|` + powershellCradle + `|` + windowsDownloadRun +
 		`|\b(?:eval|exec)\s*\(\s*(?:await\s+)?(?:fetch|urllib|requests|httpx)\b[^\n]*|\bnew\s+Function\s*\([^\n]*\bfetch\s*\([^\n]*`)
 	// originURL matches a URL with a scheme, or a bare IPv4 address with an
 	// optional port and path.
@@ -216,4 +237,52 @@ func downloadAndRunBehaviour(item component, match []int, example bool) string {
 		}
 	}
 	return ""
+}
+
+// rawGitHubFile is a file on raw.githubusercontent.com: owner and repository.
+var rawGitHubFile = regexp.MustCompile(`(?i)^https?://raw\.githubusercontent\.com/([\w.-]+)/([\w.-]+)/`)
+
+// ownInstallerOnly reports a download-and-run line whose every origin is a
+// raw.githubusercontent.com file from the skill's own repository (see
+// releaseOwnedBySkill): the skill's own installer, not untrusted code.
+func ownInstallerOnly(skill skillInput, line string) bool {
+	origins := originURL.FindAllString(line, -1)
+	for _, origin := range origins {
+		match := rawGitHubFile.FindStringSubmatch(origin)
+		if match == nil || !releaseOwnedBySkill(skill, match[1], match[2]) {
+			return false
+		}
+	}
+	return len(origins) > 0
+}
+
+// clearOwnInstallerBehaviour removes the download-and-run tag from findings
+// in a skill whose command fetches only the skill's own installer from
+// raw.githubusercontent.com. The finding stays, untagged.
+func clearOwnInstallerBehaviour(findings []model.Finding, skills []skillInput, components []component) []model.Finding {
+	content := make(map[string]string, len(components))
+	for _, item := range components {
+		content[item.Path] = item.Content
+	}
+	for index, finding := range findings {
+		if kind, _ := behaviourOf(finding); kind != behaviourDownloadAndRun {
+			continue
+		}
+		for _, skill := range skills {
+			if !pathWithinSkill(finding.Location.File, skill.Root) {
+				continue
+			}
+			if ownInstallerOnly(skill, lineSnippet(content[finding.Location.File], finding.Location.StartLine)) {
+				tags := finding.Tags[:0:0]
+				for _, tag := range finding.Tags {
+					if !strings.HasPrefix(tag, behaviourTagPrefix) {
+						tags = append(tags, tag)
+					}
+				}
+				findings[index].Tags = tags
+			}
+			break
+		}
+	}
+	return findings
 }
