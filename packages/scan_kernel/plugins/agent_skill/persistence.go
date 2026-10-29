@@ -76,9 +76,12 @@ var (
 
 // analyzePersistence reports (RA2) each line of a file that writes a
 // persistence target or registers persistent work: HIGH, or MEDIUM for a
-// startup-file line that only sets up the environment, or for an instruction
-// step taken on the user's request (editing the project's CLAUDE.md when
-// asked) unless the step hides itself or applies to all later work.
+// startup-file line that only sets up the environment, for an instruction to
+// update the project's memory or instruction files (a memory skill's
+// purpose, run when the user invokes it), and for an instruction step taken
+// on the user's request, unless the step hides itself or applies to all
+// later work. Code that writes them, and instructions to change the user's
+// global agent configuration unasked, stay HIGH.
 func analyzePersistence(item component) []model.Finding {
 	var findings []model.Finding
 	offset := 0
@@ -104,7 +107,8 @@ func analyzePersistence(item component) []model.Finding {
 		}
 		if item.Type == "markdown" || item.Type == "text" {
 			paragraph := lineWindow(item.Content, start, 4)
-			if onUserRequest.MatchString(paragraph) && !persistenceStealth.MatchString(paragraph) {
+			ownFiles := kind == "agent memory or instruction file"
+			if (ownFiles || onUserRequest.MatchString(paragraph)) && !persistenceStealth.MatchString(paragraph) {
 				severity = "MEDIUM"
 			}
 		}
