@@ -18,10 +18,11 @@ var diminishingWeights = []float64{1, .5, .25}
 const exposureFullScale = 8.5
 
 func summarize(findings []model.Finding, items []component) model.Summary {
-	ordered := deduplicateForScoring(findings)
-	evidence := make([]model.Finding, 0, len(ordered))
-	capabilities := make([]model.Finding, 0, len(ordered))
-	for _, finding := range ordered {
+	// Filter first, then de-duplicate each list: a copy that cannot count
+	// (under review, or out of its rule's context) must not hide one that can.
+	evidence := make([]model.Finding, 0, len(findings))
+	capabilities := make([]model.Finding, 0, len(findings))
+	for _, finding := range findings {
 		if isEvidenceFinding(finding) {
 			evidence = append(evidence, finding)
 		}
@@ -29,6 +30,7 @@ func summarize(findings []model.Finding, items []component) model.Summary {
 			capabilities = append(capabilities, finding)
 		}
 	}
+	evidence, capabilities = deduplicateForScoring(evidence), deduplicateForScoring(capabilities)
 	vulnerability := computeVulnerabilityScore(evidence, items)
 	exposure := computeExposureScore(capabilities, len(items))
 	combined := float64(vulnerability) + (1-float64(vulnerability)/100)*.30*exposure
