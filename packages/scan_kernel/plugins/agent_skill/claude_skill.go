@@ -357,6 +357,21 @@ var hookDangerPatterns = []struct {
 	{"reads credentials", regexp.MustCompile(`(?i)(?:~|\$HOME|\$\{HOME\})/\.ssh\b|\.ssh/id_|\bid_(?:rsa|ed25519|ecdsa|dsa)\b|\.aws/credentials|\.config/gcloud|\.azure/|\.netrc\b|\.docker/config\.json|\.kube/config|/etc/shadow|\.git-credentials|\bsecurity\s+find-(?:generic|internet)-password\b|\bprintenv\b|\bgh\s+auth\s+token\b|\benv\s*(?:\||>|$)`)},
 }
 
+// analyzeFrontmatterSyntax reports (SC10, LOW) SKILL.md front matter that
+// does not parse as YAML. The other front matter checks still run on the
+// fields that lenientFrontmatterRoot reads one at a time.
+func analyzeFrontmatterSyntax(content string) []model.Finding {
+	line, message, invalid := frontmatterSyntaxError(content)
+	if !invalid {
+		return nil
+	}
+	explanation, remediation := ruleText("SC10")
+	text := truncateRunes("Front matter is not valid YAML: "+message, 200)
+	return []model.Finding{{ID: "SC10", Category: "Supply Chain", Pattern: "Invalid Front Matter", Severity: "LOW",
+		Confidence: 1, Location: model.Location{File: "SKILL.md", StartLine: line}, Finding: text, MatchedText: text,
+		Explanation: explanation, Remediation: remediation, CodeSnippet: lineSnippet(content, line), Tags: []string{"Supply Chain"}}}
+}
+
 // analyzeSkillHooks reports (EA6) each hook handler in SKILL.md front matter:
 // MEDIUM for a hook's presence, HIGH when it posts events to a URL (type
 // http) or its command or MCP tool input matches hookDangerPatterns.

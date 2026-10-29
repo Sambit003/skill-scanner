@@ -56,6 +56,7 @@ func (Plugin) Scan(ctx context.Context, request model.ScanRequest) (model.ScanRe
 		manifestFindings = append(manifestFindings, analyzeMCPLeastPrivilege(skill.Components, skill.Manifest)...)
 		manifestFindings = append(manifestFindings, analyzeMCPToolPoisoning(skill.Manifest)...)
 		manifestFindings = append(manifestFindings, analyzeTriggers(skill.Manifest, skill.TriggerLines)...)
+		manifestFindings = append(manifestFindings, analyzeFrontmatterSyntax(skill.ManifestContent)...)
 		manifestFindings = append(manifestFindings, analyzeActivationHijack(skill.ManifestContent)...)
 		manifestFindings = append(manifestFindings, analyzeToolPreApproval(skill.ManifestContent)...)
 		manifestFindings = append(manifestFindings, analyzeSkillHooks(skill.ManifestContent)...)

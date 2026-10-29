@@ -88,6 +88,7 @@ var ruleExplanations = map[string]string{
 	"SSRF1": "Code accesses a cloud instance metadata endpoint (e.g. 169.254.169.254). A single request can return temporary IAM credentials, making this a high-value SSRF target for credential theft.",
 	"SSRF2": "Code issues a request to a loopback, link-local, or private-range host. This can reach internal services not meant to be exposed and is a common SSRF pivot.",
 	"SSRF3": "Request target host is built from a dynamic or untrusted value. If the host is attacker-influenced, this enables SSRF to arbitrary internal or metadata endpoints.",
+	"SC10":  "The SKILL.md front matter is not valid YAML, so tools that read it strictly (Claude Code among them) may not load the skill's name, description, hooks or allowed-tools as written. The usual cause is an unquoted colon followed by a space inside a description. The scanner still read each top-level field on its own and checked hooks and allowed-tools.",
 }
 
 var ruleTitles = map[string]string{
@@ -178,6 +179,7 @@ var ruleTitles = map[string]string{
 	"SSRF1": "Cloud Metadata Access",
 	"SSRF2": "Internal Network Request",
 	"SSRF3": "Dynamic Request Target",
+	"SC10":  "Invalid Front Matter",
 }
 
 var ruleRemediations = map[string]string{
@@ -268,4 +270,5 @@ var ruleRemediations = map[string]string{
 	"SSRF1": "Remove access to cloud metadata endpoints unless strictly required. If metadata is needed, restrict it (e.g. IMDSv2 with hop limit) and never expose returned credentials.",
 	"SSRF2": "Avoid requests to loopback/link-local/private hosts from skill code. If internal access is intended, document it and validate the target against an allowlist.",
 	"SSRF3": "Do not build request URLs from untrusted input. Validate the host against an allowlist and reject internal/metadata addresses before issuing the request.",
+	"SC10":  "Quote the value that contains the colon (description: \"Use when: ...\") or use a block scalar, then check the front matter with a YAML parser.",
 }
