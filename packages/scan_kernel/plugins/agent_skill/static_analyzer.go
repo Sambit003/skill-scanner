@@ -367,6 +367,9 @@ var staticPatterns = []staticPattern{
 	newStaticPattern("TM2", "Chaining Abuse", "Tool Misuse", "HIGH", .6, `(?:use|call)\s+(?:tool\s+)?(?:A|one|the\s+first)\s+(?:to|and)[^\n]{0,300}(?:then\s+)?(?:use|call|pass\s+(?:the\s+)?(?:output|result)\s+to)\s+(?:tool\s+)?(?:B|two|another)`),
 	newStaticPattern("TM2", "Chaining Abuse", "Tool Misuse", "HIGH", .75, `\|[ \t]*(?:sudo|su)[ \t]+`),
 	newStaticPattern("TM2", "Chaining Abuse", "Tool Misuse", "HIGH", .7, `\|[ \t]*(?:sh|bash|zsh|python|node|ruby|perl)[ \t]*$`),
+	// Decoded text piped to a shell anywhere on a line, as in inline code
+	// inside a sentence: "copy `echo ... | base64 -D | bash` into Terminal".
+	newStaticPattern("TM2", "Chaining Abuse", "Tool Misuse", "HIGH", .75, "\\bbase64\\s+(?:-d|-D|--decode)\\b[^\\n|`]*\\|[ \\t]*(?:sudo\\s+)?(?:ba|z)?sh\\b"),
 	newStaticPattern("TM2", "Chaining Abuse", "Tool Misuse", "HIGH", .75, `\|[ \t]*(?:tee|xargs)[ \t]+.*?\b(?:rm|del|sudo|curl)\b`),
 	newStaticPattern("TM2", "Chaining Abuse", "Tool Misuse", "HIGH", .6, `(?:after|once)\s+(?:the\s+)?(?:first|initial)\s+(?:tool|command|action)\s+(?:succeeds|completes|runs)[^\n]{0,300}(?:immediately|then|next)\s+(?:run|execute|call|invoke)`),
 }
@@ -605,7 +608,8 @@ func findingFromStaticMatchWithContext(item component, pattern staticPattern, ma
 	if strings.HasPrefix(pattern.ID, "PE") && pattern.ID != "PE1" {
 		indicator = isPrivilegeDocumentationExample
 	}
-	switch treatment := exampleTreatmentAt(item, match[0], context, indicator); {
+	treatment := exampleTreatmentAt(item, match[0], context, indicator)
+	switch {
 	case treatment == exampleFenced && !reportedInsideFence(item, pattern.ID, match[0]):
 		return model.Finding{}, false
 	case treatment != exampleNone:
@@ -684,11 +688,16 @@ func findingFromStaticMatchWithContext(item component, pattern staticPattern, ma
 	if reason := proseReviewReason(item, pattern.ID, match[0]); reason != "" {
 		finding = markForReview(finding, reason)
 	}
+	if pattern.ID == "SC2" || pattern.ID == "TM2" {
+		if kind := downloadAndRunBehaviour(item, match, treatment != exampleNone); kind != "" {
+			finding = markBehaviour(finding, kind)
+		}
+	}
 	return finding, true
 }
 
 func isSafeSupplyChainPattern(text string) bool {
-	if isPlaintextSupplyChainRisk(text) {
+	if isPlaintextSupplyChainRisk(text) || archivePasswordCommand.MatchString(text) {
 		return false
 	}
 	if safeInstallPattern.MatchString(text) {

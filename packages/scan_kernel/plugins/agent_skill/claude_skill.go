@@ -491,7 +491,8 @@ func analyzeEmbeddedCommands(ctx context.Context, content string) ([]model.Findi
 
 // mergeEmbeddedCommandFindings adds the findings for embedded commands. The
 // raw SKILL.md text was scanned too, so a rule reported on the same file and
-// line is kept once: the stronger finding by severity, then confidence.
+// line is kept once: a behaviour-tagged finding, else the stronger finding by
+// severity, then confidence.
 func mergeEmbeddedCommandFindings(findings, embedded []model.Finding) []model.Finding {
 	rank := map[string]int{"CRITICAL": 4, "HIGH": 3, "MEDIUM": 2, "LOW": 1}
 	key := func(finding model.Finding) string {
@@ -511,6 +512,14 @@ func mergeEmbeddedCommandFindings(findings, embedded []model.Finding) []model.Fi
 			continue
 		}
 		existing := findings[position]
+		_, embeddedBehaviour := behaviourOf(finding)
+		_, existingBehaviour := behaviourOf(existing)
+		if embeddedBehaviour != existingBehaviour {
+			if embeddedBehaviour {
+				findings[position] = finding
+			}
+			continue
+		}
 		if rank[finding.Severity] > rank[existing.Severity] || (rank[finding.Severity] == rank[existing.Severity] && finding.Confidence > existing.Confidence) {
 			findings[position] = finding
 		}

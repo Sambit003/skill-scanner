@@ -66,12 +66,17 @@ func shellTrueSeverity(matched, severity string) string {
 }
 
 // keepOneFindingPerLine keeps one finding per file, line, category and rule:
-// the highest severity, then a finding not marked for review, then the higher
-// confidence. Order is kept. TM1 and TM2 count as one rule (both report the
+// a behaviour-tagged finding, then the highest severity, then a finding not
+// marked for review, then the higher confidence. Order is kept. TM1 and TM2 count as one rule (both report the
 // same shell command). Other rules of one category stay apart: AST1 and AST8,
 // or EA1 and EA5, on one line report different things.
 func keepOneFindingPerLine(findings []model.Finding) []model.Finding {
 	better := func(candidate, current model.Finding) bool {
+		_, candidateBehaviour := behaviourOf(candidate)
+		_, currentBehaviour := behaviourOf(current)
+		if candidateBehaviour != currentBehaviour {
+			return candidateBehaviour
+		}
 		if severityRank(candidate.Severity) != severityRank(current.Severity) {
 			return severityRank(candidate.Severity) > severityRank(current.Severity)
 		}
