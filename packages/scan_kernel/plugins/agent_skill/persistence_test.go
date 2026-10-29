@@ -44,11 +44,11 @@ func TestPersistence(t *testing.T) {
 func TestPersistenceLookAlikes(t *testing.T) {
 	skill := func(body string) string { return claudeSkill("", body) }
 	for name, files := range map[string]map[string]string{
-		"reads CLAUDE.md":     {"SKILL.md": skill("Read CLAUDE.md first and follow its conventions.\n")},
-		"lists the crontab":   {"SKILL.md": skill("Run scripts/check.sh.\n"), "scripts/check.sh": "#!/bin/sh\ncrontab -l | grep backup\n"},
-		"sources the profile": {"SKILL.md": skill("Run scripts/env.sh.\n"), "scripts/env.sh": "#!/bin/sh\nsource ~/.bashrc\nwc -l ./CLAUDE.md 2>/dev/null\n"},
-		"profile attribute":   {"SKILL.md": skill("Run scripts/report.py.\n"), "scripts/report.py": "lines = []\nlines.append(f\"Profile: {card.profile}\")\n"},
-		"reads the bashrc":    {"SKILL.md": skill("Run scripts/lint.py.\n"), "scripts/lint.py": "import os\ntext = open(os.path.expanduser('~/.bashrc')).read()\n"},
+		"reads CLAUDE.md":           {"SKILL.md": skill("Read CLAUDE.md first and follow its conventions.\n")},
+		"lists the crontab":         {"SKILL.md": skill("Run scripts/check.sh.\n"), "scripts/check.sh": "#!/bin/sh\ncrontab -l | grep backup\n"},
+		"sources the profile":       {"SKILL.md": skill("Run scripts/env.sh.\n"), "scripts/env.sh": "#!/bin/sh\nsource ~/.bashrc\nwc -l ./CLAUDE.md 2>/dev/null\n"},
+		"profile attribute":         {"SKILL.md": skill("Run scripts/report.py.\n"), "scripts/report.py": "lines = []\nlines.append(f\"Profile: {card.profile}\")\n"},
+		"reads the bashrc":          {"SKILL.md": skill("Run scripts/lint.py.\n"), "scripts/lint.py": "import os\ntext = open(os.path.expanduser('~/.bashrc')).read()\n"},
 		"stores data under .claude": {"SKILL.md": skill("Save the brief to `~/.claude/briefs/YYYY-MM-DD.md`.\n")},
 	} {
 		result := scanSkillFiles(t, files)

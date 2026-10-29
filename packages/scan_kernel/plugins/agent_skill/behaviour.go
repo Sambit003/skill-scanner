@@ -57,9 +57,12 @@ func markBehaviour(finding model.Finding, kind string) model.Finding {
 }
 
 // downloadExtractRun matches a download saved to a file and run, with an
+// optional quarantine-removal step (xattr -d com.apple.quarantine), an
 // optional extract step and one more step between: curl -o f && sh f,
-// curl -o a.zip && unzip a.zip && chmod +x a && ./a.
-const downloadExtractRun = `\b(?:curl|wget)\b[^\n&;|]*\s-[oO]\s*\S+\s*(?:&&|;)\s*` +
+// curl -o f URL && xattr -d ... f && chmod +x f, curl -o a.zip && unzip
+// a.zip && chmod +x a && ./a.
+const downloadExtractRun = `\b(?:curl|wget)\b[^\n&;|]*\s-[oO]\s*\S+[^\n&;|]*(?:&&|;)\s*` +
+	`(?:(?:sudo\s+)?xattr\b[^\n&;|]*(?:&&|;)\s*)?` +
 	`(?:(?:sudo\s+)?(?:unzip|tar|7z|7za|unrar|bsdtar|gunzip)\b[^\n&;|]*(?:&&|;)\s*(?:[^\n&;|]*(?:&&|;)\s*)?)?` +
 	`(?:sudo\s+)?(?:(?:ba|z)?sh\b|chmod\s+\+x\b|\./)`
 

@@ -194,8 +194,8 @@ func analyzeEncodedPowerShell(item component) []model.Finding {
 		}
 		if payload != "" && exampleTreatmentAt(item, match[0], context, isCodeExample) == exampleNone {
 			kind := behaviourDecodeToExec
-			if payload == behaviourReverseShell {
-				kind = behaviourReverseShell
+			if payload != behaviourDownloadAndRun {
+				kind = payload
 			}
 			finding = markBehaviour(finding, kind)
 		}

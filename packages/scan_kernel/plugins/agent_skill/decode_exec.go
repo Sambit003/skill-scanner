@@ -16,9 +16,9 @@ import (
 
 var (
 	// base64ToShell matches base64 -d|-D|--decode piped into a shell, or
-	// decoded inside sh -c "$(...)".
+	// decoded inside sh -c "$(...)" or eval $(...).
 	base64ToShell = regexp.MustCompile(`(?i)\bbase64\s+(?:-d|-D|--decode)\b[^\n|]*\|\s*(?:sudo\s+)?(?:/(?:usr/)?bin/)?(?:ba|z)?sh\b` +
-		`|\b(?:ba|z)?sh\s+-c\s+["']?\$\([^)\n]*\bbase64\s+(?:-d|-D|--decode)\b`)
+		`|\b(?:(?:ba|z)?sh\s+-c|eval)\s+["']?\$\([^)\n]*\bbase64\s+(?:-d|-D|--decode)\b`)
 	base64Literal = regexp.MustCompile(`[A-Za-z0-9+/]{16,}={0,2}`)
 )
 
@@ -46,8 +46,9 @@ func decodeBase64Text(literal string) (string, bool) {
 
 // decodedPayload decodes the base64 literals of a decode-to-shell line and
 // returns the decoded text that downloads and runs remote code
-// (behaviourDownloadAndRun) or opens a reverse shell (behaviourReverseShell),
-// following nested decode-to-shell layers up to decodeDepth.
+// (behaviourDownloadAndRun), opens a reverse shell (behaviourReverseShell) or
+// sends a credential file away (behaviourCredentialExfiltration), following
+// nested decode-to-shell layers up to decodeDepth.
 func decodedPayload(line string, depth int) (string, string, bool) {
 	if depth == 0 {
 		return "", "", false
@@ -62,6 +63,9 @@ func decodedPayload(line string, depth int) (string, string, bool) {
 		}
 		if _, match := reverseShellAt(decoded); match != nil {
 			return decoded, behaviourReverseShell, true
+		}
+		if shellSendsCredentialFile(decoded) {
+			return decoded, behaviourCredentialExfiltration, true
 		}
 		if base64ToShell.MatchString(decoded) {
 			if nested, kind, ok := decodedPayload(decoded, depth-1); ok {
@@ -99,8 +103,8 @@ func analyzeDecodeToExec(item component) []model.Finding {
 		}
 		if exampleTreatmentAt(item, match[0], finding.CodeSnippet, isCodeExample) == exampleNone {
 			kind := behaviourDecodeToExec
-			if payload == behaviourReverseShell {
-				kind = behaviourReverseShell
+			if payload != behaviourDownloadAndRun {
+				kind = payload
 			}
 			finding = markBehaviour(finding, kind)
 		}
@@ -110,11 +114,15 @@ func analyzeDecodeToExec(item component) []model.Finding {
 }
 
 // decodedPayloadFinding reports encoded text that decodes to a payload: SC3
-// for download-and-run, RA3 for a reverse shell, both CRITICAL.
+// for download-and-run or sending a credential file, RA3 for a reverse
+// shell, all CRITICAL.
 func decodedPayloadFinding(item component, offset, lineNumber int, line, decoded, payload, encoding string) model.Finding {
 	id, category, pattern, what := "SC3", "Supply Chain", "Encoded Download and Execute", "a command that downloads and runs remote code"
-	if payload == behaviourReverseShell {
+	switch payload {
+	case behaviourReverseShell:
 		id, category, pattern, what = "RA3", "Rogue Agent", "Encoded Reverse Shell", "a reverse shell"
+	case behaviourCredentialExfiltration:
+		pattern, what = "Encoded Credential Exfiltration", "a command that sends a credential file to a remote host"
 	}
 	explanation, remediation := ruleText(id)
 	explanation += " The " + encoding + " decodes to " + what + ": " + truncateRunes(strings.Join(strings.Fields(decoded), " "), 200)

@@ -552,9 +552,10 @@ var (
 
 // analyzeScriptCredentialFlow reports TT3 in JavaScript and TypeScript
 // without data-flow tracking, for shapes that need none: a request whose
-// body is an environment value or the serialized environment, and a file
-// that reads a credential file or the whole environment and sends a request
-// to a collection host.
+// body is an environment value or the serialized environment, a request that
+// sends a variable holding a credential file's content, and a file that
+// reads a credential file or the whole environment and sends a request to a
+// collection host.
 func analyzeScriptCredentialFlow(item component) []model.Finding {
 	// The type, not the path: analyzeItemsParallel shares results between
 	// files with the same content and type.
@@ -585,6 +586,7 @@ func analyzeScriptCredentialFlow(item component) []model.Finding {
 		environmentValues[match[1]] = match[2] + match[3]
 	}
 	wholeEnvironment := scriptWholeEnvironment.MatchString(content)
+	credentialFileVariables := scriptCredentialFileVariables(content)
 
 	var findings []model.Finding
 	for _, match := range scriptNetworkSend.FindAllStringIndex(content, -1) {
@@ -597,6 +599,8 @@ func analyzeScriptCredentialFlow(item component) []model.Finding {
 			message = "The request sends the whole environment (process.env)"
 		case scriptSendsEnvironmentValue(call, environmentValues):
 			message = "An environment value is the request body"
+		case scriptSendsVariable(call, credentialFileVariables):
+			message = "The request sends the content of a credential file"
 		case (readsCredentialFile || wholeEnvironment) && scriptTargetsCollectionHost(call, collectionNames):
 			message = "The file reads a credential file or the whole environment and sends a request to a collection host"
 		case headerLeak == "CRITICAL":
@@ -657,6 +661,24 @@ func scriptHeaderLeak(call string, environmentValues, constants map[string]strin
 		return ""
 	}
 	return "HIGH"
+}
+
+// scriptSendsVariable reports a send call that names one of the variables
+// outside its first (destination) argument.
+func scriptSendsVariable(call string, variables map[string]bool) bool {
+	if len(variables) == 0 {
+		return false
+	}
+	rest := call
+	if comma := strings.IndexByte(call, ','); comma >= 0 {
+		rest = call[comma:]
+	}
+	for _, word := range scriptIdentifier.FindAllString(rest, -1) {
+		if variables[word] {
+			return true
+		}
+	}
+	return false
 }
 
 func scriptSendsEnvironmentValue(call string, environmentValues map[string]string) bool {

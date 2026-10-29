@@ -452,7 +452,10 @@ func analyzeSourceAndManifest(ctx context.Context, items []component, manifest m
 		return nil, err
 	}
 	behaviorFindings, err := analyzeItemsParallel(ctx, items, func(item component) []model.Finding {
-		return append(analyzePythonBehavior(item), analyzeScriptCredentialFlow(item)...)
+		flows := append(analyzePythonBehavior(item), analyzeScriptCredentialFlow(item)...)
+		flows = append(flows, analyzePasswordPrompt(item)...)
+		flows = append(flows, analyzeShellCredentialSend(item)...)
+		return tagCredentialExfiltration(item, flows)
 	})
 	if err != nil {
 		return nil, err
