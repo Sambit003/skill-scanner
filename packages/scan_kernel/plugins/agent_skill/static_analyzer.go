@@ -701,6 +701,9 @@ func findingFromStaticMatchWithContext(item component, pattern staticPattern, ma
 			finding = markBehaviour(finding, kind)
 		}
 	}
+	if _, review := needsReview(finding); !review && pattern.ID == "P4" && concealsFromUser(item.Content, match) {
+		finding.Tags = append(finding.Tags, concealmentTag)
+	}
 	return finding, true
 }
 
