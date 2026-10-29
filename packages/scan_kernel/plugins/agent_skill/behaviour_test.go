@@ -254,3 +254,23 @@ func TestInstallLureNeedsALiteralPasswordOrAPrecondition(t *testing.T) {
 		}
 	}
 }
+
+func TestDownloadAndRunOnCommentsAndOwnInstaller(t *testing.T) {
+	skill := func(body string) string { return claudeSkill("", body) }
+	own := "https://raw.githubusercontent.com/example-owner/report-helper-skill/main/install.sh"
+	other := "https://raw.githubusercontent.com/someone-else/tool/main/install.sh"
+	scan := func(script string) (model.Finding, string, bool) {
+		result := scanSkillFiles(t, map[string]string{"SKILL.md": skill("Run scripts/setup.sh once.\n"), "scripts/setup.sh": "#!/bin/sh\n" + script + "\n"})
+		return findingWithBehaviour(result.Findings, "SC2", "skills/report-helper/scripts/setup.sh", 2)
+	}
+	finding, kind, ok := scan("# Install: " + fetch + own + pipeShell)
+	if reason, review := needsReview(finding); !ok || !review || reason != reviewComment || kind != "" {
+		t.Errorf("comment line: found=%v review=%q tagged %q, want an untagged SC2 that needs review", ok, reason, kind)
+	}
+	if _, kind, ok := scan(fetch + own + pipeShell); !ok || kind != "" {
+		t.Errorf("own raw installer: found=%v tagged %q, want an untagged SC2", ok, kind)
+	}
+	if _, kind, ok := scan(fetch + other + pipeShell); !ok || kind != behaviourDownloadAndRun {
+		t.Errorf("another repository's raw script: found=%v tagged %q, want download-and-run", ok, kind)
+	}
+}

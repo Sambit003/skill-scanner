@@ -16,12 +16,15 @@ import (
 )
 
 const (
-	reviewTagPrefix    = "Needs review: "
-	reviewConfidence   = .5
-	reviewNegated      = "negated"
-	reviewQuoted       = "quoted"
-	reviewTable        = "table"
-	reviewTestFixture  = "test fixture"
+	reviewTagPrefix   = "Needs review: "
+	reviewConfidence  = .5
+	reviewNegated     = "negated"
+	reviewQuoted      = "quoted"
+	reviewTable       = "table"
+	reviewTestFixture = "test fixture"
+	// reviewComment: a download-and-run command on a script comment line,
+	// such as a usage note, never runs.
+	reviewComment      = "comment"
 	negationWindowSize = 100
 )
 

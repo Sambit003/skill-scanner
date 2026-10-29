@@ -693,6 +693,8 @@ func findingFromStaticMatchWithContext(item component, pattern staticPattern, ma
 	// finding is never silently removed.
 	if reason := proseReviewReason(item, pattern.ID, match[0]); reason != "" {
 		finding = markForReview(finding, reason)
+	} else if pattern.ID == "SC2" && scriptCommentLine(item, match[0]) {
+		finding = markForReview(finding, reviewComment)
 	}
 	if pattern.ID == "SC2" || pattern.ID == "TM2" {
 		if kind := downloadAndRunBehaviour(item, match, treatment != exampleNone); kind != "" {

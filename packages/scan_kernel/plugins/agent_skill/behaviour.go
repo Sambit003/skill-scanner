@@ -238,3 +238,51 @@ func downloadAndRunBehaviour(item component, match []int, example bool) string {
 	}
 	return ""
 }
+
+// rawGitHubFile is a file on raw.githubusercontent.com: owner and repository.
+var rawGitHubFile = regexp.MustCompile(`(?i)^https?://raw\.githubusercontent\.com/([\w.-]+)/([\w.-]+)/`)
+
+// ownInstallerOnly reports a download-and-run line whose every origin is a
+// raw.githubusercontent.com file from the skill's own repository (see
+// releaseOwnedBySkill): the skill's own installer, not untrusted code.
+func ownInstallerOnly(skill skillInput, line string) bool {
+	origins := originURL.FindAllString(line, -1)
+	for _, origin := range origins {
+		match := rawGitHubFile.FindStringSubmatch(origin)
+		if match == nil || !releaseOwnedBySkill(skill, match[1], match[2]) {
+			return false
+		}
+	}
+	return len(origins) > 0
+}
+
+// clearOwnInstallerBehaviour removes the download-and-run tag from findings
+// in a skill whose command fetches only the skill's own installer from
+// raw.githubusercontent.com. The finding stays, untagged.
+func clearOwnInstallerBehaviour(findings []model.Finding, skills []skillInput, components []component) []model.Finding {
+	content := make(map[string]string, len(components))
+	for _, item := range components {
+		content[item.Path] = item.Content
+	}
+	for index, finding := range findings {
+		if kind, _ := behaviourOf(finding); kind != behaviourDownloadAndRun {
+			continue
+		}
+		for _, skill := range skills {
+			if !pathWithinSkill(finding.Location.File, skill.Root) {
+				continue
+			}
+			if ownInstallerOnly(skill, lineSnippet(content[finding.Location.File], finding.Location.StartLine)) {
+				tags := finding.Tags[:0:0]
+				for _, tag := range finding.Tags {
+					if !strings.HasPrefix(tag, behaviourTagPrefix) {
+						tags = append(tags, tag)
+					}
+				}
+				findings[index].Tags = tags
+			}
+			break
+		}
+	}
+	return findings
+}
