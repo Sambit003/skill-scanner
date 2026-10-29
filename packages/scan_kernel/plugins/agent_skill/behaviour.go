@@ -53,13 +53,25 @@ func markBehaviour(finding model.Finding, kind string) model.Finding {
 	return finding
 }
 
+// downloadExtractRun matches a download saved to a file and run, with an
+// optional extract step and one more step between: curl -o f && sh f,
+// curl -o a.zip && unzip a.zip && chmod +x a && ./a.
+const downloadExtractRun = `\b(?:curl|wget)\b[^\n&;|]*\s-[oO]\s*\S+\s*(?:&&|;)\s*` +
+	`(?:(?:sudo\s+)?(?:unzip|tar|7z|7za|unrar|bsdtar|gunzip)\b[^\n&;|]*(?:&&|;)\s*(?:[^\n&;|]*(?:&&|;)\s*)?)?` +
+	`(?:sudo\s+)?(?:(?:ba|z)?sh\b|chmod\s+\+x\b|\./)`
+
 var (
+	// archivePasswordCommand is an archive extracted on the command line with
+	// a literal password: unzip -P 1234, 7z x -p1234. A variable or
+	// placeholder is not a literal.
+	archivePasswordCommand = regexp.MustCompile(`(?i)\bunzip\b[^\n&;|]*\s-P\s*["']?[^\s"'$<{%]|\b7za?\s+[xe]\b[^\n&;|]*\s-p["']?[^\s"'$<{%]`)
 	// downloadAndRunCommand matches remote code fetched and run in one
 	// command: curl|wget ... | sh, sh -c "$(curl ...)", sh <(curl ...),
-	// curl -o f && sh f, iwr ... | iex, eval(fetch(...)).
+	// source <(curl ...), curl -o f && sh f, curl -o a.zip && unzip a.zip &&
+	// ./a, iwr ... | iex, eval(fetch(...)).
 	downloadAndRunCommand = regexp.MustCompile(`(?i)\b(?:curl|wget)\b[^\n|]*\|\s*(?:sudo\s+)?(?:/(?:usr/)?bin/)?(?:(?:ba|z|da|k)?sh|python[0-9.]*|node|perl|ruby)\b` +
-		`|(?:\b(?:ba|z)?sh|\bsource|\beval)\s+(?:-c\s+)?["']?(?:<\(|\$\()\s*(?:curl|wget)\b[^\n)]*\)` +
-		`|\b(?:curl|wget)\b[^\n&;|]*\s-[oO]\s*\S+\s*(?:&&|;)\s*(?:sudo\s+)?(?:(?:ba|z)?sh\b|chmod\s+\+x\b|\./)` +
+		`|(?:\b(?:ba|z)?sh|\bsource|\beval|\B\.)\s+(?:-c\s+)?["']?(?:<\(|\$\()\s*(?:curl|wget)\b[^\n)]*\)` +
+		`|` + downloadExtractRun +
 		`|\b(?:iwr|irm|Invoke-WebRequest|Invoke-RestMethod)\b[^\n]*\|\s*(?:iex|Invoke-Expression)\b|\biex\s*\(\s*(?:New-Object\s+Net\.WebClient|iwr|irm|Invoke-WebRequest|Invoke-RestMethod)[^\n]*` +
 		`|\b(?:eval|exec)\s*\(\s*(?:await\s+)?(?:fetch|urllib|requests|httpx)\b[^\n]*|\bnew\s+Function\s*\([^\n]*\bfetch\s*\([^\n]*`)
 	// originURL matches a URL with a scheme, or a bare IPv4 address with an
@@ -179,7 +191,8 @@ func runsUnreviewed(item component, offset int) bool {
 }
 
 // downloadAndRunBehaviour returns behaviourDownloadAndRun for a remote code
-// execution match whose line fetches from an untrusted origin, or that runs
+// execution match whose line fetches from an untrusted origin or extracts a
+// password archive (which keeps its contents from being scanned), or that runs
 // unreviewed and is not a vendor installer served over https from a trusted
 // host. Matches in documentation examples and script comments are left
 // untagged.
@@ -193,7 +206,7 @@ func downloadAndRunBehaviour(item component, match []int, example bool) string {
 	switch {
 	case len(commands) == 0 || example || scriptCommentLine(item, match[0]):
 		return ""
-	case untrusted:
+	case untrusted, archivePasswordCommand.MatchString(item.Content[lineStart:lineEnd]):
 		return behaviourDownloadAndRun
 	case runsUnreviewed(item, match[0]):
 		for _, command := range commands {

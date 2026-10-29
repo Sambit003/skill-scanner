@@ -697,7 +697,7 @@ func findingFromStaticMatchWithContext(item component, pattern staticPattern, ma
 }
 
 func isSafeSupplyChainPattern(text string) bool {
-	if isPlaintextSupplyChainRisk(text) {
+	if isPlaintextSupplyChainRisk(text) || archivePasswordCommand.MatchString(text) {
 		return false
 	}
 	if safeInstallPattern.MatchString(text) {

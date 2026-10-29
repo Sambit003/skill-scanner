@@ -4,8 +4,9 @@ package agentskill
 // outside the skill before the skill works. The code never ships with the
 // skill, so no scan of the skill can review it:
 //   - a script taken from a paste site and run in a terminal;
-//   - an archive extracted with a literal password given in the text (which
-//     keeps it from being scanned on the way in), then an executable run;
+//   - an archive extracted with a literal password given in the text or on
+//     the command line (unzip -P, 7z x -p), which keeps it from being
+//     scanned on the way in, then an executable run;
 //   - a file from a GitHub releases URL, when the text also gives an archive
 //     password, holds a paste-site lure, or has the user run a downloaded
 //     executable as a precondition ("before using the skill").
@@ -135,6 +136,9 @@ func analyzeInstallLures(skill skillInput) []model.Finding {
 				password = append(password, lure{index, match[0], "gives a password to extract a downloaded archive, which keeps its contents from being scanned"})
 				break
 			}
+		}
+		if match := archivePasswordCommand.FindStringIndex(line.text); match != nil && (len(password) == 0 || password[len(password)-1].line != index) {
+			password = append(password, lure{index, match[0], "gives a password to extract a downloaded archive, which keeps its contents from being scanned"})
 		}
 		if match := lureRunExecutable.FindStringSubmatchIndex(line.text); match != nil {
 			file := strings.ToLower(strings.TrimPrefix(line.text[match[2]:match[3]], "./"))

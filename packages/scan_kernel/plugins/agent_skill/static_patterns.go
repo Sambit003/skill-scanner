@@ -232,6 +232,8 @@ var portedStaticPatterns = []staticPattern{
 	newStaticPattern("SC2", "External Script Fetching", "Supply Chain", "HIGH", 0.9, "curl\\s+[^|]*\\|\\s*(?:sudo\\s+)?(?:python|python3|node|ruby|perl)"),
 	newStaticPattern("SC2", "External Script Fetching", "Supply Chain", "HIGH", 0.9, "wget\\s+[^|]*\\|\\s*(?:sudo\\s+)?(?:python|python3|node|ruby|perl)"),
 	newStaticPattern("SC2", "External Script Fetching", "Supply Chain", "HIGH", 0.9, "(?:\\b(?:ba|z)?sh|\\beval)\\s+(?:-c\\s+)?[\"']?\\$\\(\\s*(?:curl|wget)\\b"),
+	newStaticPattern("SC2", "External Script Fetching", "Supply Chain", "HIGH", 0.9, "(?:\\b(?:ba|z)?sh|\\bsource|\\B\\.)\\s+<\\(\\s*(?:curl|wget)\\b"),
+	newStaticPattern("SC2", "External Script Fetching", "Supply Chain", "HIGH", 0.85, downloadExtractRun),
 	newStaticPattern("SC2", "External Script Fetching", "Supply Chain", "HIGH", 0.8, "curl\\s+[^&]*-o\\s+\\S+\\s*&&\\s*(?:sudo\\s+)?(?:ba)?sh"),
 	newStaticPattern("SC2", "External Script Fetching", "Supply Chain", "HIGH", 0.8, "wget\\s+[^&]*-O\\s+\\S+\\s*&&\\s*(?:sudo\\s+)?(?:ba)?sh"),
 	newStaticPattern("SC2", "External Script Fetching", "Supply Chain", "HIGH", 0.95, "exec\\s*\\(\\s*(?:urllib|requests|httpx)\\.[^)]+\\.(?:read|text|content)"),
