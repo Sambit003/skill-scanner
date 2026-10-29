@@ -390,9 +390,12 @@ var (
 	plainHTTPPackageInst  = regexp.MustCompile(`(?i)(?:pip|npm|yarn|pnpm)\s+install\s+.*?\bhttp://`)
 )
 
+// trustedSupplyChainDomains are vendor installer hosts. Raw file hosts such as
+// raw.githubusercontent.com are left out: anyone can publish a script there,
+// and companies pull vendor installers from their own mirrors.
 var trustedSupplyChainDomains = []string{
 	"deb.nodesource.com", "rpm.nodesource.com", "get.docker.com", "install.python-poetry.org",
-	"raw.githubusercontent.com", "brew.sh", "rustup.rs", "pypa.io", "pip.pypa.io",
+	"brew.sh", "rustup.rs", "pypa.io", "pip.pypa.io",
 	"astral.sh", "pypi.org", "npmjs.com", "github.com",
 }
 
