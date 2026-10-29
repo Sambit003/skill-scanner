@@ -12,7 +12,7 @@ import (
 	"strings"
 	"testing"
 
-	"gitlab.com/superalign/labs/asset-scan-demo/packages/scan_kernel/internal/model"
+	"github.com/Sambit003/skill-scanner/packages/scan_kernel/internal/model"
 )
 
 const blindSpotFrontmatter = "---\nname: weekly-report\ndescription: Formats the weekly report.\n---\n\n# Weekly report helper\n\n"

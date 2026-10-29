@@ -15,7 +15,7 @@ import (
 	"strconv"
 	"strings"
 
-	"gitlab.com/superalign/labs/asset-scan-demo/packages/scan_kernel/internal/model"
+	"github.com/Sambit003/skill-scanner/packages/scan_kernel/internal/model"
 )
 
 // capabilityLabels are the rules whose findings move to the capabilities

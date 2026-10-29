@@ -4,7 +4,7 @@ import (
 	"encoding/base64"
 	"testing"
 
-	"gitlab.com/superalign/labs/asset-scan-demo/packages/scan_kernel/internal/model"
+	"github.com/Sambit003/skill-scanner/packages/scan_kernel/internal/model"
 )
 
 // Fixtures build commands from pieces and use reserved hosts (192.0.2.x,

@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"gitlab.com/superalign/labs/asset-scan-demo/packages/scan_kernel/internal/model"
+	"github.com/Sambit003/skill-scanner/packages/scan_kernel/internal/model"
 )
 
 // A copy of a match that cannot count (a code-context rule in Markdown) must

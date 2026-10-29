@@ -11,7 +11,7 @@ import (
 	"regexp"
 	"strings"
 
-	"gitlab.com/superalign/labs/asset-scan-demo/packages/scan_kernel/internal/model"
+	"github.com/Sambit003/skill-scanner/packages/scan_kernel/internal/model"
 )
 
 // reverseShellSignature is an anchor line plus companion patterns that must

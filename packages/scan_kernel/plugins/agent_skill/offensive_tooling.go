@@ -10,7 +10,7 @@ import (
 	"sort"
 	"strings"
 
-	"gitlab.com/superalign/labs/asset-scan-demo/packages/scan_kernel/internal/model"
+	"github.com/Sambit003/skill-scanner/packages/scan_kernel/internal/model"
 )
 
 // offensiveToolName matches well-known offensive tools by names that are not
