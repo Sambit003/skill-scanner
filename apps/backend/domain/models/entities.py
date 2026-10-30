@@ -48,6 +48,9 @@ class ScanModel(Base):
     # "What this skill can do" entries from the scanner. NULL for scans
     # recorded before the scanner listed capabilities.
     capabilities = Column(JSON, nullable=True)
+    # What set the recommendation, from the scanner summary. NULL for scans
+    # recorded before the scanner gave a reason.
+    verdict_reason = Column(Text, nullable=True)
     
     # Timing & errors
     error_message = Column(Text, nullable=True)

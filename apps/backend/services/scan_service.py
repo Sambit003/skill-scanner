@@ -11,7 +11,7 @@ from backend.domain.models.schemas import (
 )
 from backend.repositories.scan_repository import ScanRepository
 from backend.domain.repository_identity import repository_key as normalize_repository_key
-from backend.services.score_visibility import redact_report_content, visible_risk_score
+from backend.services.score_visibility import redact_report_content, visible_risk_score, visible_verdict_reason
 from backend.workers.scan_worker import run_asset_scan_task
 
 def capability_responses(stored: Optional[List[dict]]) -> Optional[List[CapabilityResponse]]:
@@ -172,6 +172,7 @@ class ScanService:
             category_breakdown=category_breakdown,
             findings=findings,
             capabilities=capabilities,
+            verdict_reason=visible_verdict_reason(scan.verdict_reason),
             available_reports=available_reports,
             report_downloads=report_downloads,
             links=links,

@@ -218,3 +218,6 @@ class ScanDetailResponse(ScanResponse):
     findings: List[FindingResponse] = Field(default_factory=list)
     # None for scans recorded before the scanner listed capabilities.
     capabilities: Optional[List[CapabilityResponse]] = None
+    # What set the recommendation; None for scans recorded before the scanner
+    # gave a reason. The risk number is left out while scores are hidden.
+    verdict_reason: Optional[str] = None
