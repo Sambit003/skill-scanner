@@ -3,7 +3,6 @@ AR1	HIGH	Anti-Refusal	skills/productivity/to-questionnaire/SKILL.md	9	Anti-Refus
 AS1	HIGH	Agent Snooping	skills/misc/git-guardrails-claude-code/SKILL.md	24	Agent Config Directory Access	0.9
 AS1	HIGH	Agent Snooping	skills/misc/git-guardrails-claude-code/SKILL.md	61	Agent Config Directory Access	0.9
 EA2	MEDIUM	Excessive Agency	skills/productivity/grilling/SKILL.md	20	Autonomous Decision Making	0.8
-RA2	MEDIUM	Rogue Agent	CHANGELOG.md	36	Persistence: agent memory or instruction file	0.85
 SC1	LOW	Supply Chain	package.json	17	Unpinned Dependencies	0.4
 SC1	LOW	Supply Chain	package.json	18	Unpinned Dependencies	0.4
 TM1	HIGH	Tool Misuse	skills/misc/git-guardrails-claude-code/SKILL.md	13	Tool Parameter Abuse	0.65

@@ -10,6 +10,7 @@ package agentskill
 // the verdict (see findingTier).
 
 import (
+	"path"
 	"regexp"
 	"strings"
 
@@ -87,6 +88,10 @@ var (
 	// work, in the sentence that asks for it ("run the tests quietly" in the
 	// sentence before does not).
 	persistenceSilentOrLasting = regexp.MustCompile(`(?i)\bsilently\b|\bquietly\b|\b(?:every|all)\s+(?:future|later|subsequent)\b|\bfrom\s+now\s+on\b`)
+	// changelogFile is a release history. It records past changes, so a
+	// sentence in it like "Add AGENTS.md as a symlink to CLAUDE.md"
+	// describes a write rather than asking for one.
+	changelogFile = regexp.MustCompile(`(?i)^(?:change(?:log|s)|history|news|release[-_]?notes|releases)(?:\.(?:md|markdown|txt|rst))?$`)
 	// blockStart begins a Markdown block: a list item, heading, quote, table
 	// row or code fence.
 	blockStart = regexp.MustCompile(`^[ \t]*(?:[-*+>#|]|\d+[.)]|` + "```" + `)`)
@@ -99,9 +104,11 @@ var (
 // purpose, run when the user invokes it), and for an instruction step taken
 // on the user's request, unless the step hides itself or applies to all
 // later work. Code that writes them, and instructions to change the user's
-// global agent configuration unasked, stay HIGH.
+// global agent configuration unasked, stay HIGH. A changelog is matched only
+// for commands, not instructions.
 func analyzePersistence(item component) []model.Finding {
 	var findings []model.Finding
+	instructions := (item.Type == "markdown" || item.Type == "text") && !changelogFile.MatchString(path.Base(item.Path))
 	offset := 0
 	for _, line := range strings.SplitAfter(item.Content, "\n") {
 		start := offset
@@ -109,7 +116,7 @@ func analyzePersistence(item component) []model.Finding {
 		kind, match := "", []int{0, len(line)}
 		for _, target := range persistenceWrites {
 			write := target.code
-			if item.Type == "markdown" || item.Type == "text" {
+			if instructions {
 				write = target.instruction
 			}
 			if found := write.FindStringIndex(line); found != nil {
@@ -153,9 +160,12 @@ func analyzePersistence(item component) []model.Finding {
 
 // writeTakesEffect reports a line whose write happens when the skill is used:
 // in an instruction file the agent follows, or in code that runs, apart from
-// a script comment line. A write in HTML, JSON or another data file only
-// describes one.
+// a script comment line. A write in a changelog, or in HTML, JSON or another
+// data file, only describes one.
 func writeTakesEffect(item component, offset int) bool {
+	if changelogFile.MatchString(path.Base(item.Path)) {
+		return false
+	}
 	if item.Type == "markdown" || item.Type == "text" {
 		return true
 	}
