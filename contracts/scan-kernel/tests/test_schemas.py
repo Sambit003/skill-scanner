@@ -92,7 +92,7 @@ def test_canonical_v2_scan_response_is_valid() -> None:
                             "end_line": None,
                         },
                         "frameworks": {
-                            "mapping_version": "2026.09-1",
+                            "mapping_version": "2026.10-1",
                             "owasp_agentic": ["AST03"],
                             "owasp_llm": ["LLM03:2026", "LLM06:2026"],
                             "nist_gai_risks": ["Information Security"],
@@ -126,7 +126,7 @@ def test_canonical_v2_rules_response_is_valid() -> None:
                         "remediation": "Add limits.",
                         "documentation_url": "/v1/rules/EA4",
                         "frameworks": {
-                            "mapping_version": "2026.09-1",
+                            "mapping_version": "2026.10-1",
                             "owasp_agentic": ["AST03"],
                             "owasp_llm": ["LLM03:2026", "LLM06:2026"],
                             "nist_gai_risks": ["Information Security"],

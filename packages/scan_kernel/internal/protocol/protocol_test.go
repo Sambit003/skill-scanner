@@ -173,8 +173,8 @@ func TestV2ProtocolEnvelopesEmitFrameworks(t *testing.T) {
 		t.Fatalf("unexpected v2 rules items: %+v", listData)
 	}
 	for _, item := range listData.Result.Items {
-		if item.Frameworks.MappingVersion != "2026.09-1" {
-			t.Errorf("rule %s has mapping_version %q, want '2026.09-1'", item.RuleID, item.Frameworks.MappingVersion)
+		if item.Frameworks.MappingVersion != "2026.10-1" {
+			t.Errorf("rule %s has mapping_version %q, want '2026.10-1'", item.RuleID, item.Frameworks.MappingVersion)
 		}
 		if len(item.Frameworks.OwaspAgentic) == 0 || len(item.Frameworks.OwaspLLM) == 0 || len(item.Frameworks.NistGaiRisks) == 0 {
 			t.Errorf("rule %s has empty framework arrays: %+v", item.RuleID, item.Frameworks)
@@ -211,8 +211,8 @@ func TestV2ProtocolEnvelopesEmitFrameworks(t *testing.T) {
 	if ruleData.Result.Rule.RuleID != "EA4" {
 		t.Fatalf("expected rule EA4, got %s", ruleData.Result.Rule.RuleID)
 	}
-	if ruleData.Result.Rule.Frameworks.MappingVersion != "2026.09-1" {
-		t.Errorf("EA4 mapping_version = %s, want 2026.09-1", ruleData.Result.Rule.Frameworks.MappingVersion)
+	if ruleData.Result.Rule.Frameworks.MappingVersion != "2026.10-1" {
+		t.Errorf("EA4 mapping_version = %s, want 2026.10-1", ruleData.Result.Rule.Frameworks.MappingVersion)
 	}
 	if !reflect.DeepEqual(ruleData.Result.Rule.Frameworks.OwaspLLM, []string{"LLM03:2026", "LLM06:2026"}) {
 		t.Errorf("EA4 owasp_llm = %v, want [LLM03:2026, LLM06:2026]", ruleData.Result.Rule.Frameworks.OwaspLLM)

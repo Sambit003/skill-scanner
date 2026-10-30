@@ -27,6 +27,7 @@ func TestFrameworkOverridesMatchSpecification(t *testing.T) {
 		"TT5": {"LLM10:2026"},
 		"AS1": {"LLM02:2026", "LLM08:2026"},
 		"YR5": {"LLM01:2026"},
+		"TR2": {"LLM01:2026", "LLM04:2026"},
 	}
 
 	if len(ruleFrameworkOverrides) != len(expectedOverrides) {
@@ -193,7 +194,7 @@ func TestFrameworksReportRendering(t *testing.T) {
 	if !strings.Contains(md, "## Compliance summary") {
 		t.Error("Markdown report missing '## Compliance summary'")
 	}
-	if !strings.Contains(md, "2026.09-1") {
+	if !strings.Contains(md, "2026.10-1") {
 		t.Error("Markdown report missing mapping version")
 	}
 	if !strings.Contains(md, "LLM03:2026") || !strings.Contains(md, "LLM06:2026") {

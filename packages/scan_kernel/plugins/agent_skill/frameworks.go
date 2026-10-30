@@ -7,7 +7,7 @@ import (
 	"gitlab.com/superalign/labs/asset-scan-demo/packages/scan_kernel/internal/model"
 )
 
-const mappingVersion = "2026.09-1"
+const mappingVersion = "2026.10-1"
 
 // familyAgenticFrameworks maps rule families to the OWASP Agentic Skills Top 10 (v1.0 2026 Edition).
 // Ported directly from the frontend source of truth to make the scan kernel the single authority.
@@ -22,7 +22,7 @@ var familyAgenticFrameworks = map[string][]string{
 	"TM":   {"AST03", "AST04", "AST06"},
 	"RA":   {"AST01"},
 	"RP":   {"AST02", "AST05", "AST07", "AST09", "AST10"},
-	"TR":   {"AST02"},
+	"TR":   {"AST04"},
 	"AST":  {"AST01", "AST08"},
 	"TT":   {"AST01", "AST03", "AST08"},
 	"YR":   {"AST01", "AST02", "AST04", "AST08"},
@@ -45,7 +45,7 @@ var familyLLMFrameworks = map[string][]string{
 	"TM":   {"LLM03:2026"},
 	"RA":   {"LLM03:2026"},
 	"RP":   {"LLM04:2026"},
-	"TR":   {"LLM04:2026"},
+	"TR":   {"LLM01:2026"},
 	"AST":  {"LLM10:2026"},
 	"TT":   {"LLM02:2026"},
 	"YR":   {"LLM04:2026"},
@@ -71,6 +71,7 @@ var ruleFrameworkOverrides = map[string][]string{
 	"TT5": {"LLM10:2026"},
 	"AS1": {"LLM02:2026", "LLM08:2026"},
 	"YR5": {"LLM01:2026"},
+	"TR2": {"LLM01:2026", "LLM04:2026"},
 }
 
 // nistPrimaryRisksByLLM defines the primary (●) NIST AI 600-1 risks per OWASP LLM category

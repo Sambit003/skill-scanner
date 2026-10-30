@@ -47,7 +47,7 @@
         "Prompt Injection"
       ],
       "frameworks": {
-        "mapping_version": "2026.09-1",
+        "mapping_version": "2026.10-1",
         "owasp_agentic": [
           "AST01",
           "AST04"
@@ -83,7 +83,7 @@
         "Prompt Injection"
       ],
       "frameworks": {
-        "mapping_version": "2026.09-1",
+        "mapping_version": "2026.10-1",
         "owasp_agentic": [
           "AST01",
           "AST04"
@@ -119,7 +119,7 @@
         "Data Exfiltration"
       ],
       "frameworks": {
-        "mapping_version": "2026.09-1",
+        "mapping_version": "2026.10-1",
         "owasp_agentic": [
           "AST01",
           "AST03"
@@ -144,7 +144,7 @@
       "explanation": "Tool parameters are crafted to achieve unintended or unsafe behavior. Parameter abuse can bypass intended safety checks (e.g. shell=True, --force, dangerous glob patterns).",
       "finding": "subprocess.run(user_input, shell=True",
       "frameworks": {
-        "mapping_version": "2026.09-1",
+        "mapping_version": "2026.10-1",
         "nist_gai_risks": [
           "Information Security"
         ],
@@ -192,7 +192,7 @@
         "YARA Match"
       ],
       "frameworks": {
-        "mapping_version": "2026.09-1",
+        "mapping_version": "2026.10-1",
         "owasp_agentic": [
           "AST01",
           "AST02",
@@ -230,7 +230,7 @@
         "Dangerous Code Execution"
       ],
       "frameworks": {
-        "mapping_version": "2026.09-1",
+        "mapping_version": "2026.10-1",
         "owasp_agentic": [
           "AST01",
           "AST08"
@@ -264,7 +264,7 @@
         "Data Flow"
       ],
       "frameworks": {
-        "mapping_version": "2026.09-1",
+        "mapping_version": "2026.10-1",
         "owasp_agentic": [
           "AST01",
           "AST03",

@@ -332,7 +332,7 @@ func TestRuleDocumentsUseCanonicalRuleIdentity(t *testing.T) {
 		"AS1": {
 			family: "AS", title: "Agent Config Directory Access", category: "Agent Snooping",
 			frameworks: model.FrameworkMappings{
-				MappingVersion: "2026.09-1",
+				MappingVersion: "2026.10-1",
 				OwaspAgentic:   []string{"AST01", "AST03"},
 				OwaspLLM:       []string{"LLM02:2026", "LLM08:2026"},
 				NistGaiRisks:   []string{"Data Privacy", "Information Security"},
@@ -342,7 +342,7 @@ func TestRuleDocumentsUseCanonicalRuleIdentity(t *testing.T) {
 		"AST1": {
 			family: "AST", title: "AST1", category: "Security",
 			frameworks: model.FrameworkMappings{
-				MappingVersion: "2026.09-1",
+				MappingVersion: "2026.10-1",
 				OwaspAgentic:   []string{"AST01", "AST08"},
 				OwaspLLM:       []string{"LLM10:2026"},
 				NistGaiRisks:   []string{"Information Security"},
@@ -352,7 +352,7 @@ func TestRuleDocumentsUseCanonicalRuleIdentity(t *testing.T) {
 		"RA2": {
 			family: "RA", title: "Session Persistence", category: "Rogue Agent",
 			frameworks: model.FrameworkMappings{
-				MappingVersion: "2026.09-1",
+				MappingVersion: "2026.10-1",
 				OwaspAgentic:   []string{"AST01"},
 				OwaspLLM:       []string{"LLM03:2026"},
 				NistGaiRisks:   []string{"Information Security"},
@@ -362,7 +362,7 @@ func TestRuleDocumentsUseCanonicalRuleIdentity(t *testing.T) {
 		"RP1": {
 			family: "RP", title: "Unpinned External Reference", category: "MCP Rug Pull",
 			frameworks: model.FrameworkMappings{
-				MappingVersion: "2026.09-1",
+				MappingVersion: "2026.10-1",
 				OwaspAgentic:   []string{"AST02", "AST05", "AST07", "AST09", "AST10"},
 				OwaspLLM:       []string{"LLM04:2026"},
 				NistGaiRisks:   []string{"Information Security", "Value Chain and Component Integration"},
@@ -372,7 +372,7 @@ func TestRuleDocumentsUseCanonicalRuleIdentity(t *testing.T) {
 		"RP2": {
 			family: "RP", title: "Manifest Expansion Risk", category: "MCP Rug Pull",
 			frameworks: model.FrameworkMappings{
-				MappingVersion: "2026.09-1",
+				MappingVersion: "2026.10-1",
 				OwaspAgentic:   []string{"AST02", "AST05", "AST07", "AST09", "AST10"},
 				OwaspLLM:       []string{"LLM04:2026"},
 				NistGaiRisks:   []string{"Information Security", "Value Chain and Component Integration"},
