@@ -1,6 +1,9 @@
 package agentskill
 
-import "testing"
+import (
+	"slices"
+	"testing"
+)
 
 func TestPersistence(t *testing.T) {
 	skill := func(body string) string { return claudeSkill("", body) }
@@ -64,5 +67,30 @@ func TestPersistenceLookAlikes(t *testing.T) {
 				t.Errorf("%s: %s tagged %s", name, finding.ID, kind)
 			}
 		}
+	}
+}
+
+func TestPersistenceChangelog(t *testing.T) {
+	skill := func(body string) string { return claudeSkill("", body) }
+	entry := "- Add `AGENTS.md` as a symlink to `CLAUDE.md`\n"
+	command := "- Fixed: `echo rule >> ~/.claude/CLAUDE.md` no longer runs twice\n"
+	result := scanSkillFiles(t, map[string]string{
+		"SKILL.md":     skill("Summarise the release notes.\n"),
+		"CHANGELOG.md": "# Changelog\n\n## 1.2.0\n\n" + entry + command,
+	})
+	path := "skills/report-helper/CHANGELOG.md"
+	if finding, _, ok := findingWithBehaviour(result.Findings, "RA2", path, 5); ok {
+		t.Errorf("changelog entry: RA2 %s on %s:5", finding.Severity, path)
+	}
+	finding, _, ok := findingWithBehaviour(result.Findings, "RA2", path, 6)
+	if !ok {
+		t.Fatalf("changelog command: no RA2 on %s:6; findings=%v", path, ruleIDs(result.Findings))
+	}
+	if slices.Contains(finding.Tags, memoryPersistenceTag) {
+		t.Errorf("changelog command: RA2 tagged %q", memoryPersistenceTag)
+	}
+	result = scanSkillFiles(t, map[string]string{"SKILL.md": skill(entry)})
+	if _, _, ok := findingWithBehaviour(result.Findings, "RA2", "skills/report-helper/SKILL.md", 6); !ok {
+		t.Errorf("same line in SKILL.md: no RA2; findings=%v", ruleIDs(result.Findings))
 	}
 }
