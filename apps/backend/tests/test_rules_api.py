@@ -48,7 +48,7 @@ class SuccessfulRuleClient:
             remediation="Add rate limits.",
             documentation_url="/v1/rules/EA4",
             frameworks=ScannerFrameworkRefs(
-                mapping_version="2026.09-1",
+                mapping_version="2026.10-1",
                 owasp_agentic=["AST03"],
                 owasp_llm=["LLM03:2026", "LLM06:2026"],
                 nist_gai_risks=["Information Security"],
@@ -62,7 +62,7 @@ async def test_get_rule_returns_frameworks() -> None:
     doc = await get_rule("EA4", client=SuccessfulRuleClient())
     assert doc.rule_id == "EA4"
     assert doc.frameworks is not None
-    assert doc.frameworks.mapping_version == "2026.09-1"
+    assert doc.frameworks.mapping_version == "2026.10-1"
     assert doc.frameworks.owasp_llm == ["LLM03:2026", "LLM06:2026"]
     assert doc.frameworks.nist_rmf == ["MEASURE 2.7"]
 

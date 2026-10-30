@@ -1,5 +1,5 @@
 {
-  "mapping_version": "2026.09-1",
+  "mapping_version": "2026.10-1",
   "families": {
     "AR": {
       "owasp_agentic": [
@@ -241,19 +241,15 @@
     },
     "TR": {
       "owasp_agentic": [
-        "AST02"
+        "AST04"
       ],
       "owasp_llm": [
-        "LLM04:2026"
+        "LLM01:2026"
       ],
       "nist_gai_risks": [
-        "Information Security",
-        "Value Chain and Component Integration"
+        "Information Security"
       ],
       "nist_rmf": [
-        "GOVERN 6.1",
-        "MANAGE 3.1",
-        "MAP 4.1",
         "MEASURE 2.7"
       ]
     },
@@ -423,6 +419,25 @@
         "Information Security"
       ],
       "nist_rmf": [
+        "MEASURE 2.7"
+      ]
+    },
+    "TR2": {
+      "owasp_agentic": [
+        "AST04"
+      ],
+      "owasp_llm": [
+        "LLM01:2026",
+        "LLM04:2026"
+      ],
+      "nist_gai_risks": [
+        "Information Security",
+        "Value Chain and Component Integration"
+      ],
+      "nist_rmf": [
+        "GOVERN 6.1",
+        "MANAGE 3.1",
+        "MAP 4.1",
         "MEASURE 2.7"
       ]
     },

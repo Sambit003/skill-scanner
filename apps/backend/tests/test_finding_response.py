@@ -43,7 +43,7 @@ def test_finding_response_hydrates_frameworks() -> None:
         extra_metadata={
             "id": "EA4",
             "frameworks": {
-                "mapping_version": "2026.09-1",
+                "mapping_version": "2026.10-1",
                 "owasp_agentic": ["AST03"],
                 "owasp_llm": ["LLM03:2026", "LLM06:2026"],
                 "nist_gai_risks": ["Information Security"],
@@ -53,7 +53,7 @@ def test_finding_response_hydrates_frameworks() -> None:
     )
 
     assert finding.frameworks is not None
-    assert finding.frameworks.mapping_version == "2026.09-1"
+    assert finding.frameworks.mapping_version == "2026.10-1"
     assert finding.frameworks.owasp_agentic == ["AST03"]
     assert finding.frameworks.owasp_llm == ["LLM03:2026", "LLM06:2026"]
     assert finding.frameworks.nist_gai_risks == ["Information Security"]

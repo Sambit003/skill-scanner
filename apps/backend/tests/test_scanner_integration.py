@@ -30,4 +30,6 @@ async def test_backend_calls_real_go_scanner() -> None:
     # The request opts into capabilities; the fixture runs a shell command.
     assert result.capabilities is not None
     assert any(capability.rule_id == "AST4" for capability in result.capabilities)
+    # The fixture reaches DO_NOT_INSTALL; the summary names why.
+    assert (result.summary.verdict_reason or "").startswith("DO_NOT_INSTALL: ")
     assert any(rule.rule_id == "P1" for rule in rules)

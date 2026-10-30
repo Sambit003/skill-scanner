@@ -86,7 +86,7 @@ func main() {
 	doc.WriteString("| OWASP Agentic Skills Top 10 | v1.0 (2026 Edition) | `https://owasp.org/www-project-agentic-skills-top-10/` | 2026-09-02 | Checklist snapshot 2026-08-03 |\n")
 	doc.WriteString("| NIST AI RMF | 1.0 (AI 100-1) | `https://airc.nist.gov/airmf-resources/airmf/5-sec-core/` | 2026-09-02 | `f0c8c0d75337e305b9220e10dd23b6daa69d0bbb0b20cd85445c34516330a726` |\n")
 	doc.WriteString("| NIST GenAI Profile | AI 600-1 (July 2024) | `https://nvlpubs.nist.gov/nistpubs/ai/NIST.AI.600-1.pdf` | 2026-09-02 | `bb6fb01faea3a118fdf920ba6c43bb122070b3e669940c6421c0425b943fe32d` |\n")
-	fmt.Fprintf(&doc, "| Engine Mapping Version | `%s` | Scan Kernel Source of Truth | 2026-09-03 | Code-enforced completeness |\n\n", agentskill.MappingVersion)
+	fmt.Fprintf(&doc, "| Engine Mapping Version | `%s` | Scan Kernel Source of Truth | 2026-10-30 | Code-enforced completeness |\n\n", agentskill.MappingVersion)
 
 	doc.WriteString("### AST Provenance Chain\n")
 	doc.WriteString("The AST01–AST10 taxonomy is an exact match (IDs, titles, order, severity tiers) of the official **OWASP Agentic Skills Top 10, v1.0 (2026 Edition)**. Inherited via NVIDIA SkillSpector's OWASP coverage assessment (checklist snapshot 2026-08-03, 72 checks; provenance chain: commits `00cd6ab` → `a09f2f2` → `cc9a5ea`). Distinct from the sibling OWASP Top 10 for Agentic Applications (ASI 2026).\n\n")
@@ -130,6 +130,7 @@ func main() {
 		"TT5": "External input directly reaching execution sink without exfiltration (LLM10).",
 		"AS1": "Agent configuration directory access containing instructions destined for context (LLM02 + LLM08).",
 		"YR5": "YARA prompt-injection signature; the YR family default (LLM04 supply chain) does not apply (LLM01).",
+		"TR2": "Description wording that ranks the skill above other skills hijacks activation (LLM01); a trigger that shadows a built-in command is name confusion (LLM04).",
 	}
 
 	for _, ruleID := range overrideIDs {
@@ -152,10 +153,10 @@ func main() {
 	doc.WriteString("## 4. Static Coverage & Audit Boundaries\n\n")
 	doc.WriteString("| 2026 Category | Static Coverage Status | Rules / Mechanisms | Evidence & Audit Boundaries |\n")
 	doc.WriteString("|---|---|---|---|---|\n")
-	doc.WriteString("| LLM01 Prompt Injection | Detections present | P1–5, TP1–3, AR1–3, MP1–3, YR5 | Embedded instruction and metadata injection; no runtime adversarial evaluation. |\n")
+	doc.WriteString("| LLM01 Prompt Injection | Detections present | P1–5, TP1–3, AR1–3, MP1–3, YR5, TR1–3 | Embedded instruction and metadata injection, including activation wording in skill descriptions; no runtime adversarial evaluation. |\n")
 	doc.WriteString("| LLM02 Sensitive Information Disclosure | Detections present | E1–5, TT1–4, AS1–3 | Environment, secret file, config access and data flow detection. |\n")
 	doc.WriteString("| LLM03 Excessive Agency | Detections present | EA1–7, LP1–4, PE1–5, TM1–4, RA1–2 | Over-permissioning, autonomous high-impact actions, container escapes. |\n")
-	doc.WriteString("| LLM04 Supply Chain | Detections present | SC1–8, RP1–3, YR1–4, TR1–3 | Unpinned dependencies, malware signatures, trigger-namespace squatting. SC4 excluded in HSBC build. |\n")
+	doc.WriteString("| LLM04 Supply Chain | Detections present | SC1–8, RP1–3, YR1–4, TR2 (secondary) | Unpinned dependencies, malware signatures, built-in command shadowing. SC4 excluded in HSBC build. |\n")
 	doc.WriteString("| LLM05 Data & Model Poisoning | Partial | MP3 | Persistent memory-store poisoning in agent scope. Pre-training and fine-tuning poisoning are out of static scope. |\n")
 	doc.WriteString("| LLM06 Unbounded Consumption | Partial | EA4, OH3, MP2 | Static unbounded resource markers and context stuffing patterns. No runtime latency/cost measurement. |\n")
 	doc.WriteString("| LLM07 Misinformation | Not covered | *(none)* | Output factual quality and hallucination are runtime evaluation concerns. |\n")
@@ -166,7 +167,8 @@ func main() {
 	doc.WriteString("## 5. Ratification Log\n\n")
 	doc.WriteString("- **O1 (Ratified 2026-09-03, Project Lead)**: Trim RMF subcategories strictly to crosswalk-backed entries. MEASURE 2.6 dropped everywhere; MEASURE 2.7 emitted where an LLM category maps to MEASURE 2; LLM03-only and LLM10-only emit empty `nist_rmf: []`.\n")
 	doc.WriteString("- **O2 (Ratified 2026-09-02, Project Lead)**: LLM09 excluded from memory findings; agent memory is classified under LLM01/LLM05, avoiding unevidenced vector tags.\n")
-	doc.WriteString("- **O3 (Ratified 2026-09-03, Project Lead)**: `TR1`–`TR3` classified under `LLM04:2026` as trigger-namespace slopsquatting / supply chain name confusion.\n")
+	doc.WriteString("- **O3 (Ratified 2026-09-03, Project Lead)**: `TR1`–`TR3` classified under `LLM04:2026` as trigger-namespace slopsquatting / supply chain name confusion. Superseded by O4.\n")
+	doc.WriteString("- **O4 (Approved 2026-10-30, Parin Vachhani)**: `TR1`–`TR3` reclassified to `LLM01:2026` / `AST04`: nearly all TR findings now come from activation wording in `description` and `when_to_use`, which the model reads as instructions. `TR2` keeps `LLM04:2026` as a secondary category for built-in command shadowing. Supersedes O3.\n")
 	doc.WriteString("- **C1 (Ratified 2026-09-03, Project Lead)**: MP3 NIST primary risks use pure composition (`Information Security`, `Information Integrity`, `Value Chain and Component Integration` via LLM05).\n\n")
 
 	doc.WriteString("## 6. Requirements Traceability\n\n")

@@ -75,6 +75,7 @@ class ScanRepository:
                 severity=summary_dict.get("severity"),
                 recommendation=summary_dict.get("recommendation"),
                 safe_to_install=summary_dict.get("safe_to_install"),
+                verdict_reason=summary_dict.get("verdict_reason"),
                 findings_count=len(findings_list),
                 findings_by_severity=summary_dict.get("findings_by_severity", {}),
                 findings_by_category=summary_dict.get("findings_by_category", {}),
